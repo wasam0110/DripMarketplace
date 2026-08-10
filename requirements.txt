@@ -1,0 +1,55 @@
+# ── Web framework ─────────────────────────────────────────────────────────────
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.20        # File uploads
+
+# ── Database ──────────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]==2.0.36
+asyncpg==0.30.0
+alembic==1.14.0
+
+# ── Validation & config ───────────────────────────────────────────────────────
+pydantic[email]==2.10.4
+pydantic-settings==2.7.0
+
+# ── Auth ──────────────────────────────────────────────────────────────────────
+argon2-cffi==23.1.0
+cryptography==44.0.0            # RS256 JWT signing
+python-jose[cryptography]==3.3.0
+pyotp==2.9.0                    # Admin TOTP 2FA
+qrcode==8.0                     # TOTP QR code generation
+
+# ── Cache / Queue ─────────────────────────────────────────────────────────────
+redis[hiredis]==5.2.1
+arq==0.26.1                     # Async Redis queue (background tasks)
+
+# ── Logging ───────────────────────────────────────────────────────────────────
+structlog==24.4.0
+
+# ── File handling ─────────────────────────────────────────────────────────────
+pillow==11.1.0                  # Image processing + WebP conversion
+python-magic==0.4.27            # Magic-byte MIME detection
+
+# ── HTTP client ───────────────────────────────────────────────────────────────
+httpx==0.28.1                   # Async HTTP (payment gateways, Resend)
+
+# ── Payments ─────────────────────────────────────────────────────────────────
+stripe==11.4.1
+
+# ── Email ────────────────────────────────────────────────────────────────────
+resend==2.6.0
+
+# ── Storage ───────────────────────────────────────────────────────────────────
+supabase==2.11.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+python-slugify==8.0.4           # URL slug generation
+orjson==3.10.12                 # Fast JSON serialisation
+
+# ── Testing ───────────────────────────────────────────────────────────────────
+pytest==8.3.4
+pytest-asyncio==0.25.2
+pytest-cov==6.0.0
+httpx==0.28.1                   # Async test client
+factory-boy==3.3.1              # Test fixtures
+pip-audit==2.8.0                # Dependency vulnerability scanning
