@@ -154,7 +154,7 @@ async def refresh(
 
 @router.post(
     "/logout",
-    status_code=204,
+    status_code=200,
     summary="Invalidate current session",
 )
 async def logout(
