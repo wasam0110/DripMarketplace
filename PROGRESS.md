@@ -23,8 +23,8 @@
 | Block | Name | Status |
 |-------|------|--------|
 | 1 | Foundation | ✅ Complete |
-| 2 | Auth | 🔄 In Progress |
-| 3 | Sellers & Slots | ❌ Not started |
+| 2 | Auth | ✅ Complete |
+| 3 | Sellers & Slots | ✅ Complete |
 | 4 | Products & Images | ❌ Not started |
 | 5 | Cart & Orders | ❌ Not started |
 | 6 | Payments | ❌ Not started |
@@ -38,82 +38,89 @@
 ---
 
 ## Block 1 — Foundation ✅
+**Completed:** Session 1
+**Commit:** `feat: Block 1 — foundation`
 
-- [x] `requirements.txt` — all pinned deps
-- [x] `pyproject.toml` — pytest + ruff + mypy config
-- [x] `Makefile` — all dev commands
-- [x] `Dockerfile` — production API image (multi-stage)
-- [x] `Dockerfile.worker` — ARQ worker image
-- [x] `docker-compose.yml` — local Postgres + Redis + pgAdmin
-- [x] `.env.example` — all env vars documented
-- [x] `.gitignore`
-- [x] `alembic.ini`
-- [x] `alembic/env.py` — async-compatible
-- [x] `app/core/config.py` — Pydantic Settings with validators
-- [x] `app/core/logging.py` — structlog JSON + PII scrubber
-- [x] `app/core/exceptions.py` — full exception hierarchy (30+ types)
-- [x] `app/core/database.py` — async engine + session factory + get_db
-- [x] `app/core/redis.py` — connection pool + key helpers + cache utils
-- [x] `app/core/middleware.py` — security headers + request ID + logging + rate limit
-- [x] `app/core/security.py` — Argon2id + RS256 JWT + refresh tokens + TOTP
-- [x] `app/models/base.py` — Base + UUIDPrimaryKeyMixin + TimestampMixin + SoftDeleteMixin
-- [x] `app/schemas/common.py` — pagination + error response + field validators
-- [x] `app/repositories/base.py` — generic async CRUD (create/read/update/soft-delete/list)
-- [x] `app/api/deps.py` — get_db + auth dependencies + role guards
-- [x] `app/api/v1/health.py` — health check endpoint
-- [x] `app/api/v1/router.py` — master router (stubs for future blocks)
-- [x] `app/tasks/worker.py` — ARQ WorkerSettings stub
-- [x] `main.py` — app factory + lifespan + middleware + exception handlers
-- [x] `tests/conftest.py` — shared fixtures (test DB, client, auth headers)
-- [x] All `__init__.py` files
-- [x] **Verified:** `python -c "from app.core.config import Settings"` passes
+### What was built
+- Full project scaffold — Dockerfile, docker-compose, Makefile, .env.example, .gitignore
+- `app/core/config.py` — Pydantic Settings with all env var validators
+- `app/core/logging.py` — structlog JSON logger with PII scrubber
+- `app/core/exceptions.py` — 30+ typed exception hierarchy (`DRIPException` base)
+- `app/core/database.py` — async SQLAlchemy engine + session factory + `get_db`
+- `app/core/redis.py` — connection pool + key helpers + cache utils
+- `app/core/middleware.py` — security headers, request ID, logging, rate limiting
+- `app/core/security.py` — Argon2id hashing, RS256 JWT, refresh tokens, TOTP
+- `app/models/base.py` — `Base`, `UUIDPrimaryKeyMixin`, `AuditMixin`, `SoftDeleteMixin`
+- `app/schemas/common.py` — pagination, error response, shared field validators
+- `app/repositories/base.py` — generic async CRUD
+- `app/api/deps.py` — `get_db`, `require_customer`, `require_seller`, `require_admin`, `CurrentUser`, `CurrentSeller`, `CurrentAdmin`
+- `app/api/v1/health.py` — health check endpoint
+- `app/api/v1/router.py` — master router
+- `app/tasks/worker.py` — ARQ WorkerSettings stub
+- `main.py` — app factory, lifespan, middleware, exception handlers
+- `tests/conftest.py` — shared fixtures
+- All `__init__.py` files
+- **Verified:** `python -c "from app.core.config import Settings"` ✅
 
 ---
 
-## Block 2 — Auth 🔄
+## Block 2 — Auth ✅
+**Completed:** Session 1
+**Commit:** `feat: Block 2 — auth`
 
-### Models
-- [x] `app/models/user.py` — User · UserSession · UserAddress
-
-### Repositories
-- [ ] `app/repositories/user_repo.py` — UserRepository (get_by_email, create_session, etc.)
-
-### Schemas
-- [ ] `app/schemas/auth.py` — RegisterRequest · LoginRequest · AuthResponse · TokenResponse
-
-### Services
-- [ ] `app/services/auth_service.py` — register · login · refresh · logout · verify_email · reset_password · google_oauth
-
-### Integrations
-- [ ] `app/integrations/resend_client.py` — send_email wrapper + templates
-
-### Tasks
-- [ ] `app/tasks/email_tasks.py` — send_verification_email · send_password_reset_email
-
-### Routes
-- [ ] `app/api/v1/auth.py` — 12 endpoints (POST /register, /login, /refresh, /logout, /forgot-password, /reset-password, /verify-email, /google, /google/callback, /me, /change-password, /setup-2fa)
-
-### Migration
-- [ ] `alembic/versions/001_create_users.py` — users · user_sessions · user_addresses tables
-
-### Tests
-- [ ] `tests/unit/test_security.py` — hash/verify, JWT encode/decode, TOTP
-- [ ] `tests/unit/test_auth_service.py` — register, login, refresh, logout flows
-- [ ] `tests/integration/test_auth_api.py` — full HTTP flow tests
-- [ ] `tests/security/test_auth_security.py` — rate limit, brute force, token revocation
+### What was built
+- `app/models/user.py` — `User`, `UserSession`, `UserAddress` with full column set
+  - `User`: email, password_hash, role (customer/seller/admin), first_name, last_name, phone, avatar_url, has_verified_email, google_id, totp_secret, is_2fa_enabled, last_login_at
+  - `UserSession`: token_hash, ip_address, user_agent, expires_at, revoked_at
+  - `UserAddress`: label, street, city, province, is_default
+- `app/repositories/user_repo.py` — `UserRepository` (get_by_email, create, update, soft-delete), `SessionRepository`, `AddressRepository`
+- `app/schemas/auth.py` — `RegisterRequest`, `LoginRequest`, `AuthResponse`, `TokenResponse`, `RefreshRequest`, 12 total schemas
+- `app/services/auth_service.py` — register, login, refresh, logout, verify_email, forgot_password, reset_password, google_oauth, setup_2fa
+- `app/integrations/resend_client.py` — email wrapper + templates (verification, password reset, welcome)
+- `app/tasks/email_tasks.py` — `send_verification_email`, `send_password_reset_email` ARQ tasks
+- `app/api/v1/auth.py` — 12 endpoints: POST /register, /login, /refresh, /logout, /forgot-password, /reset-password, /verify-email, /google, /google/callback, /me, /change-password, /setup-2fa
+- `alembic/versions/001_create_users.py` — users, user_sessions, user_addresses tables (revision: `001`)
+- Tests: `test_security.py`, `test_auth_service.py`, `test_auth_api.py`, `test_auth_security.py`
+- **Migration stamped:** `001` ✅
 
 ---
 
-## Block 3 — Sellers & Slots ❌
+## Block 3 — Sellers & Slots ✅
+**Completed:** Session 2
+**Commit:** `feat: Block 3 — sellers & slots`
+**Tests:** 50/50 ✅
 
-- [ ] `app/models/seller.py` — Seller · SellerWallet · SellerBankAccount · SellerVerification
-- [ ] `app/repositories/seller_repo.py`
-- [ ] `app/schemas/seller.py`
-- [ ] `app/services/seller_service.py`
-- [ ] `app/services/slot_service.py` — consume_slot · release_slot · purchase_extra_slots
-- [ ] `app/api/v1/sellers.py`
-- [ ] `alembic/versions/002_create_sellers.py`
-- [ ] Tests
+### What was built
+- `app/models/seller.py` — `Seller`, `SellerWallet`, `SellerBankAccount`
+  - `Seller`: brand_name, slug, description, logo_url, brand_color, return_policy, whatsapp_number, instagram_handle, status (pending_payment/pending_approval/active/suspended/rejected), total_slots, slots_used, registration_fee, approved_by, approved_at
+  - DB constraints: slots_used ≤ total_slots, slots_used ≥ 0, total_slots ≥ 50
+  - Future relationships pre-wired: products, seller_orders, wallet_transactions, payouts
+  - `SellerWallet`: available_balance, pending_balance, total_earned, total_commission
+  - `SellerBankAccount`: bank_name, account_number, jazzcash_number, easypaisa_number, is_default
+- `app/repositories/seller_repo.py` — `SellerRepository` (create, get_by_id, get_by_user_id, get_by_slug, add_slots, increment/decrement_slots_used, count_published_products), `WalletRepository` (credit_pending, release_pending_to_available, charge_commission, debit_available), `BankAccountRepository`
+- `app/schemas/seller.py` — 20 Pydantic schemas covering registration, profile, slots, dashboard, orders (shapes), bank accounts, analytics, pagination
+- `app/services/seller_service.py` — register (creates User + Seller atomically), get_profile, update_profile, update_logo, get_dashboard, list/add/delete bank accounts. Slug auto-generated and de-duped.
+- `app/services/slot_service.py` — `calculate_pricing` (static, no DB), `purchase_slots` (wallet live; JazzCash/Easypaisa wired in Block 6), `assert_slot_available` (guard called by Block 4 product publish)
+- `app/api/v1/sellers.py` — 14 endpoints:
+  - Public: `POST /seller/register`, `GET /seller/register/slot-price`
+  - Profile: `GET /seller/me`, `PATCH /seller/me`, `POST /seller/logo`
+  - Slots: `POST /seller/slots/purchase`
+  - Dashboard: `GET /seller/dashboard`
+  - Orders: `GET /seller/orders`, `GET /seller/orders/{id}`, `PUT /seller/orders/{id}/status` (stubs — Block 5)
+  - Bank accounts: `GET /seller/bank-accounts`, `POST /seller/bank-accounts`, `DELETE /seller/bank-accounts/{id}`
+  - Analytics: `GET /seller/analytics/revenue` (stub — Block 11)
+- `alembic/versions/002_create_sellers.py` — seller_status enum, sellers, seller_wallets, seller_bank_accounts (revision: `002_create_sellers`)
+- **Modified existing files:**
+  - `app/models/user.py` — replaced `@property seller` shim with real SQLAlchemy relationship (`foreign_keys="[Seller.user_id]"`)
+  - `app/api/v1/router.py` — registered sellers router
+  - `app/core/exceptions.py` — added `PaymentRequiredError`
+- **Migration stamped:** `002_create_sellers (head)` ✅
+- **Business rules enforced:** PKR 5,000 registration, 50 base slots, PKR 50/extra slot, slot guard for product publish
+
+### Key decisions
+- Seller registration is public (no JWT) — creates User (role=seller) + Seller + Wallet in one atomic transaction
+- All private endpoints use `CurrentUser` from `deps.py` which returns JWT payload dict (`current_user["sub"]` for user_id)
+- `DRIPException.http_status` used (not `status_code`) — matches your Block 1 exception base class
 
 ---
 
@@ -164,7 +171,7 @@
 
 ## Block 7 — Wallet & Commission ❌
 
-- [ ] `app/models/wallet.py` — SellerWallet · WalletTransaction · CommissionLedger · Payout
+- [ ] `app/models/wallet.py` — WalletTransaction · CommissionLedger · Payout
 - [ ] `app/repositories/wallet_repo.py`
 - [ ] `app/schemas/wallet.py`
 - [ ] `app/services/wallet_service.py` — double-entry ledger operations
@@ -242,7 +249,9 @@
 | Min withdrawal | PKR 500 |
 | Max COD order | PKR 25,000 |
 
+---
+
 ## Current Session — Start Here
 
-**Last completed:** Block 1 foundation verified ✅, Block 2 User model created
-**Next to build:** Block 2 — user_repo → auth schemas → auth service → routes → migration → tests
+**Last completed:** Block 3 — Sellers & Slots ✅ (50/50 tests, migration at head)
+**Next to build:** Block 4 — Products & Images

@@ -16,13 +16,16 @@ from __future__ import annotations
 import asyncio
 import os
 from logging.config import fileConfig
+from pathlib import Path
 
+from dotenv import load_dotenv
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
-
 from alembic import context
 
+# Load .env from project root
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 # ── Load all models so Alembic can detect schema changes ─────────────────────
 # Import Base first, then every model module. Add new model files here.
 from app.models.base import Base  # noqa: F401
@@ -44,14 +47,14 @@ target_metadata = Base.metadata
 
 
 def get_url() -> str:
-    """
-    Get database URL from environment variable.
-    Alembic uses a sync URL (postgresql://) while the app uses async (postgresql+asyncpg://).
-    """
     url = os.environ.get("DATABASE_URL", "")
-    # Convert async URL to sync for Alembic
-    return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+    if not url:
+        raise RuntimeError("DATABASE_URL is not set in .env")
+    return url  # keep asyncpg:// — async_engine_from_config needs it
 
+
+def get_sync_url() -> str:
+    return get_url().replace("postgresql+asyncpg://", "postgresql+psycopg2://")
 
 def run_migrations_offline() -> None:
     """

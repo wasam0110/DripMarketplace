@@ -12,8 +12,6 @@ from __future__ import annotations
 import enum
 import uuid
 from datetime import datetime
-from typing import Any
-
 from sqlalchemy import Boolean, CheckConstraint, DateTime, Enum as SAEnum, ForeignKey, Index, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -72,17 +70,6 @@ class User(UUIDPrimaryKeyMixin, AuditMixin, Base):
         lazy="selectin",
     )
 
-    @property
-    def seller(self) -> Any:
-        """
-        Temporary Block 2 compatibility shim.
-
-        AuthService already supports seller_id claims, but the Seller model
-        belongs to Block 3. This property is replaced by the real seller
-        relationship when Block 3 is implemented.
-        """
-        return None
-
 
 class UserSession(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "user_sessions"
@@ -135,3 +122,15 @@ class UserAddress(UUIDPrimaryKeyMixin, Base):
     )
 
     user: Mapped[User] = relationship(back_populates="addresses")
+addresses: Mapped[list["UserAddress"]] = relationship(
+    back_populates="user",
+    cascade="all, delete-orphan",
+    lazy="selectin",
+)
+# ADD this after addresses:
+seller: Mapped["Seller | None"] = relationship(
+    "Seller",
+    back_populates="user",
+    foreign_keys="[Seller.user_id]",
+    uselist=False,
+)

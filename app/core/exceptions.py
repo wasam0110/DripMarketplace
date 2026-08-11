@@ -266,3 +266,9 @@ class StorageError(ServerError):
 class PaymentGatewayError(ServerError):
     default_code    = "PAYMENT_GATEWAY_ERROR"
     default_message = "Payment gateway is unavailable. Please try a different payment method."
+
+
+class PaymentRequiredError(BusinessRuleError):
+    status_code = 402
+    error_code  = "payment_required"
+    message     = "Payment is required to complete this action"
