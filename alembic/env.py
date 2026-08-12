@@ -29,9 +29,9 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 # ── Load all models so Alembic can detect schema changes ─────────────────────
 # Import Base first, then every model module. Add new model files here.
 from app.models.base import Base  # noqa: F401
-# from app.models.user import User  # noqa: F401  (uncomment as blocks are built)
-# from app.models.seller import Seller  # noqa: F401
-# from app.models.product import Product  # noqa: F401
+from app.models.user import User  # noqa: F401  (uncomment as blocks are built)
+from app.models.seller import Seller  # noqa: F401
+from app.models.product import Product  # noqa: F401
 # from app.models.order import Order  # noqa: F401
 # from app.models.wallet import SellerWallet  # noqa: F401
 

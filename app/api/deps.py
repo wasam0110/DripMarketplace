@@ -130,7 +130,7 @@ async def require_seller(
     if role == "seller":
         # Verify seller status (lazy import to avoid circular deps)
         from app.repositories.seller_repo import SellerRepository
-        seller = await SellerRepository.get_by_user_id(db, UUID(payload["sub"]))
+        seller = await SellerRepository(db).get_by_user_id(db, UUID(payload["sub"]))
         if not seller:
             raise PermissionDeniedError(message="Seller account not found.")
         if seller.status.value == "suspended":
