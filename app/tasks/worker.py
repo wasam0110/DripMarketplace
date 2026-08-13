@@ -3,6 +3,7 @@ app/tasks/worker.py — ARQ worker with Block 2 email tasks registered.
 """
 
 from __future__ import annotations
+from app.tasks.order_tasks import cod_verification_timeout, send_order_confirmation
 
 from arq.connections import RedisSettings
 
@@ -50,6 +51,8 @@ class WorkerSettings:
         task_send_shipping_notification,
         task_send_cod_timeout,
         task_send_seller_approved,
+        cod_verification_timeout,
+        send_order_confirmation,
     ]
 
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)

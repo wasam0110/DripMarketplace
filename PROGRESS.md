@@ -26,7 +26,7 @@
 | 2 | Auth | ✅ Complete |
 | 3 | Sellers & Slots | ✅ Complete |
 | 4 | Products & Images | ✅ Complete |
-| 5 | Cart & Orders | ❌ Not started |
+| 5 | Cart & Orders | ✅ Complete |
 | 6 | Payments | ❌ Not started |
 | 7 | Wallet & Commission | ❌ Not started |
 | 8 | Admin Panel | ❌ Not started |
@@ -69,18 +69,17 @@
 **Commit:** `feat: Block 2 — auth`
 
 ### What was built
-- `app/models/user.py` — `User`, `UserSession`, `UserAddress` with full column set
+- `app/models/user.py` — `User`, `UserSession`, `UserAddress`
   - `User`: email, password_hash, role (customer/seller/admin), first_name, last_name, phone, avatar_url, has_verified_email, google_id, totp_secret, is_2fa_enabled, last_login_at
   - `UserSession`: token_hash, ip_address, user_agent, expires_at
   - `UserAddress`: label, street, city, province, is_default
-- `app/repositories/user_repo.py` — `UserRepository` (get_by_email, create, update, soft-delete), `SessionRepository`, `AddressRepository`
-- `app/schemas/auth.py` — `RegisterRequest`, `LoginRequest`, `AuthResponse`, `TokenResponse`, `RefreshRequest`, 12 total schemas
+- `app/repositories/user_repo.py` — `UserRepository`, `SessionRepository`, `AddressRepository`
+- `app/schemas/auth.py` — 12 schemas: RegisterRequest, LoginRequest, AuthResponse, TokenResponse, RefreshRequest, and more
 - `app/services/auth_service.py` — register, login, refresh, logout, verify_email, forgot_password, reset_password, google_oauth, setup_2fa
-- `app/integrations/resend_client.py` — email wrapper + templates (verification, password reset, welcome)
-- `app/tasks/email_tasks.py` — `send_verification_email`, `send_password_reset_email` ARQ tasks
-- `app/api/v1/auth.py` — 12 endpoints: POST /register, /login, /refresh, /logout, /forgot-password, /reset-password, /verify-email, /google, /google/callback, /me, /change-password, /setup-2fa
-- `alembic/versions/001_create_users.py` — users, user_sessions, user_addresses tables (revision: `001`)
-- Tests: `test_security.py`, `test_auth_service.py`, `test_auth_api.py`, `test_auth_security.py`
+- `app/integrations/resend_client.py` — email wrapper + templates
+- `app/tasks/email_tasks.py` — send_verification_email, send_password_reset_email
+- `app/api/v1/auth.py` — 12 endpoints
+- `alembic/versions/001_create_users.py` (revision: `001`)
 - **Migration stamped:** `001` ✅
 
 ---
@@ -92,23 +91,22 @@
 
 ### What was built
 - `app/models/seller.py` — `Seller`, `SellerWallet`, `SellerBankAccount`
-  - `Seller`: brand_name, slug, description, logo_url, brand_color, return_policy, whatsapp_number, instagram_handle, status (pending_payment/pending_approval/active/suspended/rejected), total_slots, slots_used, registration_fee, approved_by, approved_at
+  - `Seller`: brand_name, slug, status (pending_payment/pending_approval/active/suspended/rejected), total_slots, slots_used, registration_fee, approved_by
   - DB constraints: slots_used ≤ total_slots, slots_used ≥ 0, total_slots ≥ 50
   - `SellerWallet`: available_balance, pending_balance, total_earned, total_commission
   - `SellerBankAccount`: bank_name, account_number, jazzcash_number, easypaisa_number, is_default
 - `app/repositories/seller_repo.py` — `SellerRepository`, `WalletRepository`, `BankAccountRepository`
-- `app/schemas/seller.py` — 20 Pydantic schemas covering registration, profile, slots, dashboard, orders (shapes), bank accounts, analytics, pagination
-- `app/services/seller_service.py` — register (creates User + Seller atomically), get_profile, update_profile, update_logo, get_dashboard, list/add/delete bank accounts
-- `app/services/slot_service.py` — `calculate_pricing` (static), `purchase_slots` (wallet live; JazzCash/Easypaisa wired in Block 6), `assert_slot_available`
-- `app/api/v1/sellers.py` — 14 endpoints (public registration, profile, slots, dashboard, orders stub, bank accounts, analytics stub)
-- `alembic/versions/002_create_sellers.py` — seller_status enum, sellers, seller_wallets, seller_bank_accounts (revision: `002_create_sellers`)
-- **Modified:** `app/models/user.py` (real seller relationship), `app/api/v1/router.py`, `app/core/exceptions.py`
+- `app/schemas/seller.py` — 20 Pydantic schemas
+- `app/services/seller_service.py` — register (User + Seller atomically), profile, dashboard, bank accounts
+- `app/services/slot_service.py` — calculate_pricing, purchase_slots, assert_slot_available
+- `app/api/v1/sellers.py` — 11 endpoints (registration, profile, slots, dashboard, bank accounts, analytics stub)
+- `alembic/versions/002_create_sellers.py` (revision: `002_create_sellers`)
 - **Migration stamped:** `002_create_sellers` ✅
 
 ### Key decisions
 - Seller registration is public — creates User (role=seller) + Seller + Wallet atomically
-- `CurrentUser` returns JWT payload dict; use `current_user["sub"]` for user_id
-- `DRIPException.http_status` (not `status_code`) matches Block 1 base class
+- `CurrentUser` returns JWT payload dict; `current_user["sub"]` = user_id
+- `DRIPException.http_status` (not `status_code`)
 
 ---
 
@@ -118,52 +116,62 @@
 **Tests:** 40/40 ✅
 
 ### What was built
-- `app/models/product.py` — `Category`, `Product`, `ProductImage`, `ProductVariant`, `ProductInventory`, `Tag`, `product_tags` association table
-  - `Category`: self-referential parent/children, name, slug, image_url, sort_order, is_active
-  - `Product`: seller_id, category_id, name, slug, description, price, sale_price, is_published, admin_hidden, meta_title, meta_description, avg_rating, review_count, view_count
-  - DB constraints: price PKR 100–500,000, sale_price < price, avg_rating 0–5
-  - `ProductVariant`: sku (unique), size_type (alpha/numeric/one_size), size_value, colour, price_override, is_active. Unique constraint on (product_id, size_value, colour)
-  - `ProductInventory`: stock, reserved, available_stock property. Constraints: stock ≥ 0, reserved ≥ 0, stock ≥ reserved
-  - `ProductImage`: url, alt_text, sort_order, is_primary (max 6 per product)
-  - `Tag`: many-to-many with Product via product_tags
-- `app/repositories/product_repo.py` — `ProductRepository` (create, get_by_id, get_by_slug, slug_exists, get_seller_products, list_catalogue with cursor pagination + filters, search_suggestions, soft_delete, increment_view_count, image management), `VariantRepository`
-- `app/repositories/inventory_repo.py` — `InventoryRepository` (create, get_by_variant, update_stock, reserve, release, deduct)
-- `app/schemas/product.py` — 18 Pydantic schemas: CreateProductRequest, UpdateProductRequest, CreateVariantRequest, ProductCardResponse, ProductDetailResponse, VariantWithStockResponse, SellerProductRowResponse, SlotInfoResponse, CursorPagination, SearchSuggestionsResponse, and more
-- `app/services/product_service.py` — create_product (draft; optional publish), update_product, delete_product (frees slot if published), publish_product (validates images + variants + slot), unpublish_product (frees slot), get_catalogue (cursor-based with full filters), get_product_detail, get_product_by_slug, get_seller_products, add_images, get_variants, search_suggestions
-- `app/services/image_service.py` — magic-byte validation (JPEG/PNG/WebP), 5MB limit, Pillow WebP conversion, Supabase upload
-- `app/integrations/supabase_storage.py` — async httpx wrapper for Supabase Storage REST API (upload, get_public_url, delete)
-- `app/api/v1/products.py` — 17 endpoints:
-  - Public: `GET /products`, `GET /products/{id}`, `GET /products/slug/{slug}`, `GET /products/{id}/variants`, `GET /products/{id}/reviews` (stub), `POST /products/{id}/reviews` (stub), `GET /products/search/suggestions`
-  - Seller: `GET /seller/products`, `POST /seller/products`, `PUT /seller/products/{id}`, `DELETE /seller/products/{id}`, `POST /seller/products/{id}/publish`, `POST /seller/products/{id}/unpublish`, `POST /seller/products/{id}/images`
-  - Admin: `GET /admin/products` (stub — Block 8), `POST /admin/products/{id}/hide` (stub — Block 8)
-- `alembic/versions/003_create_products.py` — size_type enum, categories, products, product_images, product_variants, product_inventory, tags, product_tags (revision: `003_create_products`)
-- **Modified:** `app/api/v1/router.py` (products router), `app/models/seller.py` (removed future block relationships that caused mapper errors), `alembic/env.py` (Product model import), `app/api/deps.py` (fixed `SellerRepository(db).get_by_user_id()` instance method call)
+- `app/models/product.py` — `Category`, `Product`, `ProductImage`, `ProductVariant`, `ProductInventory`, `Tag`, `product_tags`
+  - Price constraints: PKR 100–500,000, sale_price < price
+  - Inventory constraints: stock ≥ 0, reserved ≥ 0, stock ≥ reserved
+  - Variant unique constraint: (product_id, size_value, colour)
+- `app/repositories/product_repo.py` — `ProductRepository`, `VariantRepository`
+- `app/repositories/inventory_repo.py` — `InventoryRepository` (reserve, release, deduct)
+- `app/schemas/product.py` — 18 schemas
+- `app/services/product_service.py` — create, update, delete, publish/unpublish (slot guard), catalogue (cursor pagination), search
+- `app/services/image_service.py` — magic-byte validation, WebP conversion, Supabase upload
+- `app/integrations/supabase_storage.py` — async httpx Supabase Storage wrapper
+- `app/api/v1/products.py` — 17 endpoints (public catalogue, seller management, admin stubs)
+- `alembic/versions/003_create_products.py` (revision: `003_create_products`)
 - **Migration stamped:** `003_create_products` ✅
 
 ### Key decisions
-- Creating a product never consumes a slot — slot consumed only on publish
-- Deleting or unpublishing a published product frees the slot immediately
+- Slot consumed only on publish, freed on unpublish/delete
 - Publish requires: ≥1 image, ≥1 variant, available slot
-- Catalogue uses cursor pagination (created_at + id) for infinite scroll
-- Images validated by magic bytes (not just extension), converted to WebP before upload
-- `seller_orders`, `wallet_transactions`, `payouts` relationships removed from Seller model until Block 5/7 are built — will be re-added then
-- `CurrentSeller` payload dict: use `current_user["seller_id"]` for seller_id
+- `CurrentSeller` payload: `current_user["seller_id"]`
 
 ---
 
-## Block 5 — Cart & Orders ❌
+## Block 5 — Cart & Orders ✅
+**Completed:** Session 3
+**Commit:** `feat: Block 5 — cart & orders`
+**Tests:** 43/43 ✅
 
-- [ ] `app/models/order.py` — Order · OrderItem · OrderAddress · SellerOrder · OrderStatusHistory
-- [ ] `app/models/coupon.py` — Coupon · CouponUsage
-- [ ] `app/repositories/order_repo.py`
-- [ ] `app/schemas/order.py`
-- [ ] `app/services/order_service.py` — create_order (atomic stock decrement) · cancel_order · cod_timeout
-- [ ] `app/services/coupon_service.py`
-- [ ] `app/api/v1/orders.py`
-- [ ] `app/api/v1/cart.py`
-- [ ] `app/tasks/order_tasks.py` — cod_verification_timeout · send_order_confirmation
-- [ ] `alembic/versions/004_create_orders.py`
-- [ ] Tests
+### What was built
+- `app/models/order.py` — `Order`, `OrderAddress`, `OrderItem`, `SellerOrder`, `OrderStatusHistory`
+  - `Order`: user_id (nullable for guest), order_number (unique), status, guest_email/name/phone, subtotal, discount_amount, shipping_fee, total, payment_method, coupon_id, notes
+  - DB constraints: total > 0, user_id IS NOT NULL OR guest_email IS NOT NULL
+  - `OrderItem`: snapshots product_name + variant_label at order time; qty > 0
+  - `SellerOrder`: per-seller subtotal, tracking_number, courier_name, shipped_at, delivered_at
+  - `OrderStatusHistory`: full audit trail for every status change
+- `app/models/coupon.py` — `Coupon`, `CouponUsage`
+  - Coupon: percentage (max 70%) or fixed discount, min_order_amount, per-customer usage limit, validity window
+- `app/repositories/order_repo.py` — `OrderRepository` (create, get_by_id, get_by_number, get_customer_orders, update_status, add_status_history), `SellerOrderRepository`
+- `app/schemas/order.py` — 20+ schemas: CreateOrderRequest, CreateGuestOrderRequest, CartResponse, CartItemResponse, SellerCartGroup, OrderDetailResponse, CouponValidationResponse, UpdateSellerOrderRequest, and more
+- `app/services/order_service.py` — create_order (atomic: validate stock → create order + items + seller_orders → reserve inventory → clear cart → enqueue COD timeout), create_guest_order, get_order, cancel_order (releases inventory), get_seller_orders, update_seller_order_status
+- `app/services/cart_service.py` — Redis hash-based cart (CART_TTL 7 days), add_item (stock check), update_item, remove_item, clear, sync (guest→server merge on login), get_raw_items (used by order creation)
+- `app/services/coupon_service.py` — validate (checks active, expiry, usage limits, per-customer limit), apply_to_order (records CouponUsage, increments uses_count)
+- `app/api/v1/orders.py` — 9 endpoints: POST /orders, POST /orders/guest, GET /orders, GET /orders/{id}, GET /orders/number/{number}, POST /orders/{id}/cancel, POST /coupons/validate, GET/PUT /seller/orders, GET /seller/orders/{id}
+- `app/api/v1/cart.py` — 6 endpoints: GET/POST /cart, PATCH/DELETE /cart/{variant_id}, POST /cart/clear, POST /cart/sync
+- `app/tasks/order_tasks.py` — `cod_verification_timeout` (auto-cancel after 30 min), `send_order_confirmation` (stub — Block 9)
+- `alembic/versions/004_create_orders.py` — discount_type, order_status, payment_method, seller_order_status enums + all 6 tables (revision: `004_create_orders`)
+- **Modified:** `app/models/seller.py` (re-added seller_orders relationship), `app/models/user.py` (added orders relationship), `app/api/v1/sellers.py` (removed order stubs now live in orders.py), `app/api/v1/router.py`, `alembic/env.py`, `app/tasks/worker.py`
+- **Migration stamped:** `004_create_orders` ✅
+
+### Key decisions
+- Cart is Redis-based (`cart:{user_id}` hash, TTL 7 days); order creation reads from Redis for auth users, from request body for guests
+- Inventory is reserved (not deducted) at order time; deducted on delivery (Block 7)
+- COD orders auto-cancel via ARQ task after 30 minutes if not verified
+- Max COD: PKR 25,000 (BR-COD-01)
+- Shipping: PKR 200 flat, free above PKR 5,000
+- WhatsApp verification URL returned in CreateOrderResponse for COD orders
+- Seller order status transitions: pending → processing → shipped → delivered
+- `SellerOrder.back_populates="seller"` re-added to `Seller` model now that SellerOrder exists
 
 ---
 
@@ -265,5 +273,5 @@
 
 ## Current Session — Start Here
 
-**Last completed:** Block 4 — Products & Images ✅ (40/40 tests, migration at head)
-**Next to build:** Block 5 — Cart & Orders
+**Last completed:** Block 5 — Cart & Orders ✅ (43/43 tests, migration at head)
+**Next to build:** Block 6 — Payments

@@ -32,8 +32,8 @@ from app.models.base import Base  # noqa: F401
 from app.models.user import User  # noqa: F401  (uncomment as blocks are built)
 from app.models.seller import Seller  # noqa: F401
 from app.models.product import Product  # noqa: F401
-# from app.models.order import Order  # noqa: F401
-# from app.models.wallet import SellerWallet  # noqa: F401
+from app.models.order  import Order   # noqa: F401
+from app.models.coupon import Coupon  # noqa: F401
 
 # ── Alembic config ────────────────────────────────────────────────────────────
 config = context.config

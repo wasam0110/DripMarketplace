@@ -67,7 +67,10 @@ class Seller(Base, TimestampMixin, SoftDeleteMixin):
     # These relationships are wired here so Block 4/5 models slot straight in
     products:            Mapped[list["Product"]]           = relationship(back_populates="seller")
 
-
+    seller_orders: Mapped[list["SellerOrder"]] = relationship(
+    "SellerOrder", back_populates="seller"
+)
+    
     @property
     def slots_available(self) -> int:
         return self.total_slots - self.slots_used

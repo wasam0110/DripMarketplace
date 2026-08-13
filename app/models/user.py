@@ -70,7 +70,9 @@ class User(UUIDPrimaryKeyMixin, AuditMixin, Base):
                    foreign_keys="[Seller.user_id]",
                    uselist=False,
                )
-
+    orders: Mapped[list["Order"]] = relationship(
+    "Order", back_populates="user", lazy="noload"
+)
 
 class UserSession(UUIDPrimaryKeyMixin, Base):
     __tablename__ = "user_sessions"
