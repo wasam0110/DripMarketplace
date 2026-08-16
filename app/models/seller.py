@@ -70,6 +70,13 @@ class Seller(Base, TimestampMixin, SoftDeleteMixin):
     seller_orders: Mapped[list["SellerOrder"]] = relationship(
     "SellerOrder", back_populates="seller"
 )
+    wallet_transactions: Mapped[list["WalletTransaction"]] = relationship(
+    "WalletTransaction", back_populates="seller"
+)
+    payouts: Mapped[list["Payout"]] = relationship(
+    "Payout", back_populates="seller"
+)
+    
     
     @property
     def slots_available(self) -> int:

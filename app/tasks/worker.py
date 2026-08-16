@@ -4,7 +4,7 @@ app/tasks/worker.py — ARQ worker with Block 2 email tasks registered.
 
 from __future__ import annotations
 from app.tasks.order_tasks import cod_verification_timeout, send_order_confirmation
-
+from app.tasks.wallet_tasks import settle_commission, move_pending_to_available
 from arq.connections import RedisSettings
 
 from app.core.config import settings
@@ -16,6 +16,8 @@ from app.tasks.email_tasks import (
     task_send_shipping_notification,
     task_send_cod_timeout,
     task_send_seller_approved,
+    settle_commission,
+    move_pending_to_available,
 )
 
 logger = get_logger(__name__)
@@ -53,6 +55,8 @@ class WorkerSettings:
         task_send_seller_approved,
         cod_verification_timeout,
         send_order_confirmation,
+        settle_commission,
+        move_pending_to_available,
     ]
 
     redis_settings = RedisSettings.from_dsn(settings.REDIS_URL)

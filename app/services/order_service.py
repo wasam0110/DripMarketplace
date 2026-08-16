@@ -353,6 +353,19 @@ class OrderService:
             courier_name=payload.courier_name,
         )
         await self.db.commit()
+
+        # Trigger commission settlement when delivered
+        if payload.status == "delivered":
+            try:
+                from arq import create_pool
+                from arq.connections import RedisSettings
+                from app.core.config import settings
+                pool = await create_pool(RedisSettings.from_dsn(str(settings.REDIS_URL)))
+                await pool.enqueue_job("settle_commission", str(seller_order_id))
+                await pool.aclose()
+            except Exception:
+                pass  # Non-critical — can be triggered manually
+
         return {"message": f"Seller order status updated to '{payload.status}'"}
 
     # ── Helpers ────────────────────────────────────────────────────────────────

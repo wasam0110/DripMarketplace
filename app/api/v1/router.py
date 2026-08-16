@@ -10,6 +10,7 @@ from app.api.v1 import products
 from app.api.v1          import orders     
 from app.api.v1          import cart 
 from app.api.v1 import payments
+from app.api.v1 import wallet 
 
 api_router = APIRouter()
 
@@ -20,3 +21,4 @@ api_router.include_router(products.router)
 api_router.include_router(orders.router)   
 api_router.include_router(cart.router) 
 api_router.include_router(payments.router)
+api_router.include_router(wallet.router)
