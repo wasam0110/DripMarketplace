@@ -272,3 +272,7 @@ class PaymentRequiredError(BusinessRuleError):
     status_code = 402
     error_code  = "payment_required"
     message     = "Payment is required to complete this action"
+class ExternalServiceError(DRIPException):
+    http_status     = 502
+    default_code    = "EXTERNAL_SERVICE_ERROR"
+    default_message = "An upstream service is unavailable"

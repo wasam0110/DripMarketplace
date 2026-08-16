@@ -7,7 +7,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
-    String, Text, Numeric, Boolean, Char,
+    String, Text, Numeric, Boolean, CHAR,
     DateTime, Enum as SAEnum, ForeignKey,
     CheckConstraint,
 )
@@ -38,7 +38,7 @@ class Payment(Base):
                            default=PaymentStatus.pending,
                        )
     amount:            Mapped[Decimal]           = mapped_column(Numeric(12, 2))
-    currency:          Mapped[str]               = mapped_column(Char(3), default="PKR")
+    currency:          Mapped[str]               = mapped_column(CHAR(3), default="PKR")
     gateway_reference: Mapped[str | None]        = mapped_column(String(255))
     gateway_payload:   Mapped[dict | None]       = mapped_column(JSONB)
     failure_reason:    Mapped[str | None]        = mapped_column(String(500))
