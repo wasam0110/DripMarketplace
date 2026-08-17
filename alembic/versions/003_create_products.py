@@ -22,7 +22,7 @@ depends_on    = None
 def upgrade() -> None:
     # size_type enum
     size_type_enum = postgresql.ENUM(
-        "alpha", "numeric", "one_size", name="size_type"
+        "alpha", "numeric", "one_size", name="size_type", create_type=False
     )
     size_type_enum.create(op.get_bind(), checkfirst=True)
 
@@ -102,8 +102,7 @@ def upgrade() -> None:
         sa.Column("product_id",     postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("products.id", ondelete="CASCADE"), nullable=False),
         sa.Column("sku",            sa.String(100), nullable=False),
-        sa.Column("size_type",      sa.Enum("alpha","numeric","one_size",
-                  name="size_type", create_type=False), nullable=False),
+        sa.Column("size_type",      size_type_enum, nullable=False),
         sa.Column("size_value",     sa.String(10),  nullable=False),
         sa.Column("colour",         sa.String(50),  nullable=False),
         sa.Column("price_override", sa.Numeric(10,2), nullable=True),

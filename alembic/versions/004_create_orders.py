@@ -24,14 +24,21 @@ def upgrade() -> None:
     bind = op.get_bind()
 
     # Enums (checkfirst=True — may already exist in Supabase)
+    enum_defs = {
+        "discount_type":       ["percentage", "fixed"],
+        "order_status":        ["pending_payment","payment_confirmed","pending_cod_verification",
+                                 "processing","shipped","delivered","completed","cancelled","refunded"],
+        "payment_method":      ["jazzcash","easypaisa","card","cod"],
+        "seller_order_status": ["pending","processing","shipped","delivered","cancelled","returned"],
+    }
+    enum_objs: dict[str, postgresql.ENUM] = {}
+
     for enum_name, values in [
-        ("discount_type",       ["percentage", "fixed"]),
-        ("order_status",        ["pending_payment","payment_confirmed","pending_cod_verification",
-                                 "processing","shipped","delivered","completed","cancelled","refunded"]),
-        ("payment_method",      ["jazzcash","easypaisa","card","cod"]),
-        ("seller_order_status", ["pending","processing","shipped","delivered","cancelled","returned"]),
+        (name, vals) for name, vals in enum_defs.items()
     ]:
-        postgresql.ENUM(*values, name=enum_name).create(bind, checkfirst=True)
+        enum_obj = postgresql.ENUM(*values, name=enum_name, create_type=False)
+        enum_obj.create(bind, checkfirst=True)
+        enum_objs[enum_name] = enum_obj
 
     # coupons (must come before orders FK)
     op.create_table(
@@ -39,7 +46,7 @@ def upgrade() -> None:
         sa.Column("id",                    postgresql.UUID(as_uuid=True), primary_key=True,
                   server_default=sa.text("gen_random_uuid()")),
         sa.Column("code",                  sa.String(30),  nullable=False),
-        sa.Column("discount_type",         sa.Enum("percentage","fixed", name="discount_type", create_type=False), nullable=False),
+        sa.Column("discount_type",         enum_objs["discount_type"], nullable=False),
         sa.Column("discount_value",        sa.Numeric(10,2), nullable=False),
         sa.Column("min_order_amount",      sa.Numeric(10,2), nullable=False, server_default="0"),
         sa.Column("max_uses",              sa.Integer(), nullable=True),
@@ -60,7 +67,7 @@ def upgrade() -> None:
         sa.Column("id",              postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("user_id",         postgresql.UUID(as_uuid=True), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("order_number",    sa.String(20),  nullable=False),
-        sa.Column("status",          sa.Enum("pending_payment","payment_confirmed","pending_cod_verification","processing","shipped","delivered","completed","cancelled","refunded", name="order_status", create_type=False), nullable=False, server_default="pending_payment"),
+        sa.Column("status",          enum_objs["order_status"], nullable=False, server_default="pending_payment"),
         sa.Column("guest_email",     sa.String(254), nullable=True),
         sa.Column("guest_name",      sa.String(200), nullable=True),
         sa.Column("guest_phone",     sa.String(20),  nullable=True),
@@ -68,7 +75,7 @@ def upgrade() -> None:
         sa.Column("discount_amount", sa.Numeric(12,2), nullable=False, server_default="0"),
         sa.Column("shipping_fee",    sa.Numeric(10,2), nullable=False, server_default="200"),
         sa.Column("total",           sa.Numeric(12,2), nullable=False),
-        sa.Column("payment_method",  sa.Enum("jazzcash","easypaisa","card","cod", name="payment_method", create_type=False), nullable=False),
+        sa.Column("payment_method",  enum_objs["payment_method"], nullable=False),
         sa.Column("coupon_id",       postgresql.UUID(as_uuid=True), sa.ForeignKey("coupons.id"), nullable=True),
         sa.Column("notes",           sa.Text, nullable=True),
         sa.Column("created_at",      sa.TIMESTAMP(timezone=True), nullable=False, server_default=sa.text("NOW()")),
@@ -119,7 +126,7 @@ def upgrade() -> None:
         sa.Column("id",              postgresql.UUID(as_uuid=True), primary_key=True, server_default=sa.text("gen_random_uuid()")),
         sa.Column("order_id",        postgresql.UUID(as_uuid=True), sa.ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("seller_id",       postgresql.UUID(as_uuid=True), sa.ForeignKey("sellers.id"), nullable=False),
-        sa.Column("status",          sa.Enum("pending","processing","shipped","delivered","cancelled","returned", name="seller_order_status", create_type=False), nullable=False, server_default="pending"),
+        sa.Column("status",          enum_objs["seller_order_status"], nullable=False, server_default="pending"),
         sa.Column("subtotal",        sa.Numeric(12,2), nullable=False),
         sa.Column("tracking_number", sa.String(100), nullable=True),
         sa.Column("courier_name",    sa.String(100), nullable=True),

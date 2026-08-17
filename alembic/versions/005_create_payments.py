@@ -21,10 +21,12 @@ depends_on    = None
 def upgrade() -> None:
     bind = op.get_bind()
 
-    postgresql.ENUM(
+    payment_status_enum = postgresql.ENUM(
         "pending", "processing", "completed", "failed", "refunded",
         name="payment_status",
-    ).create(bind, checkfirst=True)
+        create_type=False,
+    )
+    payment_status_enum.create(bind, checkfirst=True)
 
     # payments
     op.create_table(
@@ -34,8 +36,7 @@ def upgrade() -> None:
         sa.Column("order_id",          postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("orders.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("method",            sa.String(20),  nullable=False),
-        sa.Column("status",            sa.Enum("pending","processing","completed","failed","refunded",
-                  name="payment_status", create_type=False), nullable=False, server_default="pending"),
+        sa.Column("status",            payment_status_enum, nullable=False, server_default="pending"),
         sa.Column("amount",            sa.Numeric(12, 2), nullable=False),
         sa.Column("currency",          sa.String(3),   nullable=False, server_default="PKR"),
         sa.Column("gateway_reference", sa.String(255), nullable=True),

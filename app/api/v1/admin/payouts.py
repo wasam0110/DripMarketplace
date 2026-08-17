@@ -3,12 +3,12 @@ from __future__ import annotations
 from uuid import UUID
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, CurrentAdmin
 from app.schemas.wallet import PaginatedPayouts, PayoutResponse
-from app.schemas.admin import AdminPayoutActionRequest
 from app.services.wallet_service import WalletService
 from app.models.wallet import PayoutStatus
 
@@ -16,15 +16,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 DB = Annotated[AsyncSession, Depends(get_db)]
 
 
-class AdminPayoutActionRequest:
-    pass
-
-
-from pydantic import BaseModel
-
 class PayoutActionRequest(BaseModel):
     admin_note:        Optional[str] = None
-    payment_reference: Optional[str] = None  # for complete action
+    payment_reference: Optional[str] = None
 
 
 @router.get("/payouts", response_model=PaginatedPayouts)
@@ -101,7 +95,6 @@ async def reject_payout(
     current_admin: CurrentAdmin,
 ) -> PayoutResponse:
     if not payload.admin_note:
-        from fastapi import HTTPException
         raise HTTPException(status_code=422, detail="admin_note required for rejection")
     return await WalletService(db).admin_reject_payout(
         payout_id=payout_id,

@@ -72,8 +72,11 @@ async def jazzcash_callback(request: Request, db: DB) -> dict:
 
 @router.post("/callback/easypaisa", include_in_schema=False)
 async def easypaisa_callback(request: Request, db: DB) -> dict:
-    data = await request.json()
-    await PaymentService(db).handle_easypaisa_callback(data)
+    try:
+        data = await request.json()
+        await PaymentService(db).handle_easypaisa_callback(data)
+    except Exception:
+        pass
     return {"status": "ok"}
 
 

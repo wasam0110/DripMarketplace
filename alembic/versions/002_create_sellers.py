@@ -22,6 +22,7 @@ def upgrade() -> None:
     seller_status = postgresql.ENUM(
         "pending_payment", "pending_approval", "active", "suspended", "rejected",
         name="seller_status",
+        create_type=False,
     )
     seller_status.create(op.get_bind(), checkfirst=True)
 
@@ -40,10 +41,7 @@ def upgrade() -> None:
         sa.Column("return_policy",    sa.Text,         nullable=True),
         sa.Column("whatsapp_number",  sa.String(20),   nullable=True),
         sa.Column("instagram_handle", sa.String(100),  nullable=True),
-        sa.Column("status",           sa.Enum(
-            "pending_payment", "pending_approval", "active", "suspended", "rejected",
-            name="seller_status", create_type=False,
-        ), nullable=False, server_default="pending_payment"),
+        sa.Column("status",           seller_status, nullable=False, server_default="pending_payment"),
         sa.Column("total_slots",      sa.Integer(),    nullable=False, server_default="50"),
         sa.Column("slots_used",       sa.Integer(),    nullable=False, server_default="0"),
         sa.Column("registration_fee", sa.Numeric(10, 2), nullable=False, server_default="5000.00"),

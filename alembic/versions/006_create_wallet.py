@@ -22,14 +22,21 @@ depends_on    = None
 def upgrade() -> None:
     bind = op.get_bind()
 
-    for name, values in [
-        ("wallet_tx_type", [
+    enum_defs = {
+        "wallet_tx_type": [
             "credit_commission","debit_commission","credit_refund",
             "debit_withdrawal","credit_adjustment","debit_adjustment",
-        ]),
-        ("payout_status", ["requested","approved","processing","completed","rejected"]),
+        ],
+        "payout_status": ["requested","approved","processing","completed","rejected"],
+    }
+    enum_objs: dict[str, postgresql.ENUM] = {}
+
+    for name, values in [
+        (enum_name, vals) for enum_name, vals in enum_defs.items()
     ]:
-        postgresql.ENUM(*values, name=name).create(bind, checkfirst=True)
+        enum_obj = postgresql.ENUM(*values, name=name, create_type=False)
+        enum_obj.create(bind, checkfirst=True)
+        enum_objs[name] = enum_obj
 
     # payouts (must come before wallet_transactions)
     op.create_table(
@@ -41,10 +48,7 @@ def upgrade() -> None:
         sa.Column("amount",         sa.Numeric(12, 2), nullable=False),
         sa.Column("payment_method", sa.String(50),  nullable=False),
         sa.Column("payment_detail", sa.String(255), nullable=False),
-        sa.Column("status",         sa.Enum(
-            "requested","approved","processing","completed","rejected",
-            name="payout_status", create_type=False,
-        ), nullable=False, server_default="requested"),
+        sa.Column("status",         enum_objs["payout_status"], nullable=False, server_default="requested"),
         sa.Column("admin_note",     sa.Text, nullable=True),
         sa.Column("approved_by",    postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("users.id"), nullable=True),
@@ -83,11 +87,7 @@ def upgrade() -> None:
                   server_default=sa.text("gen_random_uuid()")),
         sa.Column("seller_id",       postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("sellers.id"), nullable=False),
-        sa.Column("type",            sa.Enum(
-            "credit_commission","debit_commission","credit_refund",
-            "debit_withdrawal","credit_adjustment","debit_adjustment",
-            name="wallet_tx_type", create_type=False,
-        ), nullable=False),
+        sa.Column("type",            enum_objs["wallet_tx_type"], nullable=False),
         sa.Column("amount",          sa.Numeric(12, 2), nullable=False),
         sa.Column("balance_after",   sa.Numeric(12, 2), nullable=False),
         sa.Column("reference",       sa.String(255), nullable=True),

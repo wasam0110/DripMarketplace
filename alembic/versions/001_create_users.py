@@ -19,13 +19,19 @@ depends_on = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+
     # Enable UUID generation
     op.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto")
 
-    # Enum
-    op.execute(
-        "CREATE TYPE user_role AS ENUM ('customer', 'seller', 'admin')"
+    user_role_enum = postgresql.ENUM(
+        "customer",
+        "seller",
+        "admin",
+        name="user_role",
+        create_type=False,
     )
+    user_role_enum.create(bind, checkfirst=True)
 
     # users
     op.create_table(
@@ -40,13 +46,7 @@ def upgrade() -> None:
         sa.Column("password_hash", sa.String(255), nullable=True),
         sa.Column(
             "role",
-            sa.Enum(
-                "customer",
-                "seller",
-                "admin",
-                name="user_role",
-                create_type=False,
-            ),
+            user_role_enum,
             nullable=False,
             server_default="customer",
         ),

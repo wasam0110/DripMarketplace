@@ -34,8 +34,9 @@ from app.models.seller import Seller  # noqa: F401
 from app.models.product import Product  # noqa: F401
 from app.models.order  import Order   # noqa: F401
 from app.models.coupon import Coupon  # noqa: F401
-from app.models.seller_order import SellerOrder  # noqa: F401
 from app.models.payment import Payment
+from app.models.wallet import WalletTransaction
+from app.models.admin import Banner, SystemSetting  # noqa: F401
 
 # ── Alembic config ────────────────────────────────────────────────────────────
 config = context.config

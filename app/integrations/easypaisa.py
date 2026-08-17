@@ -3,7 +3,8 @@ from __future__ import annotations
 import hashlib
 import hmac
 from datetime import datetime
-
+from typing import Optional
+from typing import Optional
 import httpx
 
 from app.core.exceptions import ExternalServiceError
@@ -34,12 +35,10 @@ class EasypaisaClient:
 
     # ── Hash ──────────────────────────────────────────────────────────────────
 
-    def build_hash(self, params: dict) -> str:
-        """
-        Hash = SHA-256(sorted_values_concatenated + store_key)
-        """
+    def build_hash(self, params: dict, store_key: Optional[str] = None) -> str:
+        key = store_key if store_key is not None else self.store_key
         sorted_vals = "".join(str(v) for _, v in sorted(params.items()))
-        data        = sorted_vals + self.store_key
+        data        = sorted_vals + key
         return hashlib.sha256(data.encode("utf-8")).hexdigest()
 
     def verify_callback(self, data: dict) -> bool:
