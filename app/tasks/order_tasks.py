@@ -67,8 +67,10 @@ async def cod_verification_timeout(ctx: dict, order_id: str) -> None:
 
 
 async def send_order_confirmation(ctx: dict, order_id: str) -> None:
-    """
-    Send order confirmation email to customer.
-    Wired with Resend in Block 9 (Notifications).
-    """
-    logger.info(f"Order confirmation email queued for order {order_id} — wired in Block 9")
+    from app.core.database import AsyncSessionLocal
+    from app.services.notification_service import NotificationService
+    async with AsyncSessionLocal() as db:
+        try:
+            await NotificationService(db).notify_order_placed(uuid.UUID(order_id))
+        except Exception as exc:
+            logger.error(f"Order confirmation failed for {order_id}: {exc}")
