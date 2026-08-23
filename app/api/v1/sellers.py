@@ -12,7 +12,6 @@ from app.schemas.seller import (
     SellerDashboardResponse, PaginatedSellerOrders, PagePagination,
     SellerOrderDetailResponse, UpdateOrderStatusRequest,
     BankAccountResponse, CreateBankAccountRequest,
-    RevenueAnalyticsResponse,
 )
 from app.services.seller_service import SellerService
 from app.services.slot_service import SlotService
@@ -154,14 +153,3 @@ async def delete_bank_account(
         user_id=UUID(current_user["sub"]), account_id=account_id
     )
     return Response(status_code=204)
-
-# ── ANALYTICS (stub — Block 10) ────────────────────────────────────────────────
-
-@router.get("/analytics/revenue", response_model=RevenueAnalyticsResponse)
-async def get_revenue_analytics(
-    db: DB,
-    current_user: CurrentUser,
-    period:      str = Query(default="30d", pattern="^(7d|30d|90d|1y)$"),
-    granularity: str = Query(default="day", pattern="^(day|week|month)$"),
-) -> RevenueAnalyticsResponse:
-    return RevenueAnalyticsResponse(period=period, granularity=granularity, data=[])
