@@ -23,7 +23,7 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 from alembic import context
-
+from app.models.return_ import Return
 # Load .env from project root
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 # ── Load all models so Alembic can detect schema changes ─────────────────────

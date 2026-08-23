@@ -12,6 +12,7 @@ from app.api.v1          import cart
 from app.api.v1 import payments
 from app.api.v1 import wallet 
 from app.api.v1 import notifications
+from app.api.v1 import returns 
 from app.api.v1.admin import (    # ← add
     dashboard as admin_dashboard,
     brands    as admin_brands,
@@ -39,3 +40,4 @@ api_router.include_router(admin_payouts.router)
 api_router.include_router(admin_content.router)    
 api_router.include_router(admin_settings.router) 
 api_router.include_router(notifications.router)
+api_router.include_router(returns.router) 
