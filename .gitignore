@@ -1,0 +1,21 @@
+# Local secrets and environment files
+drip-backend/.env
+drip-frontend/.env
+
+# Python
+drip-backend/.venv/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.coverage
+coverage.xml
+
+# Node
+drip-frontend/node_modules/
+drip-frontend/dist/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,20 @@
+export const products = [
+  { id: 1, name: 'Orbit Heavyweight Tee', brand: 'VOID FORM', price: 4200, oldPrice: 5200, category: 'Tops', badge: 'SALE', rating: 4.9, colors: ['#e8e8e8','#1a1a1a','#c3e64d'], image: 'https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=900&q=85' },
+  { id: 2, name: 'Asphalt Cargo Trouser', brand: 'NO SIGNAL', price: 7800, category: 'Bottoms', badge: 'NEW', rating: 4.8, colors: ['#202020','#8b8b7a'], image: 'https://images.unsplash.com/photo-1517445312882-bc9910d016b7?auto=format&fit=crop&w=900&q=85' },
+  { id: 3, name: 'Static Racing Jacket', brand: 'AFTERDARK', price: 12500, category: 'Outerwear', rating: 5.0, colors: ['#141414','#d9d9d0'], image: 'https://images.unsplash.com/photo-1551028719-00167b16eac5?auto=format&fit=crop&w=900&q=85' },
+  { id: 4, name: 'Logo 6 Panel', brand: 'COMMON GROUND', price: 3200, category: 'Headwear', badge: 'NEW', rating: 4.7, colors: ['#222','#dfff00','#e8e8e8'], image: 'https://images.unsplash.com/photo-1521369909029-2afed882baee?auto=format&fit=crop&w=900&q=85' },
+  { id: 5, name: 'Acid Washed Hoodie', brand: 'VOID FORM', price: 6900, category: 'Tops', rating: 4.8, colors: ['#65685d','#202020'], image: 'https://images.unsplash.com/photo-1556821840-3a63f95609a7?auto=format&fit=crop&w=900&q=85' },
+  { id: 6, name: 'Utility Overshirt', brand: 'NO SIGNAL', price: 8400, category: 'Outerwear', badge: 'SALE', rating: 4.6, colors: ['#b9ad91','#242424'], image: 'https://images.unsplash.com/photo-1591047139829-d91aecb6caea?auto=format&fit=crop&w=900&q=85' },
+  { id: 7, name: 'Wide Leg Denim', brand: 'COMMON GROUND', price: 7200, category: 'Bottoms', rating: 4.9, colors: ['#202a35','#c4b7a1'], image: 'https://images.unsplash.com/photo-1542272604-787c3835535d?auto=format&fit=crop&w=900&q=85' },
+  { id: 8, name: 'Club Logo Beanie', brand: 'AFTERDARK', price: 2800, category: 'Headwear', rating: 4.7, colors: ['#1a1a1a','#a9c138'], image: 'https://images.unsplash.com/photo-1576871337622-98d48d1cf531?auto=format&fit=crop&w=900&q=85' },
+]
+export const brands = ['VOID FORM','NO SIGNAL','AFTERDARK','COMMON GROUND','NIGHT SHIFT','RITUAL DEPT.']
+export const brandDetails = {
+ 'VOID FORM': { tagline:'Uniforms for the unfinished.', story:'VOID FORM builds considered essentials for people who move differently. Heavyweight fabrics, clean silhouettes, and no unnecessary noise.', accent:'#28352b', image:'https://images.unsplash.com/photo-1529139574466-a303027c1d8b?auto=format&fit=crop&w=1800&q=85', products:18, orders:'1.2k', rating:'4.9' },
+ 'NO SIGNAL': { tagline:'Utility for the everyday.', story:'NO SIGNAL is a study in function, movement, and the space between city and escape.', accent:'#4c5144', image:'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1800&q=85', products:24, orders:'980', rating:'4.8' },
+ 'AFTERDARK': { tagline:'Made for the late hours.', story:'AFTERDARK explores night culture through bold layers, sharp contrasts, and limited-run pieces.', accent:'#3c3035', image:'https://images.unsplash.com/photo-1483985988355-763728e1935b?auto=format&fit=crop&w=1800&q=85', products:12, orders:'740', rating:'5.0' },
+ 'COMMON GROUND': { tagline:'Find your people.', story:'COMMON GROUND makes accessible everyday pieces that bring different worlds into the same room.', accent:'#6b604b', image:'https://images.unsplash.com/photo-1496747611176-843222e1e57c?auto=format&fit=crop&w=1800&q=85', products:16, orders:'860', rating:'4.7' },
+ 'NIGHT SHIFT': { tagline:'After hours essentials.', story:'A new independent label joining the DRIP community soon.', accent:'#39434a', image:'https://images.unsplash.com/photo-1485968579580-b6d095142e6e?auto=format&fit=crop&w=1800&q=85', products:0, orders:'—', rating:'—' },
+ 'RITUAL DEPT.': { tagline:'Dress with intention.', story:'A new independent label joining the DRIP community soon.', accent:'#514636', image:'https://images.unsplash.com/photo-1525507119028-ed4c629a60a3?auto=format&fit=crop&w=1800&q=85', products:0, orders:'—', rating:'—' },
+}
+export const money = n => `PKR ${n.toLocaleString('en-PK')}`
