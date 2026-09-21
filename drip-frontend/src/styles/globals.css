@@ -1,0 +1,35 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background-color: #0A0A0A;
+    color: #F5F5F5;
+    font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection { background: #DFFF00; color: #0A0A0A; }
+  :focus-visible { outline: 2px solid #DFFF00; outline-offset: 2px; }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-accent text-bg font-bold text-sm tracking-wide px-6 py-3 inline-flex items-center gap-2 transition-opacity hover:opacity-90 active:opacity-75 cursor-pointer;
+  }
+  .btn-outline {
+    @apply border border-border text-white font-medium text-sm px-6 py-3 inline-flex items-center gap-2 transition-colors hover:border-accent hover:text-accent cursor-pointer;
+  }
+  .btn-ghost {
+    @apply text-muted font-medium text-sm px-4 py-2 transition-colors hover:text-white cursor-pointer;
+  }
+  .input-base {
+    @apply w-full bg-card border border-border text-white placeholder-muted px-4 py-3 text-sm focus:outline-none focus:border-accent transition-colors;
+  }
+  .panel {
+    @apply bg-surface border border-border p-6;
+  }
+}
