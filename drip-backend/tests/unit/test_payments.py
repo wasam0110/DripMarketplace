@@ -81,8 +81,8 @@ class TestPaymentSchemas:
         assert req.order_id is not None
 
     def test_retry_valid(self):
-        req = RetryPaymentRequest(payment_method="jazzcash")
-        assert req.payment_method == "jazzcash"
+        req = RetryPaymentRequest(payment_method="payfast")
+        assert req.payment_method == "payfast"
 
     def test_retry_invalid_method(self):
         with pytest.raises(ValidationError):

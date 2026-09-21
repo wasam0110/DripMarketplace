@@ -14,7 +14,10 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncGenerator
+from pydoc import text
+from pydoc import text
 from typing import Any
+from sqlalchemy import text
 
 import pytest
 import pytest_asyncio
@@ -51,7 +54,8 @@ async def test_engine():
         await conn.run_sync(Base.metadata.create_all)
     yield engine
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await conn.execute(text("DROP SCHEMA public CASCADE"))
+        await conn.execute(text("CREATE SCHEMA public"))
     await engine.dispose()
 
 

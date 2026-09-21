@@ -153,8 +153,7 @@ def _mock_service(
     seller.slot_count   = BASE_SLOTS
 
     from app.models.seller import SellerStatus
-    seller.status = SellerStatus(seller_status) if seller_status in SellerStatus._value2member_map_ else seller_status
-
+    seller.status = seller_status  # keep as string, the test mock doesn't need enum
     wallet = MagicMock()
     wallet.available_balance = wallet_balance
 

@@ -38,8 +38,6 @@ class SlotService:
             total_slots      = BASE_SLOTS + extra_slots,
         )
 
-    # ── Purchase ───────────────────────────────────────────────────────────────
-
     async def purchase_slots(
         self, user_id: UUID, payload: SlotPurchaseRequest
     ) -> SlotPurchaseResponse:
@@ -47,16 +45,16 @@ class SlotService:
         if not seller:
             raise NotFoundError("Seller profile not found")
 
-        if seller.status != SellerStatus.active:
+        seller_status = seller.status.value if hasattr(seller.status, 'value') else seller.status
+        if seller_status != SellerStatus.active.value:
             raise PermissionDeniedError(
-                f"Only active sellers can purchase slots. Status: {seller.status.value}"
+                f"Only active sellers can purchase slots. Status: {seller_status}"
             )
 
         amount = Decimal(payload.quantity * EXTRA_SLOT_PRICE)
 
         if payload.payment_method == "wallet":
             await self._charge_wallet(seller.id, amount)
-        # jazzcash / easypaisa payment intent wired in Block 7
 
         updated = await self.seller_repo.add_slots(seller.id, payload.quantity)
         await self.db.commit()
@@ -67,7 +65,6 @@ class SlotService:
             new_slots_available = updated.slots_available,
             amount_charged      = int(amount),
         )
-
     # ── Guard used by Product service (Block 4) ────────────────────────────────
 
     async def assert_slot_available(self, seller_id: UUID) -> None:
