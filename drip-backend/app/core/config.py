@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     )
 
     # ── App ───────────────────────────────────────────────────────────────────
-    ENVIRONMENT: Literal["development", "staging", "production"] = "development"
-    APP_NAME: str = "DRIP API"
+    ENVIRONMENT: Literal["development", "staging", "production", "test"] = "development"
+    APP_NAME: str = "WearHowZ API"
     APP_VERSION: str = "1.0.0"
     API_PREFIX: str = "/api/v1"
     DEBUG: bool = False
@@ -73,8 +73,8 @@ class Settings(BaseSettings):
 
     # ── Email — Resend ────────────────────────────────────────────────────────
     RESEND_API_KEY: str = ""
-    FROM_EMAIL: str = "orders@drip.pk"
-    FROM_NAME: str = "DRIP Marketplace"
+    FROM_EMAIL: str = "orders@example.com"
+    FROM_NAME: str = "WearHowZ"
 
     # ── WhatsApp ──────────────────────────────────────────────────────────────
     DRIP_WHATSAPP_NUMBER: str = "923000000000"
@@ -87,6 +87,7 @@ class Settings(BaseSettings):
     FREE_SHIPPING_THRESHOLD: int = 5000
     STANDARD_SHIPPING_FEE: int = 200
     COD_TIMEOUT_MINUTES: int = 30
+    PAYMENT_TIMEOUT_MINUTES: int = 30
     WALLET_HOLD_DAYS: int = 3
     MIN_WITHDRAWAL_AMOUNT: int = 500
     MAX_WITHDRAWAL_AMOUNT: int = 200_000
@@ -141,6 +142,11 @@ class Settings(BaseSettings):
     PAYFAST_MERCHANT_ID: str  = ""
     PAYFAST_SECURED_KEY: str  = ""
     PAYFAST_SANDBOX:     bool = True
+    # Enable only after the merchant-specific protocol and sandbox flow are verified.
+    PAYFAST_ENABLED: bool = False
+    GUEST_ORDER_TOKEN_DAYS: int = 7
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
 
     # ── App URLs ──────────────────────────────────────────────────────────────
     FRONTEND_URL: str = "http://localhost:3000"

@@ -1,4 +1,5 @@
 from __future__ import annotations
+from decimal import Decimal
 
 import re
 from uuid import UUID
@@ -42,13 +43,13 @@ class SellerService:
         self.seller_repo = SellerRepository(db)
         self.wallet_repo = WalletRepository(db)
         self.bank_repo   = BankAccountRepository(db)
-        self.user_repo   = UserRepository(db)
+        self.user_repo = UserRepository
 
     # ── Registration (public — creates User + Seller in one call) ──────────────
 
     async def register(self, payload: SellerRegistrationRequest) -> SellerRegistrationResponse:
         # 1. Email must not already exist
-        if await self.user_repo.get_by_email(payload.email):
+        if await self.user_repo.get_by_email(self.db, payload.email):
             raise ConflictError("An account with this email already exists")
 
         # 2. Brand name must be globally unique
@@ -60,6 +61,7 @@ class SellerService:
 
         # 4. Create User with role=seller
         user = await self.user_repo.create(
+            self.db,
             email         = payload.email,
             password_hash = hash_password(payload.password),
             first_name    = payload.first_name,
@@ -68,7 +70,9 @@ class SellerService:
         )
 
         # 5. Create Seller linked to that user
-        total_slots = BASE_SLOTS + payload.extra_slots
+        from app.services.slot_service import SlotService
+        pricing = await SlotService(self.db).get_pricing(payload.extra_slots)
+        total_slots = pricing.total_slots
         seller = await self.seller_repo.create(
             user_id          = user.id,
             brand_name       = payload.brand_name,
@@ -78,7 +82,8 @@ class SellerService:
             whatsapp_number  = payload.whatsapp_number,
             instagram_handle = payload.instagram_handle,
             total_slots      = total_slots,
-            status           = SellerStatus.pending_payment,
+            registration_fee = Decimal(pricing.total_cost),
+            status           = SellerStatus.pending_payment if pricing.total_cost else SellerStatus.pending_approval,
         )
 
         # 6. Create zero-balance wallet
@@ -86,11 +91,28 @@ class SellerService:
 
         await self.db.commit()
 
+        from app.core.config import settings
+        if settings.ENVIRONMENT != "test":
+            from app.core.security import create_email_verify_token
+            from arq import create_pool
+            from arq.connections import RedisSettings
+            try:
+                pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+                try:
+                    await pool.enqueue_job("task_send_verification_email", user.email, user.first_name or "there", create_email_verify_token(str(user.id)))
+                finally:
+                    await pool.aclose()
+            except Exception:
+                from app.core.logging import get_logger
+                get_logger(__name__).warning("seller.verification_enqueue_failed", seller_id=str(seller.id))
         return SellerRegistrationResponse(
             seller_id = seller.id,
+            amount_due = seller.registration_fee,
             message   = (
-                f"Application submitted. Complete payment of PKR {REGISTRATION_FEE:,} "
-                "to activate your seller account."
+                f"Application submitted. Complete payment of PKR {seller.registration_fee:,.2f} "
+                "before your application can be approved."
+                if seller.registration_fee else
+                "Application submitted for approval. No registration payment is due."
             ),
         )
 
@@ -124,18 +146,31 @@ class SellerService:
         wallet        = await self.wallet_repo.get_by_seller_id(seller.id)
         product_count = await self.seller_repo.count_published_products(seller.id)
 
+        from sqlalchemy import select, func
+        from datetime import datetime, UTC, timedelta
+        from app.models.wallet import CommissionLedger
+        from app.models.order import SellerOrder
+        now = datetime.now(UTC)
+        start = now.replace(hour=0, minute=0, second=0, microsecond=0) if period == "today" else now - timedelta(days={"week": 7, "month": 30, "quarter": 90, "year": 365}.get(period, 30))
+        gross, commission, net = (await self.db.execute(select(
+            func.coalesce(func.sum(CommissionLedger.gross_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.commission_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.seller_amount), 0))
+            .where(CommissionLedger.seller_id == seller.id, CommissionLedger.settled_at >= start))).one()
+        rows = (await self.db.execute(select(SellerOrder.status, func.count()).where(SellerOrder.seller_id == seller.id, SellerOrder.created_at >= start).group_by(SellerOrder.status))).all()
+        counts = {status.value: count for status, count in rows}
         return SellerDashboardResponse(
             period            = period,
-            gross_revenue     = 0,
-            commission_paid   = 0,
-            net_earnings      = 0,
-            order_count       = 0,
+            gross_revenue     = gross,
+            commission_paid   = commission,
+            net_earnings      = net,
+            order_count       = sum(counts.values()),
             product_count     = product_count,
             slots_used        = seller.slots_used,
             slots_available   = seller.slots_available,
-            pending_balance   = int(wallet.pending_balance)   if wallet else 0,
-            available_balance = int(wallet.available_balance) if wallet else 0,
-            status_breakdown  = OrderStatusBreakdown(),
+            pending_balance   = wallet.pending_balance if wallet else 0,
+            available_balance = wallet.available_balance if wallet else 0,
+            status_breakdown  = OrderStatusBreakdown(**counts),
         )
 
     # ── Bank Accounts ──────────────────────────────────────────────────────────
@@ -204,4 +239,6 @@ class SellerService:
             slots_used       = seller.slots_used,
             slots_available  = seller.slots_available,
             joined_at        = seller.created_at,
+            registration_amount_due = Decimal("0") if seller.registration_paid_at else seller.registration_fee,
+            registration_paid_at = seller.registration_paid_at,
         )

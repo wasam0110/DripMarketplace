@@ -8,6 +8,8 @@ from typing import Optional
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 import re
 
+from app.models.order import PaymentMethod
+
 
 # ── Address ───────────────────────────────────────────────────────────────────
 
@@ -54,9 +56,9 @@ class CartItemResponse(BaseModel):
     primary_image: Optional[str]
     size:         str
     colour:       str
-    unit_price:   int
+    unit_price:   Decimal
     quantity:     int
-    subtotal:     int
+    subtotal:     Decimal
     available_stock: int
     seller_id:    UUID
 
@@ -66,16 +68,16 @@ class SellerCartGroup(BaseModel):
     brand_name:  str
     brand_color: str
     items:       list[CartItemResponse]
-    group_subtotal: int
+    group_subtotal: Decimal
 
 
 class CartResponse(BaseModel):
     items:             list[CartItemResponse]
     grouped_by_seller: list[SellerCartGroup]
     item_count:        int
-    subtotal:          int
-    shipping_fee:      int
-    total:             int
+    subtotal:          Decimal
+    shipping_fee:      Decimal
+    total:             Decimal
 
 
 class AddToCartRequest(BaseModel):
@@ -96,7 +98,7 @@ class SyncCartRequest(BaseModel):
 class CreateOrderRequest(BaseModel):
     """For authenticated users — items come from Redis cart."""
     shipping_address: ShippingAddressInput
-    payment_method:   str = Field(pattern="^(jazzcash|easypaisa|card|cod)$")
+    payment_method:   PaymentMethod
     coupon_code:      Optional[str] = Field(default=None, max_length=30)
     notes:            Optional[str] = Field(default=None, max_length=500)
 
@@ -106,7 +108,7 @@ class CreateGuestOrderRequest(CreateOrderRequest):
     guest_email: EmailStr
     guest_name:  str  = Field(min_length=2, max_length=200)
     guest_phone: str  = Field(max_length=20)
-    items:       list[CartItemInput] = Field(min_length=1)
+    items:       list[CartItemInput] = Field(min_length=1, max_length=100)
 
     @field_validator("guest_phone")
     @classmethod
@@ -120,8 +122,9 @@ class CreateOrderResponse(BaseModel):
     order_id:      UUID
     order_number:  str
     status:        str
-    total:         int
+    total:         Decimal
     payment_method: str
+    guest_token:   Optional[str] = None
     payment_url:   Optional[str] = None   # JazzCash/Easypaisa/Stripe — wired in Block 6
     whatsapp_url:  Optional[str] = None   # COD verification link
 
@@ -135,9 +138,9 @@ class OrderItemResponse(BaseModel):
     variant_id:    UUID
     product_name:  str
     variant_label: str
-    unit_price:    int
+    unit_price:    Decimal
     quantity:      int
-    subtotal:      int
+    subtotal:      Decimal
 
     model_config = {"from_attributes": True}
 
@@ -147,7 +150,7 @@ class SellerOrderResponse(BaseModel):
     seller_id:       UUID
     brand_name:      str
     status:          str
-    subtotal:        int
+    subtotal:        Decimal
     tracking_number: Optional[str]
     courier_name:    Optional[str]
     shipped_at:      Optional[datetime]
@@ -161,10 +164,10 @@ class OrderDetailResponse(BaseModel):
     order_number:    str
     status:          str
     payment_method:  str
-    subtotal:        int
-    discount_amount: int
-    shipping_fee:    int
-    total:           int
+    subtotal:        Decimal
+    discount_amount: Decimal
+    shipping_fee:    Decimal
+    total:           Decimal
     notes:           Optional[str]
     address:         ShippingAddressResponse
     items:           list[OrderItemResponse]
@@ -178,7 +181,7 @@ class OrderRowResponse(BaseModel):
     id:           UUID
     order_number: str
     status:       str
-    total:        int
+    total:        Decimal
     item_count:   int
     created_at:   datetime
 
@@ -207,15 +210,15 @@ class CancelOrderRequest(BaseModel):
 
 class ValidateCouponRequest(BaseModel):
     code:     str = Field(min_length=1, max_length=30)
-    subtotal: int = Field(ge=1)
+    subtotal: Decimal = Field(ge=1)
 
 
 class CouponValidationResponse(BaseModel):
     code:            str
     discount_type:   str
-    discount_value:  int
-    discount_amount: int
-    new_subtotal:    int
+    discount_value:  Decimal
+    discount_amount: Decimal
+    new_subtotal:    Decimal
 
 
 # ── Seller order management ───────────────────────────────────────────────────

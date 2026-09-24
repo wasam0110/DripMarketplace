@@ -3,9 +3,10 @@ app/tasks/worker.py — ARQ worker with all tasks registered.
 """
 
 from __future__ import annotations
-from app.tasks.order_tasks import cod_verification_timeout, send_order_confirmation
+from app.tasks.order_tasks import cod_verification_timeout, send_order_confirmation, expire_pending_orders
 from app.tasks.wallet_tasks import settle_commission, move_pending_to_available
 from arq.connections import RedisSettings
+from arq import cron
 
 from app.core.config import settings
 from app.core.logging import configure_logging, get_logger
@@ -16,8 +17,6 @@ from app.tasks.email_tasks import (
     task_send_shipping_notification,
     task_send_cod_timeout,
     task_send_seller_approved,
-    settle_commission,
-    move_pending_to_available,
 )
 from app.tasks.notification_tasks import (
     send_order_confirmation,
@@ -69,6 +68,7 @@ class WorkerSettings:
         task_send_cod_timeout,
         task_send_seller_approved,
         cod_verification_timeout,
+        expire_pending_orders,
         send_order_confirmation,
         settle_commission,
         move_pending_to_available,
@@ -91,4 +91,5 @@ class WorkerSettings:
     keep_result = 3600
     retry_jobs  = True
     max_tries   = 3
-    queue_name  = "drip:default"
+    queue_name = "arq:queue"
+    cron_jobs = [cron(move_pending_to_available, minute={0, 10, 20, 30, 40, 50}), cron(expire_pending_orders, minute=set(range(0, 60, 5)))]

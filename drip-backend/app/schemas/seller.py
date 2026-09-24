@@ -3,7 +3,7 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 from datetime import datetime
-from typing import Optional
+from typing import Optional, Literal
 import re
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
@@ -41,6 +41,7 @@ class SellerRegistrationRequest(BaseModel):
 
 
 class SellerRegistrationResponse(BaseModel):
+    amount_due: Decimal = Decimal("5000.00")
     seller_id: UUID
     message:   str
 
@@ -59,7 +60,7 @@ class SlotPricingResponse(BaseModel):
 
 class SlotPurchaseRequest(BaseModel):
     quantity:       int = Field(ge=1, le=10_000)
-    payment_method: str = Field(pattern="^(jazzcash|easypaisa|wallet)$")
+    payment_method: Literal["wallet"]
 
 
 class SlotPurchaseResponse(BaseModel):
@@ -72,6 +73,8 @@ class SlotPurchaseResponse(BaseModel):
 # ── Profile ───────────────────────────────────────────────────────────────────
 
 class SellerProfileResponse(BaseModel):
+    registration_amount_due: Decimal = Decimal("5000.00")
+    registration_paid_at: datetime | None = None
     id:               UUID
     brand_name:       str
     slug:             str
@@ -116,19 +119,20 @@ class OrderStatusBreakdown(BaseModel):
     shipped:    int = 0
     delivered:  int = 0
     cancelled:  int = 0
+    returned:   int = 0
 
 
 class SellerDashboardResponse(BaseModel):
     period:            str
-    gross_revenue:     int
-    commission_paid:   int
-    net_earnings:      int
+    gross_revenue:     Decimal
+    commission_paid:   Decimal
+    net_earnings:      Decimal
     order_count:       int
     product_count:     int
     slots_used:        int
     slots_available:   int
-    pending_balance:   int
-    available_balance: int
+    pending_balance:   Decimal
+    available_balance: Decimal
     status_breakdown:  OrderStatusBreakdown
 
 

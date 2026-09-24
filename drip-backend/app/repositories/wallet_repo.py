@@ -55,9 +55,9 @@ class CommissionRepository:
         ).where(CommissionLedger.seller_id == seller_id)
         sums = (await self.db.execute(summary_q)).one()
         summary = {
-            "total_gross":      int(sums[0]),
-            "total_commission": int(sums[1]),
-            "total_net":        int(sums[2]),
+            "total_gross":      sums[0],
+            "total_commission": sums[1],
+            "total_net":        sums[2],
         }
 
         return rows, total, summary
@@ -87,7 +87,7 @@ class WalletTransactionRepository:
         count_q = select(func.count()).select_from(q.subquery())
         total   = (await self.db.execute(count_q)).scalar_one()
 
-        q = q.order_by(desc(WalletTransaction.created_at)).offset((page - 1) * per_page).limit(per_page)
+        q = q.order_by(desc(WalletTransaction.created_at), desc(WalletTransaction.id)).offset((page - 1) * per_page).limit(per_page)
         result = await self.db.execute(q)
         return result.scalars().all(), total
 
@@ -103,9 +103,12 @@ class PayoutRepository:
         await self.db.refresh(payout)
         return payout
 
-    async def get_by_id(self, payout_id: UUID) -> Optional[Payout]:
+    async def get_by_id(self, payout_id: UUID, *, for_update: bool = False) -> Optional[Payout]:
+        query = select(Payout).where(Payout.id == payout_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(
-            select(Payout).where(Payout.id == payout_id)
+            query
         )
         return result.scalar_one_or_none()
 
@@ -123,7 +126,7 @@ class PayoutRepository:
         count_q = select(func.count()).select_from(q.subquery())
         total   = (await self.db.execute(count_q)).scalar_one()
 
-        q = q.order_by(desc(Payout.requested_at)).offset((page - 1) * per_page).limit(per_page)
+        q = q.order_by(desc(Payout.requested_at), desc(Payout.id)).offset((page - 1) * per_page).limit(per_page)
         result = await self.db.execute(q)
         return result.scalars().all(), total
 
@@ -140,7 +143,7 @@ class PayoutRepository:
         count_q = select(func.count()).select_from(q.subquery())
         total   = (await self.db.execute(count_q)).scalar_one()
 
-        q = q.order_by(desc(Payout.requested_at)).offset((page - 1) * per_page).limit(per_page)
+        q = q.order_by(desc(Payout.requested_at), desc(Payout.id)).offset((page - 1) * per_page).limit(per_page)
         result = await self.db.execute(q)
         return result.scalars().all(), total
 

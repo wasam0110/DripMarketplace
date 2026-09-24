@@ -39,9 +39,9 @@ class User(UUIDPrimaryKeyMixin, AuditMixin, Base):
         ),
         Index("ix_users_email",      "email"),
         Index("ix_users_role",       "role"),
-        Index("ix_users_deleted_at", "deleted_at"),
     )
 
+    auth_version: Mapped[int] = mapped_column(__import__("sqlalchemy").Integer, default=0, server_default="0")
     email:              Mapped[str]            = mapped_column(String(254), unique=True, nullable=False)
     password_hash:      Mapped[str | None]     = mapped_column(String(255), nullable=True)
     role:               Mapped[UserRole]       = mapped_column(
@@ -107,3 +107,6 @@ class UserAddress(UUIDPrimaryKeyMixin, Base):
     updated_at: Mapped[datetime]   = mapped_column(DateTime(timezone=True), nullable=False, server_default="now()", onupdate=None)
 
     user: Mapped["User"] = relationship(back_populates="addresses")
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.models.order import Order

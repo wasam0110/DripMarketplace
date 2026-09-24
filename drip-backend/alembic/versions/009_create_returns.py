@@ -49,7 +49,7 @@ def upgrade() -> None:
                   sa.ForeignKey("seller_orders.id"), nullable=False),
         sa.Column("user_id",         postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("status",          sa.Enum(
+        sa.Column("status",          postgresql.ENUM(
             "requested","approved","rejected","received","refunded",
             name="return_status", create_type=False,
         ), nullable=False, server_default="requested"),
@@ -88,7 +88,7 @@ def upgrade() -> None:
                   sa.ForeignKey("sellers.id"), nullable=False),
         sa.Column("user_id",         postgresql.UUID(as_uuid=True),
                   sa.ForeignKey("users.id"), nullable=False),
-        sa.Column("status",          sa.Enum(
+        sa.Column("status",          postgresql.ENUM(
             "open","under_review","resolved_customer","resolved_seller","closed",
             name="dispute_status", create_type=False,
         ), nullable=False, server_default="open"),

@@ -17,7 +17,7 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 
 async def _get_redis():
     from app.core.redis import get_redis
-    return await get_redis()
+    return get_redis()
 
 
 @router.get("", response_model=CartResponse)

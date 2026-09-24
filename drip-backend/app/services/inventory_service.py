@@ -50,7 +50,7 @@ class InventoryService:
                 Product.deleted_at.is_(None),
             )
         )
-        row = (await self.db.execute(stmt)).first()
+        row = (await self.db.execute(stmt.with_for_update(of=ProductInventory))).first()
         if row is None:
             raise NotFoundError("ProductVariant")
         return row.ProductInventory, row.ProductVariant, row.Product
@@ -162,6 +162,8 @@ class InventoryService:
         from app.api.v1.inventory import VariantStockResponse
 
         inv, variant, product = await self._get_inventory_for_seller(variant_id, seller_id)
+        if stock < inv.reserved:
+            raise BusinessRuleError("Stock cannot fall below reserved units")
         await self.db.execute(
             update(ProductInventory)
             .where(ProductInventory.variant_id == variant_id)
@@ -185,9 +187,9 @@ class InventoryService:
         prev_stock = inv.stock
         new_stock  = prev_stock + delta
 
-        if new_stock < 0:
+        if new_stock < inv.reserved:
             raise BusinessRuleError(
-                f"Adjustment would result in negative stock "
+                f"Adjustment would fall below reserved stock "
                 f"(current={prev_stock}, delta={delta})."
             )
 
@@ -270,17 +272,17 @@ class InventoryService:
             try:
                 result = await self.db.execute(
                     update(ProductInventory)
-                    .where(ProductInventory.variant_id == item.variant_id)
+                    .where(ProductInventory.variant_id == item.variant_id, ProductInventory.reserved <= item.stock)
                     .values(stock=item.stock, updated_at=datetime.now(UTC))
                 )
                 if result.rowcount == 0:
                     failed += 1
-                    errors.append({"variant_id": str(item.variant_id), "error": "Variant not found"})
+                    errors.append({"variant_id": str(item.variant_id), "error": "Variant not found or stock is below reserved units"})
                 else:
                     updated += 1
             except Exception as exc:
                 failed += 1
-                errors.append({"variant_id": str(item.variant_id), "error": str(exc)})
+                errors.append({"variant_id": str(item.variant_id), "error": "Inventory update failed"})
 
         await self.db.commit()
         logger.info("bulk_stock_update", updated=updated, failed=failed)

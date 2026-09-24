@@ -110,9 +110,9 @@ class TestSlotPurchaseRequestSchema:
         assert req.quantity       == 5
         assert req.payment_method == "wallet"
 
-    def test_valid_jazzcash_payment(self):
-        req = SlotPurchaseRequest(quantity=1, payment_method="jazzcash")
-        assert req.payment_method == "jazzcash"
+    def test_retired_gateway_rejected(self):
+        with pytest.raises(ValidationError):
+            SlotPurchaseRequest(quantity=1, payment_method="jazzcash")
 
     def test_zero_quantity_rejected(self):
         with pytest.raises(ValidationError):
@@ -144,6 +144,9 @@ def _mock_service(
     wallet_balance: Decimal = Decimal("50000"),
 ) -> SlotService:
     db = AsyncMock()
+    result = MagicMock()
+    result.scalars.return_value.all.return_value = []
+    db.execute = AsyncMock(return_value=result)
     svc = SlotService(db)
 
     seller = MagicMock()
@@ -195,7 +198,7 @@ class TestSlotPurchaseFlow:
         svc = _mock_service(wallet_balance=Decimal("0"))
         req = SlotPurchaseRequest(quantity=5, payment_method="wallet")
 
-        with pytest.raises((InsufficientBalanceError, Exception)):
+        with pytest.raises(InsufficientBalanceError):
             await svc.purchase_slots(user_id=uuid4(), payload=req)
 
     @pytest.mark.asyncio

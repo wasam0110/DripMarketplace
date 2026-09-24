@@ -65,7 +65,6 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
         Index("ix_products_seller_id",   "seller_id"),
         Index("ix_products_category_id", "category_id"),
         Index("ix_products_is_published","is_published"),
-        Index("ix_products_deleted_at",  "deleted_at"),
     )
 
     id:               Mapped[UUID]           = mapped_column(primary_key=True, default=uuid4)

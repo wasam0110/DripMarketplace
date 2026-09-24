@@ -41,6 +41,11 @@ def client():
     async def mock_db():
         session          = MagicMock()
         session.execute  = AsyncMock(return_value=result)
+        from app.models.user import UserRole
+        async def get_user(model, user_id):
+            role = UserRole.admin if str(user_id).endswith("003") else UserRole.customer
+            return MagicMock(id=user_id, deleted_at=None, role=role, auth_version=0, has_verified_email=True)
+        session.get = AsyncMock(side_effect=get_user)
         session.commit   = AsyncMock()
         session.rollback = AsyncMock()
         session.flush    = AsyncMock()

@@ -81,3 +81,27 @@ async def reinstate_seller(
     current_admin: CurrentAdmin,
 ) -> dict:
     return await AdminService(db).reinstate_seller(seller_id, UUID(current_admin["sub"]))
+
+from app.schemas.admin import SellerRegistrationPaymentRequest
+
+@router.post("/sellers/{seller_id}/registration-payment")
+async def record_registration_payment(seller_id: UUID, payload: SellerRegistrationPaymentRequest, db: DB, current_admin: CurrentAdmin):
+    from sqlalchemy import select
+    from datetime import UTC, datetime
+    from app.models.seller import Seller, SellerStatus
+    from app.core.exceptions import BusinessRuleError, NotFoundError
+    seller = await db.scalar(select(Seller).where(Seller.id == seller_id, Seller.deleted_at.is_(None)).with_for_update())
+    if not seller:
+        raise NotFoundError("Seller not found")
+    if seller.registration_paid_at:
+        if seller.registration_payment_reference != payload.reference or seller.registration_fee != payload.amount:
+            raise BusinessRuleError("Registration payment is already recorded")
+        return {"status": seller.status.value}
+    if seller.status != SellerStatus.pending_payment or payload.amount != seller.registration_fee:
+        raise BusinessRuleError("Payment must match the registration amount due")
+    seller.registration_payment_reference = payload.reference
+    seller.registration_paid_at = datetime.now(UTC)
+    seller.registration_paid_by = UUID(current_admin["sub"])
+    seller.status = SellerStatus.pending_approval
+    await db.commit()
+    return {"status": seller.status.value}

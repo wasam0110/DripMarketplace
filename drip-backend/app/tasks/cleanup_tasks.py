@@ -31,7 +31,7 @@ async def cleanup_abandoned_carts(ctx: dict) -> None:
     """
     from app.core.redis import get_redis
 
-    redis   = await get_redis()
+    redis   = get_redis()
     pattern = "cart:*"
     deleted = 0
 
@@ -110,7 +110,7 @@ async def cleanup_expired_reset_tokens(ctx: dict) -> None:
     """
     from app.core.redis import get_redis
 
-    redis   = await get_redis()
+    redis   = get_redis()
     members = await redis.smembers("reset_tokens:all")
     pruned  = 0
 

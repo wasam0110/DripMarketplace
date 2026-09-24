@@ -4,6 +4,7 @@ app/api/v1/auth.py
 Auth routes — thin handlers that delegate everything to AuthService.
 Each route: validate input → call service → set cookie if needed → return response.
 """
+
 from __future__ import annotations
 
 from fastapi import APIRouter, Cookie, Depends, Request, Response
@@ -31,6 +32,7 @@ router = APIRouter()
 
 # ── POST /auth/register ───────────────────────────────────────────────────────
 
+
 @router.post(
     "/register",
     response_model=MessageResponse,
@@ -47,18 +49,21 @@ async def register(
     Rate limited: 3 per hour per IP.
     """
     result = await AuthService.register(db, payload)
-    user   = result["user"]
-    token  = result["verify_token"]
+    user = result["user"]
+    token = result["verify_token"]
 
     # Enqueue verification email (non-blocking)
     try:
         from arq import create_pool
         from arq.connections import RedisSettings
         from app.core.config import settings as cfg
+
         pool = await create_pool(RedisSettings.from_dsn(cfg.REDIS_URL))
         await pool.enqueue_job(
             "task_send_verification_email",
-            user.email, user.first_name or "there", token,
+            user.email,
+            user.first_name or "there",
+            token,
         )
         await pool.aclose()
     except Exception:
@@ -71,6 +76,7 @@ async def register(
 
 
 # ── GET /auth/verify-email ────────────────────────────────────────────────────
+
 
 @router.get(
     "/verify-email",
@@ -92,6 +98,7 @@ async def verify_email(
 
 
 # ── POST /auth/login ──────────────────────────────────────────────────────────
+
 
 @router.post(
     "/login",
@@ -127,6 +134,7 @@ async def login(
 
 # ── POST /auth/refresh ────────────────────────────────────────────────────────
 
+
 @router.post(
     "/refresh",
     response_model=TokenResponse,
@@ -143,6 +151,7 @@ async def refresh(
     """
     if not refresh_token:
         from app.core.exceptions import AuthenticationError
+
         raise AuthenticationError(message="No refresh token found. Please log in again.")
 
     token_resp, new_refresh = await AuthService.refresh_token(db, refresh_token)
@@ -151,6 +160,7 @@ async def refresh(
 
 
 # ── POST /auth/logout ─────────────────────────────────────────────────────────
+
 
 @router.post(
     "/logout",
@@ -167,20 +177,21 @@ async def logout(
     Revoke the refresh token + blocklist the current access token.
     Clears the refresh token cookie.
     """
-    if refresh_token:
-        from datetime import UTC, datetime, timedelta
-        exp_ts = payload.get("exp", 0)
-        exp_dt = datetime.fromtimestamp(exp_ts, tz=UTC)
-        await AuthService.logout(
-            db=db,
-            raw_refresh_token=refresh_token,
-            access_jti=payload.get("jti", ""),
-            access_exp=exp_dt,
-        )
+    from datetime import UTC, datetime, timedelta
+
+    exp_ts = payload.get("exp", 0)
+    exp_dt = datetime.fromtimestamp(exp_ts, tz=UTC)
+    await AuthService.logout(
+        db=db,
+        raw_refresh_token=refresh_token,
+        access_jti=payload.get("jti", ""),
+        access_exp=exp_dt,
+    )
     _clear_refresh_cookie(response)
 
 
 # ── POST /auth/forgot-password ────────────────────────────────────────────────
+
 
 @router.post(
     "/forgot-password",
@@ -202,6 +213,7 @@ async def forgot_password(
             from arq.connections import RedisSettings
             from app.core.config import settings as cfg
             from app.repositories.user_repo import UserRepository
+
             user = await UserRepository.get_by_email(db, payload.email)
             pool = await create_pool(RedisSettings.from_dsn(cfg.REDIS_URL))
             await pool.enqueue_job(
@@ -221,6 +233,7 @@ async def forgot_password(
 
 # ── POST /auth/reset-password ─────────────────────────────────────────────────
 
+
 @router.post(
     "/reset-password",
     response_model=MessageResponse,
@@ -238,6 +251,7 @@ async def reset_password(
 
 # ── GET /auth/me ──────────────────────────────────────────────────────────────
 
+
 @router.get(
     "/me",
     response_model=UserResponse,
@@ -249,13 +263,16 @@ async def get_me(
 ) -> UserResponse:
     """Return the profile of the currently authenticated user."""
     from app.repositories.user_repo import UserRepository
+
     user = await UserRepository.get_by_id_or_raise(db, token_payload["sub"])
     seller_id = token_payload.get("seller_id")
     from app.services.auth_service import _user_to_response
+
     return _user_to_response(user, seller_id=seller_id)
 
 
 # ── POST /auth/change-password ────────────────────────────────────────────────
+
 
 @router.post(
     "/change-password",
@@ -269,6 +286,7 @@ async def change_password(
     token_payload: CurrentUser,
 ) -> MessageResponse:
     import uuid
+
     await AuthService.change_password(
         db=db,
         user_id=uuid.UUID(token_payload["sub"]),
@@ -276,12 +294,11 @@ async def change_password(
         new_password=payload.new_password,
     )
     _clear_refresh_cookie(response)
-    return MessageResponse(
-        message="Password changed. All sessions have been signed out."
-    )
+    return MessageResponse(message="Password changed. All sessions have been signed out.")
 
 
 # ── POST /auth/setup-2fa ──────────────────────────────────────────────────────
+
 
 @router.post(
     "/setup-2fa",
@@ -298,13 +315,16 @@ async def setup_2fa(
     """
     if token_payload.get("role") != "admin":
         from app.core.exceptions import PermissionDeniedError
+
         raise PermissionDeniedError(message="2FA setup is only available for admin accounts.")
 
     import uuid
+
     return await AuthService.setup_totp(db, uuid.UUID(token_payload["sub"]))
 
 
 # ── POST /auth/setup-2fa/verify ───────────────────────────────────────────────
+
 
 @router.post(
     "/setup-2fa/verify",
@@ -317,26 +337,62 @@ async def verify_2fa_setup(
     token_payload: CurrentUser,
 ) -> MessageResponse:
     import uuid
-    await AuthService.verify_and_enable_totp(
-        db, uuid.UUID(token_payload["sub"]), payload.code
-    )
+
+    await AuthService.verify_and_enable_totp(db, uuid.UUID(token_payload["sub"]), payload.code)
     return MessageResponse(message="Two-factor authentication has been enabled.")
 
 
 # ── Google OAuth ──────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/google",
     summary="Initiate Google OAuth login",
     include_in_schema=True,
 )
-async def google_login() -> dict:
-    """Returns the Google OAuth redirect URL. Frontend redirects the user there."""
-    # Full OAuth implementation in Block 2 extension — requires Google client setup
-    return {"message": "Google OAuth — configure GOOGLE_CLIENT_ID in .env to enable."}
+async def google_login(response: Response) -> dict:
+    from app.services.google_oauth import start_google_login
+
+    return await start_google_login(response)
+
+
+@router.get("/google/callback")
+async def google_callback(request: Request, db: DBSession):
+    from app.services.google_oauth import finish_google_login
+
+    return await finish_google_login(request, db)
+
+
+@router.post("/resend-verification", response_model=MessageResponse)
+async def resend_verification(payload: ForgotPasswordRequest, db: DBSession):
+    from app.repositories.user_repo import UserRepository
+    from app.core.redis import get_redis
+    from app.core.security import create_email_verify_token
+    import hashlib
+
+    key = "email-resend:" + hashlib.sha256(payload.email.lower().encode()).hexdigest()
+    if await get_redis().set(key, "1", nx=True, ex=60):
+        user = await UserRepository.get_by_email(db, payload.email)
+        if user and not user.has_verified_email:
+            from arq import create_pool
+            from arq.connections import RedisSettings
+            from app.core.config import settings
+
+            pool = await create_pool(RedisSettings.from_dsn(settings.REDIS_URL))
+            try:
+                await pool.enqueue_job(
+                    "task_send_verification_email",
+                    user.email,
+                    user.first_name or "there",
+                    create_email_verify_token(str(user.id)),
+                )
+            finally:
+                await pool.aclose()
+    return MessageResponse(message="If verification is needed, an email will be sent.")
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
 
 def _set_refresh_cookie(response: Response, token: str) -> None:
     params = get_cookie_params()

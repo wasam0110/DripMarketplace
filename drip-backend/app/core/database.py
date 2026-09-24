@@ -13,6 +13,7 @@ Connection lifecycle:
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from typing import Any
 
 from sqlalchemy import event, text
@@ -131,6 +132,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
 
 # ── Utility: run in transaction ────────────────────────────────────────────────
 
+@asynccontextmanager
 async def atomic(session: AsyncSession) -> AsyncGenerator[AsyncSession, None]:
     """
     Context manager for explicit transaction control within a service.

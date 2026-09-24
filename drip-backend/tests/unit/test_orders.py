@@ -51,9 +51,9 @@ class TestCreateOrderRequest:
         req = CreateOrderRequest(**VALID_ORDER)
         assert req.payment_method == "cod"
 
-    def test_valid_jazzcash(self):
-        req = CreateOrderRequest(**{**VALID_ORDER, "payment_method": "jazzcash"})
-        assert req.payment_method == "jazzcash"
+    def test_valid_payfast(self):
+        req = CreateOrderRequest(**{**VALID_ORDER, "payment_method": "payfast"})
+        assert req.payment_method == "payfast"
 
     def test_invalid_payment_method(self):
         with pytest.raises(ValidationError):

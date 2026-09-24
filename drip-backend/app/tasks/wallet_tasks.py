@@ -30,42 +30,38 @@ async def settle_commission(ctx: dict, seller_order_id: str) -> None:
             raise
 
 
-async def move_pending_to_available(
-    ctx: dict, seller_id: str, amount_str: str
-) -> None:
-    """
-    Move amount from pending_balance to available_balance after 3-day hold.
-    Enqueued by commission_service.settle() with _defer_by=3 days.
-    """
+async def move_pending_to_available(ctx: dict, seller_id: str | None = None, amount_str: str | None = None) -> None:
+    """Release only mature, unreleased ledger entries. Legacy job arguments are hints only."""
+    from datetime import UTC, datetime, timedelta
+    from sqlalchemy import select
+    from app.core.config import settings
     from app.core.database import AsyncSessionLocal
-    from app.repositories.seller_repo import WalletRepository
+    from app.models.wallet import CommissionLedger, WalletTxType
+    from app.models.seller import SellerWallet
+    from app.models.order import SellerOrder
+    from app.models.payment import Payment, Refund
     from app.repositories.wallet_repo import WalletTransactionRepository
-    from app.models.wallet import WalletTxType
-
+    now = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
-        try:
-            seller_uuid = UUID(seller_id)
-            amount      = Decimal(amount_str)
-            wallet_repo = WalletRepository(db)
-            tx_repo     = WalletTransactionRepository(db)
-
-            await wallet_repo.release_pending_to_available(seller_uuid, amount)
-
-            updated       = await wallet_repo.get_by_seller_id(seller_uuid)
-            balance_after = updated.available_balance if updated else Decimal("0")
-
-            await tx_repo.create(
-                seller_id     = seller_uuid,
-                type          = WalletTxType.credit_adjustment,
-                amount        = amount,
-                balance_after = balance_after,
-                note          = "3-day hold released — funds now available for withdrawal",
-            )
-
-            await db.commit()
-            logger.info(f"Released PKR {amount} from pending to available for seller {seller_id}")
-
-        except Exception as exc:
-            await db.rollback()
-            logger.error(f"move_pending_to_available failed for {seller_id}: {exc}")
-            raise 
+        from app.services.platform_settings import get_platform_settings
+        policy = await get_platform_settings(db)
+        rows = (await db.scalars(select(CommissionLedger).where(
+            CommissionLedger.released_at.is_(None),
+            CommissionLedger.settled_at <= now - timedelta(days=policy.wallet_hold_days)
+        ).with_for_update(skip_locked=True))).all()
+        for ledger in rows:
+            so = await db.get(SellerOrder, ledger.seller_order_id)
+            refund = await db.scalar(select(Refund.id).join(Payment).where(Payment.order_id == so.order_id).limit(1))
+            if refund or so.status.value != "delivered":
+                continue  # Hold disputed/refunded orders for explicit reconciliation.
+            wallet = await db.scalar(select(SellerWallet).where(SellerWallet.seller_id == ledger.seller_id).with_for_update())
+            if wallet is None or wallet.pending_balance < ledger.seller_amount:
+                continue
+            wallet.pending_balance -= ledger.seller_amount
+            wallet.available_balance += ledger.seller_amount
+            ledger.released_at = now
+            await WalletTransactionRepository(db).create(seller_id=ledger.seller_id,
+                type=WalletTxType.credit_adjustment, amount=ledger.seller_amount,
+                balance_after=wallet.available_balance, reference=str(ledger.id),
+                note="Settlement hold released")
+        await db.commit()

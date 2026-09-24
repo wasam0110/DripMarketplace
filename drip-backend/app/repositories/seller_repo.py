@@ -139,9 +139,12 @@ class WalletRepository:
         await self.db.flush()
         return wallet
 
-    async def get_by_seller_id(self, seller_id: UUID) -> Optional[SellerWallet]:
+    async def get_by_seller_id(self, seller_id: UUID, *, for_update: bool = False) -> Optional[SellerWallet]:
+        query = select(SellerWallet).where(SellerWallet.seller_id == seller_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
         result = await self.db.execute(
-            select(SellerWallet).where(SellerWallet.seller_id == seller_id)
+            query
         )
         return result.scalar_one_or_none()
 
@@ -178,7 +181,7 @@ class WalletRepository:
         )
 
     async def debit_available(self, seller_id: UUID, amount: Decimal) -> None:
-        await self.db.execute(
+        result = await self.db.execute(
             update(SellerWallet)
             .where(
                 SellerWallet.seller_id == seller_id,
@@ -189,6 +192,15 @@ class WalletRepository:
                 updated_at=datetime.utcnow(),
             )
         )
+        if result.rowcount != 1:
+            from app.core.exceptions import InsufficientBalanceError
+            raise InsufficientBalanceError("Available balance changed; reload your wallet")
+
+    async def credit_available(self, seller_id: UUID, amount: Decimal) -> None:
+        await self.db.execute(update(SellerWallet).where(SellerWallet.seller_id == seller_id).values(
+            available_balance=SellerWallet.available_balance + amount,
+            updated_at=datetime.utcnow(),
+        ))
 
 
 class BankAccountRepository:

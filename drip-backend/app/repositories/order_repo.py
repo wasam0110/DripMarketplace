@@ -58,7 +58,7 @@ class OrderRepository:
         self.db.add(hist)
 
     async def get_by_id(
-        self, order_id: UUID, *, user_id: Optional[UUID] = None
+        self, order_id: UUID, *, user_id: Optional[UUID] = None, for_update: bool = False
     ) -> Optional[Order]:
         q = select(Order).options(
             selectinload(Order.address),
@@ -68,6 +68,8 @@ class OrderRepository:
 
         if user_id:
             q = q.where(Order.user_id == user_id)
+        if for_update:
+            q = q.with_for_update()
 
         result = await self.db.execute(q)
         return result.scalar_one_or_none()
@@ -77,6 +79,7 @@ class OrderRepository:
             select(Order)
             .options(
                 selectinload(Order.address),
+                selectinload(Order.items),
                 selectinload(Order.seller_orders).selectinload(SellerOrder.seller),
             )
             .where(Order.order_number == order_number)

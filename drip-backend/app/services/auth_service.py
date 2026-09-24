@@ -124,7 +124,7 @@ class AuthService:
         await db.commit()
         await db.refresh(user)
 
-        access_token, _ = create_access_token(subject=str(user.id), role=user.role.value)
+        access_token, _ = create_access_token(subject=str(user.id), role=user.role.value, extra_claims={"ver": user.auth_version})
         refresh_token    = generate_refresh_token()
         await SessionRepository.create(
             db,
@@ -181,7 +181,7 @@ class AuthService:
         await UserRepository.update_last_login(db, user.id)
 
                # Build tokens
-        extra: dict = {}
+        extra: dict = {"ver": user.auth_version}
         seller_id: str | None = None
         if user.role == UserRole.seller:
             from sqlalchemy import select
@@ -247,9 +247,13 @@ class AuthService:
             expires_at=datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS),
         )
 
-        extra: dict = {}
-        if user.role == UserRole.seller and user.seller:
-            extra["seller_id"] = str(user.seller.id)
+        extra: dict = {"ver": user.auth_version}
+        if user.role == UserRole.seller:
+            from app.models.seller import Seller
+            from sqlalchemy import select
+            seller_id = await db.scalar(select(Seller.id).where(Seller.user_id == user.id))
+            if seller_id:
+                extra["seller_id"] = str(seller_id)
 
         access_token, _ = create_access_token(
             subject=str(user.id),
@@ -266,15 +270,16 @@ class AuthService:
     @staticmethod
     async def logout(
         db: AsyncSession,
-        raw_refresh_token: str,
+        raw_refresh_token: str | None,
         access_jti: str,
         access_exp: datetime,
     ) -> None:
         """
         Invalidate refresh token session + blocklist the access token jti.
         """
-        token_hash = hash_refresh_token(raw_refresh_token)
-        await SessionRepository.delete_by_token_hash(db, token_hash)
+        if raw_refresh_token:
+            token_hash = hash_refresh_token(raw_refresh_token)
+            await SessionRepository.delete_by_token_hash(db, token_hash)
         await db.commit()
         await revoke_token(access_jti, access_exp)
         logger.info("auth.logout", jti=access_jti[:8])
@@ -308,9 +313,15 @@ class AuthService:
             )
 
         user = await UserRepository.get_by_id_or_raise(db, user_id)
+        from app.core.redis import get_redis
+        import hashlib
+        claimed = await get_redis().set("password-reset-used:" + hashlib.sha256(token.encode()).hexdigest(), "1", nx=True, ex=3600)
+        if not claimed:
+            raise BusinessRuleError("Password reset link has already been used")
         new_hash = hash_password(new_password)
         await UserRepository.update_password(db, user.id, new_hash)
 
+        user.auth_version += 1
         # Invalidate all sessions (force re-login everywhere)
         await SessionRepository.delete_all_for_user(db, user.id)
         await db.commit()
@@ -328,6 +339,7 @@ class AuthService:
         user = await UserRepository.get_by_id_or_raise(db, user_id)
         if not user.password_hash or not verify_password(current_password, user.password_hash):
             raise InvalidCredentialsError(message="Current password is incorrect.")
+        user.auth_version += 1
         await UserRepository.update_password(db, user.id, hash_password(new_password))
         await SessionRepository.delete_all_for_user(db, user.id)
         await db.commit()
@@ -338,6 +350,8 @@ class AuthService:
     @staticmethod
     async def setup_totp(db: AsyncSession, user_id: uuid.UUID) -> TOTPSetupResponse:
         user = await UserRepository.get_by_id_or_raise(db, user_id)
+        if user.role != UserRole.admin or user.is_2fa_enabled:
+            raise BusinessRuleError("2FA setup requires an admin without existing 2FA")
         secret = generate_totp_secret()
         qr_uri = get_totp_uri(secret, user.email)
         # Store secret but don't enable 2FA until verified
@@ -350,6 +364,8 @@ class AuthService:
         db: AsyncSession, user_id: uuid.UUID, code: str
     ) -> None:
         user = await UserRepository.get_by_id_or_raise(db, user_id)
+        if user.role != UserRole.admin:
+            raise BusinessRuleError("2FA is available to admins only")
         if not user.totp_secret:
             raise BusinessRuleError(
                 message="Please call /auth/setup-2fa first to generate a secret.",

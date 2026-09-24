@@ -8,6 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import ProductInventory
+from app.core.exceptions import BusinessRuleError
 
 
 class InventoryRepository:
@@ -68,12 +69,14 @@ class InventoryRepository:
 
     async def deduct(self, variant_id: UUID, quantity: int) -> None:
         """Deduct reserved → confirmed sale (order delivered)."""
-        await self.db.execute(
+        result = await self.db.execute(
             update(ProductInventory)
-            .where(ProductInventory.variant_id == variant_id)
+            .where(ProductInventory.variant_id == variant_id, ProductInventory.reserved >= quantity, ProductInventory.stock >= quantity)
             .values(
                 stock=ProductInventory.stock - quantity,
                 reserved=ProductInventory.reserved - quantity,
                 updated_at=datetime.utcnow(),
             )
         )
+        if result.rowcount != 1:
+            raise BusinessRuleError("Reserved inventory is inconsistent; contact support")

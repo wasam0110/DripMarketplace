@@ -41,9 +41,9 @@ class SupabaseStorage:
                     headers=self._headers(content_type),
                 )
                 if r.status_code not in (200, 201):
-                    raise StorageError(f"Upload failed: {r.text}")
+                    raise StorageError("Storage upload failed", detail=f"HTTP {r.status_code}")
         except httpx.HTTPError as exc:
-            raise StorageError(f"Storage unreachable: {exc}") from exc
+            raise StorageError("Storage unreachable") from exc
 
         return self.get_public_url(bucket, path)
 
@@ -54,6 +54,7 @@ class SupabaseStorage:
         url = f"{self.base_url}/storage/v1/object/{bucket}/{path}"
         try:
             async with httpx.AsyncClient(timeout=10) as client:
-                await client.delete(url, headers=self._headers())
-        except httpx.HTTPError:
-            pass
+                response = await client.delete(url, headers=self._headers())
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise StorageError("Storage deletion failed") from exc

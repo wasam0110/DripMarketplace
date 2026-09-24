@@ -60,11 +60,12 @@ class CouponService:
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     async def _get_valid_coupon(
-        self, code: str, subtotal: int, user_id: Optional[UUID]
+        self, code: str, subtotal: int, user_id: Optional[UUID], *, lock: bool = False
     ) -> Coupon:
-        result = await self.db.execute(
-            select(Coupon).where(Coupon.code == code.upper())
-        )
+        query = select(Coupon).where(Coupon.code == code.upper())
+        if lock:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         coupon = result.scalar_one_or_none()
 
         if not coupon:
@@ -101,5 +102,5 @@ class CouponService:
     @staticmethod
     def _calc_discount(coupon: Coupon, subtotal: Decimal) -> Decimal:
         if coupon.discount_type == DiscountType.percentage:
-            return (subtotal * coupon.discount_value / 100).quantize(Decimal("0.01"))
+            return min(subtotal, (subtotal * coupon.discount_value / 100).quantize(Decimal("0.01")))
         return min(coupon.discount_value, subtotal)

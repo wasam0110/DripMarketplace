@@ -13,11 +13,31 @@ Provides:
 from __future__ import annotations
 
 import asyncio
+import os
+
+# Never load application credentials or services for a test process.
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
+
+_original_database_url = os.environ.get("DATABASE_URL", "")
+_test_database_url = os.environ.get("TEST_DATABASE_URL", "")
+_test_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+os.environ.update({
+    "ENVIRONMENT": "test",
+    "DATABASE_URL": _test_database_url or "postgresql+asyncpg://test:test@127.0.0.1:55432/wearhowz_test",
+    "REDIS_URL": "redis://127.0.0.1:56379/15",
+    "JWT_PRIVATE_KEY": _test_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode(),
+    "JWT_PUBLIC_KEY": _test_key.public_key().public_bytes(serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo).decode(),
+    "SUPABASE_URL": "https://storage.example.invalid",
+    "SUPABASE_SERVICE_ROLE_KEY": "test-only-placeholder",
+    "RESEND_API_KEY": "",
+    "PAYFAST_MERCHANT_ID": "",
+    "PAYFAST_SECURED_KEY": "",
+})
 from collections.abc import AsyncGenerator
-from pydoc import text
-from pydoc import text
 from typing import Any
 from sqlalchemy import text
+from sqlalchemy.pool import NullPool
 
 import pytest
 import pytest_asyncio
@@ -31,50 +51,57 @@ from app.models.base import Base
 from main import app
 
 # ── Test database URL (separate DB to avoid polluting development data) ────────
-TEST_DATABASE_URL = settings.DATABASE_URL.replace("/drip", "/drip_test")
+TEST_DATABASE_URL = _test_database_url
 
 
-# ── Event loop ────────────────────────────────────────────────────────────────
-
-@pytest.fixture(scope="session")
-def event_loop():
-    """Use a single event loop for the entire test session."""
-    loop = asyncio.get_event_loop_policy().new_event_loop()
-    yield loop
-    loop.close()
-
-
-# ── Test database ─────────────────────────────────────────────────────────────
-
-@pytest_asyncio.fixture(scope="session")
+# Each database test owns a disposable schema, never the public schema.
+@pytest_asyncio.fixture
 async def test_engine():
-    """Create a test engine and apply the schema once per session."""
-    engine = create_async_engine(TEST_DATABASE_URL, echo=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield engine
-    async with engine.begin() as conn:
-        await conn.execute(text("DROP SCHEMA public CASCADE"))
-        await conn.execute(text("CREATE SCHEMA public"))
-    await engine.dispose()
+    if not TEST_DATABASE_URL:
+        pytest.skip("Set TEST_DATABASE_URL to a dedicated database ending in _test")
+    from sqlalchemy.engine import make_url
+    from uuid import uuid4
+    target = make_url(TEST_DATABASE_URL)
+    if target.drivername != "postgresql+asyncpg" or not target.database or not target.database.endswith("_test"):
+        raise RuntimeError("TEST_DATABASE_URL must be PostgreSQL and use a database ending in _test")
+    if _original_database_url:
+        original = make_url(_original_database_url)
+        if (target.host, target.port, target.database) == (original.host, original.port, original.database):
+            raise RuntimeError("Refusing to run tests against DATABASE_URL")
+    schema = "test_" + uuid4().hex
+    setup = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool, connect_args={"timeout": 15, "command_timeout": 20})
+    async with setup.begin() as conn:
+        await conn.execute(text(f'CREATE SCHEMA "{schema}"'))
+    engine = create_async_engine(TEST_DATABASE_URL, echo=False, poolclass=NullPool, connect_args={"timeout": 15, "command_timeout": 20, "server_settings": {"search_path": schema + ",public"}})
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        yield engine
+    finally:
+        await engine.dispose()
+        async with setup.begin() as conn:
+            await conn.execute(text(f'DROP SCHEMA "{schema}" CASCADE'))
+        await setup.dispose()
 
 
 @pytest_asyncio.fixture
-async def db(test_engine) -> AsyncGenerator[AsyncSession, None]:
-    """
-    Provide a transactional test database session.
-    All changes made in a test are rolled back after the test completes.
-    This keeps tests isolated and the database clean.
-    """
-    session_factory = async_sessionmaker(
-        bind=test_engine,
-        class_=AsyncSession,
-        expire_on_commit=False,
-    )
-    async with session_factory() as session:
-        async with session.begin():
+async def db(test_engine):
+    # SAVEPOINT keeps service-level commits isolated inside the outer transaction.
+    async with test_engine.connect() as connection:
+        transaction = await connection.begin()
+        async with AsyncSession(bind=connection, expire_on_commit=False, autoflush=False, join_transaction_mode="create_savepoint") as session:
             yield session
-            await session.rollback()
+        await transaction.rollback()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def isolated_redis(monkeypatch):
+    import fakeredis.aioredis
+    import app.core.redis as redis_module
+    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    monkeypatch.setattr(redis_module, "_redis", client)
+    yield client
+    await client.aclose()
 
 
 # ── HTTP test client ──────────────────────────────────────────────────────────

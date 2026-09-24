@@ -106,3 +106,10 @@ class ReviewImage(Base):
     created_at: Mapped[datetime]  = mapped_column(DateTime(timezone=True), nullable=False, server_default="now()")
 
     review: Mapped["Review"] = relationship(back_populates="images")
+
+
+class ReviewVote(Base):
+    __tablename__ = "review_votes"
+    review_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("reviews.id", ondelete="CASCADE"), primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    helpful: Mapped[bool] = mapped_column(Boolean, nullable=False)

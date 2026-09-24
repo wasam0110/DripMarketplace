@@ -36,6 +36,8 @@ from app.models.order  import Order   # noqa: F401
 from app.models.coupon import Coupon  # noqa: F401
 from app.models.payment import Payment
 from app.models.wallet import WalletTransaction
+from app.models.analytics import AnalyticsEvent
+from app.models.review import Review
 from app.models.admin import Banner, SystemSetting  # noqa: F401
 
 # ── Alembic config ────────────────────────────────────────────────────────────

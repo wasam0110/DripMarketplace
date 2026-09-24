@@ -53,6 +53,7 @@ class CommissionLedger(Base):
     commission_rate:   Mapped[Decimal] = mapped_column(Numeric(5, 4))   # e.g. 0.1500
     commission_amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     seller_amount:     Mapped[Decimal] = mapped_column(Numeric(12, 2))
+    released_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     settled_at:        Mapped[datetime] = mapped_column(
                            DateTime(timezone=True), server_default="now()"
                        )
@@ -77,6 +78,7 @@ class Payout(Base):
                         default=PayoutStatus.requested,
                     )
     admin_note:     Mapped[str | None]    = mapped_column(Text)
+    transfer_reference: Mapped[str | None] = mapped_column(String(255))
     approved_by:    Mapped[UUID | None]   = mapped_column(ForeignKey("users.id"))
     requested_at:   Mapped[datetime]      = mapped_column(
                         DateTime(timezone=True), server_default="now()"
@@ -107,3 +109,6 @@ class WalletTransaction(Base):
     seller:       Mapped["Seller"]             = relationship(back_populates="wallet_transactions")
     seller_order: Mapped["SellerOrder | None"] = relationship()
     payout:       Mapped["Payout | None"]      = relationship()
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.models.order import SellerOrder

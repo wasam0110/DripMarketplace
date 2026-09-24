@@ -31,7 +31,9 @@ def _make_service(
     commission_exists: bool = False,
 ) -> tuple[CommissionService, MagicMock]:
     """Return a CommissionService wired to mocked repos and a mock DB session."""
+    from app.models.payment import PaymentStatus
     db = AsyncMock()
+    db.scalar = AsyncMock(return_value=MagicMock(status=PaymentStatus.completed))
 
     svc = CommissionService(db)
     svc.comm_repo  = AsyncMock()
@@ -54,6 +56,8 @@ def _make_service(
 
 def _make_seller_order(subtotal: Decimal):
     order = MagicMock()
+    from app.models.order import SellerOrderStatus
+    order.status = SellerOrderStatus.delivered
     order.id       = uuid4()
     order.subtotal = subtotal
     order.seller_id = uuid4()

@@ -112,7 +112,7 @@ class SessionRepository:
             UserSession.token_hash == token_hash,
             UserSession.expires_at > datetime.now(UTC),
         )
-        return (await db.execute(stmt)).scalar_one_or_none()
+        return (await db.execute(stmt.with_for_update())).scalar_one_or_none()
 
     @classmethod
     async def delete_by_token_hash(cls, db: AsyncSession, token_hash: str) -> None:

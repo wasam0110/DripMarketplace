@@ -4,17 +4,18 @@ import io
 import uuid
 from typing import Optional
 
-from PIL import Image
+from PIL import Image, ImageOps, UnidentifiedImageError
+from app.core.config import settings
 
 from app.core.exceptions import BusinessRuleError
 from app.integrations.supabase_storage import SupabaseStorage
 
-MAX_FILE_SIZE = 5 * 1024 * 1024   # 5 MB
+MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 ALLOWED_MAGIC = {
     b"\xff\xd8\xff": "image/jpeg",
-    b"\x89PNG":      "image/png",
+    b"\x89PNG": "image/png",
 }
-PRODUCT_IMAGES_BUCKET = "product-images"
+PRODUCT_IMAGES_BUCKET = settings.SUPABASE_STORAGE_BUCKET_PRODUCTS
 
 
 class ImageService:
@@ -40,35 +41,40 @@ class ImageService:
     # ── Conversion ─────────────────────────────────────────────────────────────
 
     def to_webp(self, data: bytes, quality: int = 85) -> bytes:
-        img = Image.open(io.BytesIO(data))
-        if img.mode not in ("RGB", "RGBA"):
-            img = img.convert("RGBA")
-        buf = io.BytesIO()
-        img.save(buf, format="WEBP", quality=quality)
-        return buf.getvalue()
+        try:
+            with Image.open(io.BytesIO(data)) as source:
+                if source.width * source.height > 25_000_000:
+                    raise BusinessRuleError("Image exceeds 25 megapixels")
+                source.load()
+                img = ImageOps.exif_transpose(source)
+                img.thumbnail((2400, 2400))
+                if img.mode not in ("RGB", "RGBA"):
+                    img = img.convert("RGBA")
+                buf = io.BytesIO()
+                img.save(buf, format="WEBP", quality=quality)
+                return buf.getvalue()
+        except (UnidentifiedImageError, OSError, ValueError, Image.DecompressionBombError) as exc:
+            raise BusinessRuleError("Image is corrupt or unsupported") from exc
 
     # ── Upload ─────────────────────────────────────────────────────────────────
 
     async def process_and_upload(
-        self, data: bytes, product_id: str
+        self, data: bytes, product_id: str, *, bucket: str | None = None
     ) -> str:
         """Validate → convert to WebP → upload to Supabase → return public URL."""
         self.validate(data)
         webp_data = self.to_webp(data)
-        path      = f"products/{product_id}/{uuid.uuid4()}.webp"
-        url       = await self.storage.upload(
-            bucket       = PRODUCT_IMAGES_BUCKET,
-            path         = path,
-            data         = webp_data,
-            content_type = "image/webp",
+        path = f"products/{product_id}/{uuid.uuid4()}.webp"
+        url = await self.storage.upload(
+            bucket=bucket or PRODUCT_IMAGES_BUCKET,
+            path=path,
+            data=webp_data,
+            content_type="image/webp",
         )
         return url
 
     async def delete(self, url: str) -> None:
         """Delete an image from Supabase Storage given its public URL."""
-        # Extract path from URL: .../storage/v1/object/public/{bucket}/{path}
-        try:
-            path = url.split(f"{PRODUCT_IMAGES_BUCKET}/", 1)[1]
-            await self.storage.delete(PRODUCT_IMAGES_BUCKET, path)
-        except Exception:
-            pass  # Non-critical — log in production
+        prefix = self.storage.get_public_url(PRODUCT_IMAGES_BUCKET, "")
+        if url.startswith(prefix):
+            await self.storage.delete(PRODUCT_IMAGES_BUCKET, url[len(prefix) :])

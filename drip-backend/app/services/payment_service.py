@@ -1,289 +1,378 @@
-"""
-app/services/payment_service.py
-────────────────────────────────
-Payment business logic — PayFast + COD only.
-"""
+"""Payment amounts use decimal PKR rupees, exactly as order totals do."""
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
+from uuid import UUID
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import (
-    BusinessRuleError, NotFoundError, ExternalServiceError
-)
-from app.core.logging import get_logger
+from app.core.exceptions import BusinessRuleError, NotFoundError, ExternalServiceError
 from app.integrations.payfast import PayFastClient
-from app.models.order import Order, OrderStatus, PaymentMethod
-from app.models.payment import Payment, PaymentCallback, PaymentStatus
-from app.repositories.order_repo import OrderRepository
+from app.models.order import OrderStatus, PaymentMethod, SellerOrderStatus
+from app.models.payment import Payment, PaymentCallback, PaymentStatus, Refund
 from app.repositories.payment_repo import PaymentRepository
 from app.schemas.payment import (
-    PaymentInitResponse, PaymentStatusResponse,
-    RetryPaymentRequest, RefundRequest, RefundResponse,
     GatewayStatusResponse,
+    PaymentInitResponse,
+    PaymentStatusResponse,
+    RefundRequest,
+    RefundResponse,
+    RetryPaymentRequest,
+    PaymentRowResponse,
+    PaginatedPayments,
 )
-
-logger = get_logger(__name__)
+from app.services.order_access import authorized_order
 
 
 def _build_payfast() -> PayFastClient:
+    if not settings.PAYFAST_ENABLED or not (
+        settings.PAYFAST_MERCHANT_ID and settings.PAYFAST_SECURED_KEY
+    ):
+        raise ExternalServiceError("Online payments are not enabled")
     return PayFastClient(
-        merchant_id = settings.PAYFAST_MERCHANT_ID,
-        secured_key = settings.PAYFAST_SECURED_KEY,
-        sandbox     = getattr(settings, "PAYFAST_SANDBOX", True),
+        settings.PAYFAST_MERCHANT_ID, settings.PAYFAST_SECURED_KEY, settings.PAYFAST_SANDBOX
     )
-
-
-RETRYABLE_ORDER_STATUSES    = {OrderStatus.pending_payment}
-REFUNDABLE_PAYMENT_STATUSES = {PaymentStatus.completed}
 
 
 class PaymentService:
     def __init__(self, db: AsyncSession) -> None:
-        self.db           = db
+        self.db = db
         self.payment_repo = PaymentRepository(db)
-        self.order_repo   = OrderRepository(db)
-
-    # ── Initiate ──────────────────────────────────────────────────────────────
 
     async def initiate(
-        self, order_id: uuid.UUID, user_id: uuid.UUID
+        self, order_id: UUID, user_id: UUID | None = None, guest_token: str | None = None
     ) -> PaymentInitResponse:
-        order = await self.order_repo.get_by_id(order_id, user_id=user_id)
-        if not order:
-            raise NotFoundError("Order not found")
-
-        if order.status not in (
-            OrderStatus.pending_payment,
-            OrderStatus.pending_cod_verification,
-        ):
-            raise BusinessRuleError(
-                f"Order is not awaiting payment (status: {order.status.value})"
+        order = await authorized_order(self.db, order_id, user_id, guest_token, lock=True)
+        if order.status not in (OrderStatus.pending_payment, OrderStatus.pending_cod_verification):
+            raise BusinessRuleError("Order is not awaiting payment")
+        payment = await self.payment_repo.get_by_order_id(order.id)
+        if payment and payment.status in (PaymentStatus.completed, PaymentStatus.refunded):
+            raise BusinessRuleError("Payment has already completed")
+        if payment is None:
+            payment = await self.payment_repo.create(
+                order_id=order.id,
+                method=order.payment_method.value,
+                amount=order.total,
+                currency="PKR",
+                status=PaymentStatus.pending,
             )
-
-        existing = await self.payment_repo.get_by_order_id(order_id)
-        if existing and existing.status == PaymentStatus.completed:
-            raise BusinessRuleError("Payment already completed for this order")
-
+        if payment.amount != order.total or payment.method != order.payment_method.value:
+            raise BusinessRuleError("Payment does not match this order; contact support")
         if order.payment_method == PaymentMethod.cod:
-            return await self._initiate_cod(order)
-        if order.payment_method == PaymentMethod.payfast:
-            return await self._initiate_payfast(order, user_id)
-
-        raise BusinessRuleError(
-            f"Unsupported payment method: {order.payment_method.value}"
-        )
-
-    async def _initiate_cod(self, order: Order) -> PaymentInitResponse:
-        payment = await self.payment_repo.create(
-            order_id=order.id,
-            method=PaymentMethod.cod.value,
-            amount=Decimal(order.total) / 100,
-            status=PaymentStatus.pending,
-        )
-        logger.info("cod_payment_initiated", order_id=str(order.id))
-        return PaymentInitResponse(
-            payment_id=payment.id,
-            method="cod",
-        )
-
-    async def _initiate_payfast(
-        self, order: Order, user_id: uuid.UUID
-    ) -> PaymentInitResponse:
-        from app.models.user import User
-        user = await self.db.get(User, user_id)
-
-        payment = await self.payment_repo.create(
-            order_id=order.id,
-            method=PaymentMethod.payfast.value,
-            amount=Decimal(order.total) / 100,
-            status=PaymentStatus.pending,
-        )
-
+            await self.db.commit()
+            return PaymentInitResponse(payment_id=payment.id, method="cod")
         pf = _build_payfast()
-        amount_pkr = int(order.total // 100)  # convert paisa → rupees
+        cached = (payment.gateway_payload or {}).get("checkout")
+        if not cached:
+            from app.models.user import User
 
-        payload = pf.build_checkout_payload(
-            order_id=str(order.id),
-            amount=amount_pkr,
-            description=f"DRIP Order #{order.order_number}",
-            return_url=f"{settings.FRONTEND_URL}/order/success/{order.id}",
-            cancel_url=f"{settings.FRONTEND_URL}/checkout?cancelled=1",
-            ipn_url=f"{settings.API_BASE_URL}/api/v1/payments/callback/payfast",
-            customer_email=user.email if user else "",
-            customer_name=f"{user.first_name or ''} {user.last_name or ''}".strip() if user else "",
-        )
-
-        logger.info("payfast_payment_initiated", order_id=str(order.id), payment_id=str(payment.id))
+            user = await self.db.get(User, user_id) if user_id else None
+            cached = pf.build_checkout_payload(
+                order_id=str(order.id),
+                amount=order.total,
+                description=f"WearHowZ order {order.order_number}",
+                return_url=f"{settings.FRONTEND_URL}/order/success/{order.id}",
+                cancel_url=f"{settings.FRONTEND_URL}/checkout?cancelled=1",
+                ipn_url=f"{settings.API_BASE_URL}/api/v1/payments/callback/payfast",
+                customer_email=user.email if user else order.guest_email or "",
+                customer_name=f"{user.first_name} {user.last_name}"
+                if user
+                else order.guest_name or "",
+            )
+            payment.gateway_payload = {"checkout": cached}
+            payment.status = PaymentStatus.pending
+        await self.db.commit()
         return PaymentInitResponse(
             payment_id=payment.id,
             method="payfast",
             checkout_url=pf.base_url,
-            payfast_payload=payload,
+            payfast_payload=cached,
         )
 
-    # ── Status ────────────────────────────────────────────────────────────────
-
     async def get_status(
-        self, order_id: uuid.UUID, user_id: uuid.UUID
+        self, order_id: UUID, user_id: UUID | None = None, guest_token: str | None = None
     ) -> PaymentStatusResponse:
-        order = await self.order_repo.get_by_id(order_id, user_id=user_id)
-        if not order:
-            raise NotFoundError("Order not found")
-
+        await authorized_order(self.db, order_id, user_id, guest_token)
         payment = await self.payment_repo.get_by_order_id(order_id)
-        if not payment:
+        if payment is None:
             raise NotFoundError("Payment not found")
-
         return PaymentStatusResponse(
             order_id=order_id,
             payment_id=payment.id,
             status=payment.status.value,
             method=payment.method,
-            amount=int(payment.amount * 100),
+            amount=payment.amount,
             gateway_reference=payment.gateway_reference,
             paid_at=payment.paid_at,
         )
 
-    # ── Retry ─────────────────────────────────────────────────────────────────
-
     async def retry(
         self,
-        order_id: uuid.UUID,
-        user_id:  uuid.UUID,
-        payload:  RetryPaymentRequest,
+        order_id: UUID,
+        user_id: UUID | None,
+        payload: RetryPaymentRequest,
+        guest_token: str | None = None,
     ) -> PaymentInitResponse:
-        order = await self.order_repo.get_by_id(order_id, user_id=user_id)
-        if not order:
-            raise NotFoundError("Order not found")
-        if order.status not in RETRYABLE_ORDER_STATUSES:
+        order = await authorized_order(self.db, order_id, user_id, guest_token, lock=True)
+        if order.status != OrderStatus.pending_payment:
             raise BusinessRuleError("This order cannot be retried")
-
-        # Update payment method on the order
-        from sqlalchemy import update
-        from app.models.order import Order as OrderModel
-        await self.db.execute(
-            update(OrderModel)
-            .where(OrderModel.id == order_id)
-            .values(payment_method=payload.payment_method)
+        payment = await self.payment_repo.get_by_order_id(order.id)
+        if payment and payment.status not in (PaymentStatus.pending, PaymentStatus.failed):
+            raise BusinessRuleError("This payment cannot be retried")
+        if payment and payment.status == PaymentStatus.pending and payment.gateway_payload:
+            if payload.payment_method.value != payment.method:
+                raise BusinessRuleError(
+                    "An online payment is still pending; its method cannot be changed"
+                )
+        if (
+            payload.payment_method == PaymentMethod.cod
+            and order.total > settings.MAX_COD_ORDER_AMOUNT
+        ):
+            raise BusinessRuleError("Order exceeds the COD limit")
+        if payload.payment_method == PaymentMethod.payfast:
+            _build_payfast()
+        order.payment_method = payload.payment_method
+        order.status = (
+            OrderStatus.pending_cod_verification
+            if payload.payment_method == PaymentMethod.cod
+            else OrderStatus.pending_payment
         )
-        await self.db.commit()
-        await self.db.refresh(order)
+        if payment:
+            payment.method = payload.payment_method.value
+            if payment.status == PaymentStatus.failed:
+                payment.gateway_payload = None
+            payment.status = PaymentStatus.pending
+            payment.failure_reason = None
+        await self.db.flush()
+        response = await self.initiate(order.id, user_id, guest_token)
+        if order.payment_method == PaymentMethod.cod:
+            from app.services.order_service import OrderService
 
-        return await self.initiate(order_id=order_id, user_id=user_id)
-
-    # ── IPN callback ──────────────────────────────────────────────────────────
+            await OrderService(self.db)._enqueue_cod_timeout(str(order.id))
+        return response
 
     async def handle_payfast_callback(self, data: dict) -> None:
-        """Process PayFast IPN callback."""
-        # Log the raw callback first
-        callback = PaymentCallback(
-            gateway=     "payfast",
-            raw_payload= data,
-            is_verified= False,
-        )
+        pf = _build_payfast()
+        callback = PaymentCallback(gateway="payfast", raw_payload=data, is_verified=False)
         self.db.add(callback)
-        await self.db.flush()
-
         try:
-            pf     = _build_payfast()
-            parsed = pf.parse_ipn(data)   # raises ValueError if sig invalid
-        except ValueError as e:
-            logger.warning("payfast_ipn_invalid_signature", error=str(e))
-            return
+            parsed = pf.parse_ipn(data)
+            order_id = UUID(parsed["order_id"])
+        except (ValueError, KeyError, TypeError):
+            await self.db.commit()  # Persist rejected callback audit, without changing payment.
+            raise BusinessRuleError("Invalid payment callback") from None
+        from app.repositories.order_repo import OrderRepository
 
-        # Mark callback as verified
-        callback.is_verified = True
-
-        order_id_str = parsed["order_id"]
-        try:
-            order_id = uuid.UUID(order_id_str)
-        except ValueError:
-            logger.error("payfast_ipn_invalid_order_id", raw=order_id_str)
-            return
-
+        repo = OrderRepository(self.db)
+        order = await repo.get_by_id(order_id, for_update=True)
         payment = await self.payment_repo.get_by_order_id(order_id)
-        if not payment:
-            logger.error("payfast_ipn_payment_not_found", order_id=order_id_str)
-            return
-
+        callback.is_verified = True
+        if not order or not payment or payment.method != "payfast":
+            await self.db.commit()
+            raise BusinessRuleError("Payment callback does not match an online payment")
         callback.payment_id = payment.id
-
-        if parsed["status"] == "completed":
-            payment.status            = PaymentStatus.completed
-            payment.gateway_reference = parsed["txn_id"]
-            payment.gateway_payload   = parsed["raw"]
-            payment.paid_at           = datetime.now(timezone.utc)
-
-            # Advance order
-            from sqlalchemy import update as sa_update
-            from app.models.order import Order as OrderModel
-            await self.db.execute(
-                sa_update(OrderModel)
-                .where(OrderModel.id == order_id)
-                .values(status=OrderStatus.payment_confirmed)
+        if (
+            parsed["amount"] != payment.amount
+            or parsed.get("currency") != payment.currency
+            or payment.amount != order.total
+            or not parsed["txn_id"]
+        ):
+            await self.db.commit()
+            raise BusinessRuleError(
+                "Payment callback does not match the expected amount or currency"
             )
-            logger.info("payfast_payment_confirmed", order_id=order_id_str)
-
+        duplicate = await self.payment_repo.get_by_gateway_reference(parsed["txn_id"])
+        if duplicate is not None and duplicate.id != payment.id:
+            await self.db.commit()
+            raise BusinessRuleError("Payment reference already belongs to another order")
+        # Duplicate and delayed notifications cannot regress paid/fulfilled state.
+        if payment.status in (PaymentStatus.completed, PaymentStatus.refunded):
+            if payment.gateway_reference != parsed["txn_id"]:
+                await self.db.commit()
+                raise BusinessRuleError("Unexpected transaction reference")
+            await self.db.commit()
+            return
+        if order.status != OrderStatus.pending_payment:
+            payment.failure_reason = "Late callback requires manual reconciliation"
+            await self.db.commit()
+            raise BusinessRuleError("Order requires payment reconciliation")
+        if parsed["status"] == "completed":
+            payment.status = PaymentStatus.completed
+            payment.gateway_reference = parsed["txn_id"]
+            payment.paid_at = datetime.now(UTC)
+            payment.failure_reason = None
+            await repo.update_status(
+                order.id, OrderStatus.payment_confirmed, note="Verified payment callback"
+            )
         elif parsed["status"] == "failed":
-            payment.status        = PaymentStatus.failed
-            payment.failure_reason= "PayFast reported payment failure"
-            logger.warning("payfast_payment_failed", order_id=order_id_str)
-
-        elif parsed["status"] == "refunded":
-            payment.status = PaymentStatus.refunded
-            logger.info("payfast_payment_refunded", order_id=order_id_str)
-
+            payment.status = PaymentStatus.failed
+            payment.failure_reason = "Gateway reported failure"
+        payment.gateway_payload = {**(payment.gateway_payload or {}), "callback": parsed["raw"]}
         await self.db.commit()
-
-    # ── Refund ────────────────────────────────────────────────────────────────
 
     async def refund(
-        self,
-        payment_id: uuid.UUID,
-        admin_id:   uuid.UUID,
-        payload:    RefundRequest,
+        self, payment_id: UUID, admin_id: UUID, payload: RefundRequest
     ) -> RefundResponse:
-        payment = await self.payment_repo.get_by_id(payment_id)
+        payment = await self.db.scalar(
+            select(Payment).where(Payment.id == payment_id).with_for_update()
+        )
         if not payment:
             raise NotFoundError("Payment not found")
-        if payment.status not in REFUNDABLE_PAYMENT_STATUSES:
+        if payload.idempotency_key:
+            existing = await self.db.scalar(
+                select(Refund).where(
+                    Refund.payment_id == payment_id,
+                    Refund.idempotency_key == payload.idempotency_key,
+                )
+            )
+            if existing:
+                if existing.amount != payload.amount or existing.reason != payload.reason:
+                    raise BusinessRuleError(
+                        "Idempotency key was already used with different refund details"
+                    )
+                return self._refund_response(existing)
+        if payment.status != PaymentStatus.completed:
             raise BusinessRuleError("Only completed payments can be refunded")
-
-        # PayFast does not have an automated refund API — manual process
-        from app.models.payment import Refund
+        reserved = await self.payment_repo.get_total_refunded(payment.id)
+        if payload.amount > payment.amount - reserved:
+            raise BusinessRuleError("Refund exceeds the remaining refundable amount")
         refund = Refund(
-            payment_id=  payment_id,
-            amount=      Decimal(payload.amount) / 100,
-            reason=      payload.reason,
-            gateway_ref= None,   # filled in manually after processing
+            payment_id=payment.id,
+            amount=payload.amount,
+            reason=payload.reason,
             processed_by=admin_id,
+            idempotency_key=payload.idempotency_key,
         )
         self.db.add(refund)
-        payment.status = PaymentStatus.refunded
+        # Requesting a manual refund never claims money has been transferred.
         await self.db.commit()
         await self.db.refresh(refund)
+        return self._refund_response(refund)
 
-        logger.info("refund_created", payment_id=str(payment_id), amount=payload.amount)
+    async def confirm_refund(
+        self, refund_id: UUID, admin_id: UUID, reference: str
+    ) -> RefundResponse:
+        refund = await self.db.get(Refund, refund_id)
+        if not refund:
+            raise NotFoundError("Refund not found")
+        payment = await self.db.scalar(
+            select(Payment).where(Payment.id == refund.payment_id).with_for_update()
+        )
+        await self.db.refresh(refund)
+        if refund.processed_at:
+            if refund.gateway_ref != reference:
+                raise BusinessRuleError("Refund already confirmed with a different reference")
+            return self._refund_response(refund)
+        if refund.return_id:
+            from app.models.return_ import Return, ReturnStatus
+            from app.models.order import OrderItem
+            from app.models.product import ProductInventory
+            from app.repositories.return_repo import ReturnRepository
+            from sqlalchemy import update
+
+            returned = await ReturnRepository(self.db).get_by_id(refund.return_id)
+            if returned and returned.status == ReturnStatus.received:
+                for item in returned.items:
+                    order_item = await self.db.get(OrderItem, item.order_item_id)
+                    await self.db.execute(
+                        update(ProductInventory)
+                        .where(ProductInventory.variant_id == order_item.variant_id)
+                        .values(stock=ProductInventory.stock + item.quantity)
+                    )
+                returned.status = ReturnStatus.refunded
+                returned.resolved_at = datetime.now(UTC)
+        refund.gateway_ref = reference
+        refund.processed_at = datetime.now(UTC)
+        refund.processed_by = admin_id
+        await self.db.flush()
+        from sqlalchemy import func
+
+        confirmed = await self.db.scalar(
+            select(func.coalesce(func.sum(Refund.amount), 0)).where(
+                Refund.payment_id == payment.id, Refund.processed_at.is_not(None)
+            )
+        )
+        if confirmed >= payment.amount:
+            payment.status = PaymentStatus.refunded
+        await self.db.commit()
+        return self._refund_response(refund)
+
+    @staticmethod
+    def _refund_response(refund: Refund) -> RefundResponse:
         return RefundResponse(
-            refund_id=  refund.id,
-            payment_id= payment_id,
-            amount=     payload.amount,
-            reason=     payload.reason,
-            gateway_ref=None,
-            created_at= refund.created_at,
+            refund_id=refund.id,
+            payment_id=refund.payment_id,
+            amount=refund.amount,
+            reason=refund.reason or "",
+            gateway_ref=refund.gateway_ref,
+            created_at=refund.created_at,
+            status="completed" if refund.processed_at else "pending",
+            processed_at=refund.processed_at,
         )
 
-    # ── Gateway status ────────────────────────────────────────────────────────
+    async def record_cod_collection(self, payment_id: UUID, admin_id: UUID, reference: str):
+        payment = await self.db.get(Payment, payment_id)
+        if not payment:
+            raise NotFoundError("Payment not found")
+        from app.repositories.order_repo import OrderRepository
+
+        order = await OrderRepository(self.db).get_by_id(payment.order_id, for_update=True)
+        await self.db.refresh(payment)
+        if payment.method != "cod" or order.status not in (
+            OrderStatus.delivered,
+            OrderStatus.completed,
+        ):
+            raise BusinessRuleError("COD collection can only be recorded after delivery")
+        if payment.status == PaymentStatus.completed:
+            if payment.gateway_reference != reference:
+                raise BusinessRuleError(
+                    "Collection was already recorded with a different reference"
+                )
+            return {"status": "completed"}
+        if payment.status != PaymentStatus.pending:
+            raise BusinessRuleError("Payment cannot be collected in its current state")
+        payment.status = PaymentStatus.completed
+        payment.paid_at = datetime.now(UTC)
+        payment.gateway_reference = reference
+        from app.services.commission_service import CommissionService
+
+        for seller_order in order.seller_orders:
+            if seller_order.status == SellerOrderStatus.delivered:
+                await CommissionService(self.db).settle(seller_order.id, commit=False)
+        await self.db.commit()
+        return {"status": "completed"}
+
+    async def list_admin(self, **filters) -> PaginatedPayments:
+        rows, total = await self.payment_repo.list_admin(**filters)
+        return PaginatedPayments(
+            data=[
+                PaymentRowResponse(
+                    id=p.id,
+                    order_id=p.order_id,
+                    order_number=p.order.order_number,
+                    method=p.method,
+                    status=p.status.value,
+                    amount=p.amount,
+                    gateway_reference=p.gateway_reference,
+                    paid_at=p.paid_at,
+                    created_at=p.created_at,
+                )
+                for p in rows
+            ],
+            total=total,
+            page=filters.get("page", 1),
+        )
 
     async def gateway_status(self) -> GatewayStatusResponse:
-        pf_ok = bool(settings.PAYFAST_MERCHANT_ID and settings.PAYFAST_SECURED_KEY)
-        return GatewayStatusResponse(
-            payfast="configured" if pf_ok else "not_configured",
-            cod="active",
+        state = (
+            "disabled_pending_verification"
+            if not settings.PAYFAST_ENABLED
+            else "configured"
+            if settings.PAYFAST_MERCHANT_ID and settings.PAYFAST_SECURED_KEY
+            else "not_configured"
         )
+        return GatewayStatusResponse(payfast=state, cod="active")

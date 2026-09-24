@@ -38,7 +38,7 @@ class ReturnService:
     ) -> ReturnDetailResponse:
         # Verify seller_order belongs to user
         so_result = await self.db.execute(
-            select(SellerOrder).where(SellerOrder.id == payload.seller_order_id)
+            select(SellerOrder).where(SellerOrder.id == payload.seller_order_id).with_for_update()
         )
         seller_order = so_result.scalar_one_or_none()
         if not seller_order:
@@ -55,6 +55,8 @@ class ReturnService:
                 f"Returns are only accepted for delivered orders. Current status: {order.status.value}"
             )
 
+        if len({i.order_item_id for i in payload.items}) != len(payload.items):
+            raise BusinessRuleError("Each order item may appear only once")
         # Validate order items belong to this seller_order
         for req_item in payload.items:
             item_result = await self.db.execute(
@@ -67,7 +69,10 @@ class ReturnService:
             order_item = item_result.scalar_one_or_none()
             if not order_item:
                 raise BusinessRuleError(f"Order item {req_item.order_item_id} not found in this seller order")
-            if req_item.quantity > order_item.quantity:
+            from sqlalchemy import func
+            from app.models.return_ import ReturnItem
+            already_requested = await self.db.scalar(select(func.coalesce(func.sum(ReturnItem.quantity), 0)).join(Return).where(ReturnItem.order_item_id == order_item.id, Return.status != ReturnStatus.rejected))
+            if req_item.quantity + already_requested > order_item.quantity:
                 raise BusinessRuleError(
                     f"Cannot return more than purchased quantity for {order_item.product_name}"
                 )
@@ -211,22 +216,26 @@ class ReturnService:
         if return_.status != ReturnStatus.received:
             raise BusinessRuleError("Can only refund received returns")
 
-        # Restock inventory
+        from app.models.payment import Payment, Refund
+        from app.schemas.payment import RefundRequest
+        from app.services.payment_service import PaymentService
+        payment = await self.db.scalar(select(Payment).where(Payment.order_id == return_.order_id))
+        if not payment:
+            raise BusinessRuleError("A collected payment is required before a refund")
+        # A request remains pending until the external transfer is recorded.
+        total = Decimal("0")
         for item in return_.items:
-            order_item_result = await self.db.execute(
-                select(OrderItem).where(OrderItem.id == item.order_item_id)
-            )
-            order_item = order_item_result.scalar_one_or_none()
-            if order_item:
-                await self.inv_repo.release(order_item.variant_id, item.quantity)
-
-        await self.return_repo.update_status(
-            return_id, ReturnStatus.refunded,
-            notes=payload.admin_note,
-            resolved_at=datetime.utcnow(),
-        )
+            order_item = await self.db.get(OrderItem, item.order_item_id)
+            total += order_item.unit_price * item.quantity
+        order = await self.db.get(Order, return_.order_id)
+        total = (total * (order.subtotal - order.discount_amount) / order.subtotal).quantize(Decimal("0.01"))
+        response = await PaymentService(self.db).refund(payment.id, admin_id,
+            RefundRequest(amount=total, reason=payload.admin_note or "Received product return",
+                          idempotency_key=f"return:{return_id}"))
+        refund = await self.db.get(Refund, response.refund_id)
+        refund.return_id = return_.id
         await self.db.commit()
-        return {"message": "Return refunded. Inventory restocked."}
+        return {"message": "Refund requested; awaiting recorded transfer", "refund_id": str(refund.id), "status": response.status}
 
     # ── Admin: dispute management ──────────────────────────────────────────────
 

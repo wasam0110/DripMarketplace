@@ -5,10 +5,12 @@ app/schemas/payment.py — PayFast + COD only.
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, Field
+from app.models.order import PaymentMethod
 
 
 class InitiatePaymentRequest(BaseModel):
@@ -38,24 +40,27 @@ class PaymentStatusResponse(BaseModel):
     payment_id:        UUID
     status:            str
     method:            str
-    amount:            int
+    amount:            Decimal
     gateway_reference: Optional[str]
     paid_at:           Optional[datetime]
 
 
 class RetryPaymentRequest(BaseModel):
-    payment_method: str = Field(pattern="^(payfast|cod)$")
+    payment_method: PaymentMethod
 
 
 class RefundRequest(BaseModel):
-    amount: int = Field(ge=1)
+    idempotency_key: str | None = Field(default=None, min_length=8, max_length=100)
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
     reason: str = Field(min_length=5, max_length=500)
 
 
 class RefundResponse(BaseModel):
+    status: str = "pending"
+    processed_at: datetime | None = None
     refund_id:   UUID
     payment_id:  UUID
-    amount:      int
+    amount:      Decimal
     reason:      str
     gateway_ref: Optional[str]
     created_at:  datetime
@@ -74,7 +79,7 @@ class PaymentRowResponse(BaseModel):
     order_number:      str
     method:            str
     status:            str
-    amount:            int
+    amount:            Decimal
     gateway_reference: Optional[str]
     paid_at:           Optional[datetime]
     created_at:        datetime
@@ -86,3 +91,7 @@ class PaginatedPayments(BaseModel):
     data:  list[PaymentRowResponse]
     total: int
     page:  int
+
+
+class TransferConfirmationRequest(BaseModel):
+    reference: str = Field(min_length=3, max_length=255)

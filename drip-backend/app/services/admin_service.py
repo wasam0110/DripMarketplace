@@ -43,35 +43,40 @@ class AdminService:
     # ── Dashboard ──────────────────────────────────────────────────────────────
 
     async def get_dashboard(self, period: str) -> AdminDashboardResponse:
+        now = datetime.now(timezone.utc)
+        since = now.replace(hour=0, minute=0, second=0, microsecond=0) if period == "today" else now - timedelta(days={
+            "week": 7, "month": 30, "quarter": 90, "year": 365,
+        }.get(period, 30))
         async def count(model, *filters):
             r = await self.db.execute(select(func.count(model.id)).where(*filters))
             return r.scalar_one() or 0
 
         async def sum_col(col, *filters):
             r = await self.db.execute(select(func.coalesce(func.sum(col), 0)).where(*filters))
-            return int(r.scalar_one())
+            return Decimal(r.scalar_one())
 
         active_sellers  = await count(Seller, Seller.status == SellerStatus.active, Seller.deleted_at.is_(None))
         pending_sellers = await count(Seller, Seller.status == SellerStatus.pending_approval, Seller.deleted_at.is_(None))
         cod_unverified  = await count(Order, Order.status == OrderStatus.pending_cod_verification)
-        total_orders    = await count(Order, Order.id.isnot(None))
+        total_orders    = await count(Order, Order.created_at >= since)
 
         pending_payouts_r = await self.db.execute(
             select(func.count(Payout.id)).where(Payout.status == PayoutStatus.requested)
         )
         pending_payouts = pending_payouts_r.scalar_one() or 0
 
-        total_gmv        = await sum_col(Order.total,                   Order.status.in_(["delivered", "completed"]))
-        platform_revenue = await sum_col(CommissionLedger.commission_amount, CommissionLedger.id.isnot(None))
-        slot_revenue     = await sum_col(Seller.registration_fee,         Seller.status == SellerStatus.active)
-        new_customers    = await count(User, User.role == UserRole.customer)
+        total_gmv = await sum_col(Order.total, Order.status.in_(["delivered", "completed"]), Order.created_at >= since)
+        platform_revenue = await sum_col(CommissionLedger.commission_amount, CommissionLedger.settled_at >= since)
+        from app.services.revenue import seller_fee_revenue
+        slot_revenue = await seller_fee_revenue(self.db, since)
+        new_customers = await count(User, User.role == UserRole.customer, User.created_at >= since)
 
         return AdminDashboardResponse(
             period           = period,
             total_gmv        = total_gmv,
             platform_revenue = platform_revenue,
-            slot_revenue     = int(slot_revenue),
-            total_revenue    = platform_revenue + int(slot_revenue),
+            slot_revenue     = slot_revenue,
+            total_revenue    = platform_revenue + slot_revenue,
             total_orders     = total_orders,
             active_sellers   = active_sellers,
             pending_sellers  = pending_sellers,
@@ -114,9 +119,9 @@ class AdminService:
                 slots_used        = s.slots_used,
                 total_slots       = s.total_slots,
                 product_count     = product_count,
-                total_gmv         = 0,              # Full aggregation wired in Block 11
-                platform_cut      = int(commission_sum),
-                available_balance = int(s.wallet.available_balance) if s.wallet else 0,
+                total_gmv         = await self._seller_gmv(s.id),
+                platform_cut      = commission_sum,
+                available_balance = s.wallet.available_balance if s.wallet else 0,
                 joined_at         = s.created_at,
             ))
 
@@ -146,11 +151,11 @@ class AdminService:
             slots_used        = seller.slots_used,
             total_slots       = seller.total_slots,
             product_count     = product_count,
-            total_gmv         = 0,
-            platform_cut      = int(commission_sum),
-            available_balance = int(seller.wallet.available_balance) if seller.wallet else 0,
-            pending_balance   = int(seller.wallet.pending_balance)   if seller.wallet else 0,
-            registration_fee  = int(seller.registration_fee),
+            total_gmv         = await self._seller_gmv(seller.id),
+            platform_cut      = commission_sum,
+            available_balance = seller.wallet.available_balance if seller.wallet else 0,
+            pending_balance   = seller.wallet.pending_balance if seller.wallet else 0,
+            registration_fee  = seller.registration_fee,
             description       = seller.description,
             whatsapp_number   = seller.whatsapp_number,
             instagram_handle  = seller.instagram_handle,
@@ -260,15 +265,18 @@ class AdminService:
         count_q = select(func.count()).select_from(query.subquery())
         total   = (await self.db.execute(count_q)).scalar_one()
 
+        matching_ids = query.with_only_columns(Order.id).order_by(None)
         commission_total_r = await self.db.execute(
             select(func.coalesce(func.sum(CommissionLedger.commission_amount), 0))
+            .join(SellerOrder, CommissionLedger.seller_order_id == SellerOrder.id)
+            .where(SellerOrder.order_id.in_(matching_ids))
         )
-        commission_total = int(commission_total_r.scalar_one())
+        commission_total = commission_total_r.scalar_one()
 
         gmv_total_r = await self.db.execute(
-            select(func.coalesce(func.sum(Order.total), 0))
+            select(func.coalesce(func.sum(Order.total), 0)).where(Order.id.in_(matching_ids))
         )
-        gmv_total = int(gmv_total_r.scalar_one())
+        gmv_total = gmv_total_r.scalar_one()
 
         query = query.order_by(desc(Order.created_at)).offset((page - 1) * per_page).limit(per_page)
         result = await self.db.execute(query)
@@ -283,9 +291,9 @@ class AdminService:
                 status         = o.status.value,
                 customer_name  = customer_name,
                 seller_count   = len(o.seller_orders),
-                subtotal       = int(o.subtotal),
-                total          = int(o.total),
-                commission     = 0,  # Per-order commission from Block 11 analytics
+                subtotal       = o.subtotal,
+                total          = o.total,
+                commission     = await self.db.scalar(select(func.coalesce(func.sum(CommissionLedger.commission_amount), 0)).join(SellerOrder, CommissionLedger.seller_order_id == SellerOrder.id).where(SellerOrder.order_id == o.id)),
                 payment_method = o.payment_method.value,
                 created_at     = o.created_at,
             ))
@@ -303,6 +311,8 @@ class AdminService:
     # ── COD Queue ──────────────────────────────────────────────────────────────
 
     async def list_cod_queue(self) -> list[CODQueueItem]:
+        from app.services.platform_settings import get_platform_settings
+        policy = await get_platform_settings(self.db)
         result = await self.db.execute(
             select(Order)
             .options(
@@ -318,7 +328,7 @@ class AdminService:
         items = []
         for o in orders:
             placed_at  = o.created_at.replace(tzinfo=timezone.utc)
-            expires_at = placed_at + timedelta(minutes=COD_TIMEOUT_MINUTES)
+            expires_at = placed_at + timedelta(minutes=policy.cod_timeout_minutes)
             remaining  = max(0, int((expires_at - now).total_seconds() / 60))
 
             brand_names    = list({so.seller.brand_name for so in o.seller_orders if so.seller})
@@ -330,7 +340,7 @@ class AdminService:
                 order_number      = o.order_number,
                 customer_name     = customer_name,
                 customer_phone    = customer_phone,
-                total             = int(o.total),
+                total             = o.total,
                 brand_names       = brand_names,
                 placed_at         = placed_at,
                 expires_at        = expires_at,
@@ -342,7 +352,7 @@ class AdminService:
     async def verify_cod(self, order_id: UUID, admin_id: UUID, note: Optional[str] = None) -> dict:
         from app.repositories.order_repo import OrderRepository
         repo  = OrderRepository(self.db)
-        order = await repo.get_by_id(order_id)
+        order = await repo.get_by_id(order_id, for_update=True)
         if not order:
             raise NotFoundError("Order not found")
         if order.status != OrderStatus.pending_cod_verification:
@@ -360,7 +370,7 @@ class AdminService:
         so_repo    = SellerOrderRepository(self.db)
         inv_repo   = InventoryRepository(self.db)
 
-        order = await order_repo.get_by_id(order_id)
+        order = await order_repo.get_by_id(order_id, for_update=True)
         if not order:
             raise NotFoundError("Order not found")
         if order.status != OrderStatus.pending_cod_verification:
@@ -407,35 +417,23 @@ class AdminService:
     # ── Settings ───────────────────────────────────────────────────────────────
 
     async def get_settings(self) -> PlatformSettingsResponse:
-        result  = await self.db.execute(select(SystemSetting))
-        rows    = {s.key: s.value for s in result.scalars().all()}
-        merged  = {**DEFAULT_SETTINGS, **rows}
-        return PlatformSettingsResponse(
-            commission_rate         = float(merged["commission_rate"]),
-            registration_fee        = int(merged["registration_fee"]),
-            extra_slot_price        = int(merged["extra_slot_price"]),
-            free_shipping_threshold = int(merged["free_shipping_threshold"]),
-            standard_shipping_fee   = int(merged["standard_shipping_fee"]),
-            cod_timeout_minutes     = int(merged["cod_timeout_minutes"]),
-            wallet_hold_days        = int(merged["wallet_hold_days"]),
-        )
+        from app.services.platform_settings import get_platform_settings
+        return await get_platform_settings(self.db)
 
     async def update_settings(
         self, updates: dict, admin_id: UUID
     ) -> PlatformSettingsResponse:
+        from sqlalchemy.dialects.postgresql import insert
+        from app.schemas.admin import UpdateSettingsRequest
+        updates = UpdateSettingsRequest.model_validate(updates).model_dump(exclude_none=True)
         for key, val in updates.items():
             if val is None:
                 continue
-            result = await self.db.execute(
-                select(SystemSetting).where(SystemSetting.key == key)
-            )
-            setting = result.scalar_one_or_none()
-            if setting:
-                setting.value      = str(val)
-                setting.updated_by = admin_id
-                setting.updated_at = datetime.utcnow()
-            else:
-                self.db.add(SystemSetting(key=key, value=str(val), updated_by=admin_id))
+            statement = insert(SystemSetting).values(key=key, value=str(val), updated_by=admin_id)
+            await self.db.execute(statement.on_conflict_do_update(
+                index_elements=[SystemSetting.key],
+                set_={"value": str(val), "updated_by": admin_id, "updated_at": datetime.now(timezone.utc)},
+            ))
 
         await self.db.commit()
         return await self.get_settings()
@@ -467,3 +465,8 @@ class AdminService:
             .where(CommissionLedger.seller_id == seller_id)
         )
         return result.scalar_one()
+
+    async def _seller_gmv(self, seller_id: UUID) -> Decimal:
+        return await self.db.scalar(select(func.coalesce(func.sum(SellerOrder.subtotal), 0)).where(
+            SellerOrder.seller_id == seller_id, SellerOrder.status == "delivered",
+        ))

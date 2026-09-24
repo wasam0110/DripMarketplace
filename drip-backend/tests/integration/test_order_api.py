@@ -95,9 +95,9 @@ class TestOrderEndpoints:
         r = client.post(f"/orders/{uuid4()}/cancel", json={"reason": "Changed mind"})
         assert r.status_code in (401, 422)
 
-    def test_get_order_by_number_missing_email(self, client):
+    def test_get_order_by_number_requires_access(self, client):
         r = client.get("/orders/number/DRIP-202408-AB1234")
-        assert r.status_code == 422   # email query param required
+        assert r.status_code == 401   # email query param required
 
 
 class TestCouponEndpoints:

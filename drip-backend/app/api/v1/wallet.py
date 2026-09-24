@@ -11,7 +11,7 @@ from app.schemas.wallet import (
     WalletSummaryResponse, PaginatedTransactions,
     WithdrawalRequest, PayoutResponse, PaginatedPayouts,
     CommissionBreakdownResponse, AdminWalletOverviewResponse,
-    AdminPayoutActionRequest,
+    AdminPayoutActionRequest, CompletePayoutRequest,
 )
 from app.services.wallet_service import WalletService
 
@@ -116,10 +116,11 @@ async def admin_list_payouts(
     return PaginatedPayouts(
         data=[
             PayoutResponse(
-                id=p.id, amount=int(p.amount), payment_method=p.payment_method,
+                id=p.id, amount=p.amount, payment_method=p.payment_method,
                 payment_detail=p.payment_detail, status=p.status.value,
                 admin_note=p.admin_note, requested_at=p.requested_at,
                 completed_at=p.completed_at,
+                transfer_reference=p.transfer_reference,
             )
             for p in rows
         ],
@@ -156,3 +157,8 @@ async def admin_reject_payout(
         admin_id=UUID(current_admin["sub"]),
         note=payload.admin_note,
     )
+
+
+@router.post("/admin/wallet/payouts/{payout_id}/complete", response_model=PayoutResponse)
+async def admin_complete_payout(payout_id: UUID, payload: CompletePayoutRequest, db: DB, current_admin: CurrentAdmin) -> PayoutResponse:
+    return await WalletService(db).admin_complete_payout(payout_id, UUID(current_admin["sub"]), payload.reference)

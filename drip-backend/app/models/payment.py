@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING, Any
 from sqlalchemy import (
     String, Text, Numeric, Boolean, CHAR,
     DateTime, Enum as SAEnum, ForeignKey,
-    CheckConstraint,
+    CheckConstraint, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -73,12 +73,14 @@ class Refund(Base):
     __tablename__ = "refunds"
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_refunds_amount_positive"),
+        UniqueConstraint("payment_id", "idempotency_key", name="uq_refund_request_key"),
     )
 
     id:           Mapped[UUID]       = mapped_column(primary_key=True, default=uuid4)
     payment_id:   Mapped[UUID]       = mapped_column(ForeignKey("payments.id"))
     # return_id FK added in Block 10 when returns table exists
     return_id:    Mapped[UUID | None] = mapped_column()
+    idempotency_key: Mapped[str | None] = mapped_column(String(100))
     amount:       Mapped[Decimal]    = mapped_column(Numeric(12, 2))
     reason:       Mapped[str | None] = mapped_column(Text)
     gateway_ref:  Mapped[str | None] = mapped_column(String(255))
@@ -87,3 +89,6 @@ class Refund(Base):
     created_at:   Mapped[datetime]   = mapped_column(DateTime(timezone=True), server_default="now()")
 
     payment: Mapped["Payment"] = relationship(back_populates="refunds")
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.models.order import Order

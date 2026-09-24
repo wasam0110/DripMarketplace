@@ -6,7 +6,7 @@ from uuid import UUID
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
-    NotFoundError, PermissionDeniedError, InsufficientBalanceError
+    NotFoundError, PermissionDeniedError, InsufficientBalanceError, BusinessRuleError
 )
 from app.models.seller import SellerStatus
 from app.repositories.seller_repo import SellerRepository, WalletRepository
@@ -22,6 +22,17 @@ class SlotService:
         self.db          = db
         self.seller_repo = SellerRepository(db)
         self.wallet_repo = WalletRepository(db)
+
+    async def get_pricing(self, extra_slots: int) -> SlotPricingResponse:
+        from app.services.platform_settings import get_platform_settings
+        policy = await get_platform_settings(self.db)
+        return SlotPricingResponse(
+            registration_fee=policy.registration_fee, base_slots=BASE_SLOTS,
+            extra_slots=extra_slots, extra_slot_price=policy.extra_slot_price,
+            extra_cost=extra_slots * policy.extra_slot_price,
+            total_cost=policy.registration_fee + extra_slots * policy.extra_slot_price,
+            total_slots=BASE_SLOTS + extra_slots,
+        )
 
     # ── Public pricing calculator (no DB) ─────────────────────────────────────
 
@@ -51,7 +62,15 @@ class SlotService:
                 f"Only active sellers can purchase slots. Status: {seller_status}"
             )
 
-        amount = Decimal(payload.quantity * EXTRA_SLOT_PRICE)
+        if payload.payment_method != "wallet":
+            raise BusinessRuleError("Extra slots currently require wallet payment")
+        from sqlalchemy import select
+        from app.models.seller import Seller, SellerWallet
+        await self.db.execute(select(Seller.id).where(Seller.id == seller.id).with_for_update())
+        await self.db.execute(select(SellerWallet.id).where(SellerWallet.seller_id == seller.id).with_for_update())
+        from app.services.platform_settings import get_platform_settings
+        policy = await get_platform_settings(self.db)
+        amount = Decimal(payload.quantity * policy.extra_slot_price)
 
         if payload.payment_method == "wallet":
             await self._charge_wallet(seller.id, amount)
@@ -80,7 +99,7 @@ class SlotService:
     # ── Internal ───────────────────────────────────────────────────────────────
 
     async def _charge_wallet(self, seller_id: UUID, amount: Decimal) -> None:
-        wallet = await self.wallet_repo.get_by_seller_id(seller_id)
+        wallet = await self.wallet_repo.get_by_seller_id(seller_id, for_update=True)
         if not wallet:
             raise NotFoundError("Seller wallet not found")
         if wallet.available_balance < amount:
@@ -88,3 +107,12 @@ class SlotService:
                 f"Need PKR {int(amount):,}, have PKR {int(wallet.available_balance):,}"
             )
         await self.wallet_repo.debit_available(seller_id, amount)
+        from uuid import uuid4
+        from app.models.wallet import WalletTxType
+        from app.repositories.wallet_repo import WalletTransactionRepository
+        await self.db.refresh(wallet)
+        await WalletTransactionRepository(self.db).create(
+            seller_id=seller_id, type=WalletTxType.debit_adjustment, amount=amount,
+            balance_after=wallet.available_balance, reference=f"slot-purchase:{uuid4()}",
+            note="Additional product slots purchased",
+        )

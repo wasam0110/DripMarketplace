@@ -328,8 +328,12 @@ class CustomerService:
         if payload.order_id:
             from app.models.order import Order, OrderItem
             order = await self.db.get(Order, payload.order_id)
-            if order and str(order.user_id) == str(user_id):
-                is_verified = True
+            if not order or order.user_id != user_id:
+                raise BusinessRuleError("Order does not belong to this account")
+            item = await self.db.scalar(select(OrderItem.id).where(OrderItem.order_id == order.id, OrderItem.product_id == payload.product_id))
+            if not item:
+                raise BusinessRuleError("Product is not part of this order")
+            is_verified = order.status.value in ("delivered", "completed")
 
         review = Review(
             user_id=user_id,
@@ -343,7 +347,7 @@ class CustomerService:
         )
         self.db.add(review)
         await self.db.commit()
-        await self.db.refresh(review)
+        await self.db.refresh(review, ["user", "images"])
         logger.info("review_created", review_id=str(review.id), product_id=str(payload.product_id))
         return self._review_to_schema(review)
 
@@ -369,17 +373,26 @@ class CustomerService:
             await self.db.execute(
                 update(Review).where(Review.id == review_id).values(**updates)
             )
+            await self.refresh_product_rating(review.product_id)
             await self.db.commit()
             await self.db.refresh(review)
         return self._review_to_schema(review)
 
     async def delete_review(self, user_id: uuid.UUID, review_id: uuid.UUID) -> None:
-        result = await self.db.execute(
-            delete(Review).where(Review.id == review_id, Review.user_id == user_id)
-        )
-        if result.rowcount == 0:
-            raise NotFoundError("Review")
+        review = await self.db.scalar(select(Review).where(Review.id == review_id, Review.user_id == user_id))
+        if not review:
+            raise NotFoundError("Review not found")
+        product_id = review.product_id
+        await self.db.delete(review)
+        await self.db.flush()
+        await self.refresh_product_rating(product_id)
         await self.db.commit()
+
+    async def refresh_product_rating(self, product_id):
+        await self.db.execute(select(Product.id).where(Product.id == product_id).with_for_update())
+        average, count = (await self.db.execute(select(func.coalesce(func.avg(Review.rating), 0), func.count(Review.id))
+            .where(Review.product_id == product_id, Review.status == ReviewStatus.approved))).one()
+        await self.db.execute(update(Product).where(Product.id == product_id).values(avg_rating=average, review_count=count))
 
     async def list_product_reviews(
         self,
@@ -446,6 +459,12 @@ class CustomerService:
         if str(review.user_id) == str(user_id):
             raise BusinessRuleError("You cannot vote on your own review.")
 
+        from sqlalchemy.dialects.postgresql import insert
+        from app.models.review import ReviewVote
+        inserted = await self.db.execute(insert(ReviewVote).values(review_id=review_id, user_id=user_id, helpful=helpful)
+            .on_conflict_do_nothing().returning(ReviewVote.review_id))
+        if inserted.scalar_one_or_none() is None:
+            return
         col = Review.helpful_count if helpful else Review.unhelpful_count
         await self.db.execute(
             update(Review).where(Review.id == review_id).values({col: col + 1})
@@ -459,7 +478,7 @@ class CustomerService:
     async def get_wishlist(self, user_id: uuid.UUID) -> WishlistResponse:
         # Wishlist stored in Redis for speed; fallback to user metadata
         from app.core.redis import get_redis
-        redis = await get_redis()
+        redis = get_redis()
         key = f"wishlist:{user_id}"
         raw = await redis.smembers(key)
         product_ids = [uuid.UUID(pid) for pid in raw if pid]
@@ -467,7 +486,12 @@ class CustomerService:
         if not product_ids:
             return WishlistResponse(items=[], total=0)
 
-        stmt = select(Product).where(
+        from sqlalchemy.orm import selectinload
+        from app.models.product import ProductVariant
+        from app.models.seller import Seller, SellerStatus
+        stmt = select(Product).options(selectinload(Product.variants).selectinload(ProductVariant.inventory)).where(
+            Product.is_published.is_(True), Product.admin_hidden.is_(False),
+            Product.seller.has(Seller.status == SellerStatus.active),
             Product.id.in_(product_ids),
             Product.deleted_at.is_(None),
         )
@@ -488,14 +512,14 @@ class CustomerService:
             primary_image = (await self.db.execute(image_stmt)).scalar_one_or_none()
             items.append(
                 WishlistItemResponse(
-                    id=uuid.uuid4(),          # ephemeral ID for list keying
+                    id=p.id,
                     product_id=p.id,
                     product_name=p.name,
                     product_slug=p.slug,
                     product_image=primary_image,
                     price=int(p.price),
                     sale_price=int(p.sale_price) if p.sale_price else None,
-                    is_in_stock=True,          # TODO: join inventory
+                    is_in_stock=p.has_stock,
                     added_at=p.created_at,
                 )
             )
@@ -508,7 +532,7 @@ class CustomerService:
         if product is None or product.deleted_at is not None:
             raise NotFoundError("Product")
         from app.core.redis import get_redis
-        redis = await get_redis()
+        redis = get_redis()
         key = f"wishlist:{user_id}"
         await redis.sadd(key, str(product_id))
         await redis.expire(key, 60 * 60 * 24 * 90)   # 90-day TTL
@@ -518,7 +542,7 @@ class CustomerService:
         self, user_id: uuid.UUID, product_id: uuid.UUID
     ) -> None:
         from app.core.redis import get_redis
-        redis = await get_redis()
+        redis = get_redis()
         await redis.srem(f"wishlist:{user_id}", str(product_id))
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -530,7 +554,7 @@ class CustomerService:
     ) -> NotificationPreferencesResponse:
         # Defaults — stored in Redis hash for now
         from app.core.redis import get_redis
-        redis = await get_redis()
+        redis = get_redis()
         key = f"notif_prefs:{user_id}"
         raw = await redis.hgetall(key)
         def _bool(v: Optional[bytes], default: bool = True) -> bool:
@@ -551,7 +575,7 @@ class CustomerService:
         payload: UpdateNotificationPreferencesRequest,
     ) -> NotificationPreferencesResponse:
         from app.core.redis import get_redis
-        redis = await get_redis()
+        redis = get_redis()
         key = f"notif_prefs:{user_id}"
         updates: dict = {}
         for field, val in payload.model_dump(exclude_none=True).items():

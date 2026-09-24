@@ -65,7 +65,7 @@ class UpdateProductRequest(BaseModel):
 
     @model_validator(mode="after")
     def at_least_one(self) -> "UpdateProductRequest":
-        if all(v is None for v in self.model_dump().values()):
+        if not self.model_fields_set:
             raise ValueError("At least one field must be provided")
         return self
 
@@ -204,3 +204,14 @@ class BrandSuggestion(BaseModel):
 class SearchSuggestionsResponse(BaseModel):
     products: list[SearchSuggestion]
     brands:   list[BrandSuggestion]
+
+class UpdateVariantRequest(BaseModel):
+    size_type: str | None = Field(default=None, pattern="^(alpha|numeric|one_size)$")
+    size_value: str | None = Field(default=None, min_length=1, max_length=10)
+    colour: str | None = Field(default=None, min_length=1, max_length=50)
+    price_override: int | None = Field(default=None, ge=100, le=500_000)
+    is_active: bool | None = None
+
+
+class ReorderImagesRequest(BaseModel):
+    image_ids: list[UUID] = Field(min_length=1, max_length=6)

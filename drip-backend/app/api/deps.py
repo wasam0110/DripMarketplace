@@ -54,6 +54,7 @@ async def _extract_token(
 
 # ── Token validation ──────────────────────────────────────────────────────────
 
+
 async def _validate_token(token: str | None) -> dict:
     """
     Decode and validate the access token.
@@ -79,18 +80,37 @@ async def _validate_token(token: str | None) -> dict:
 
 # ── User fetching ─────────────────────────────────────────────────────────────
 
+
 async def get_current_user_payload(
     token: str | None = Depends(_extract_token),
+    db: AsyncSession = Depends(get_db),
 ) -> dict:
     """
     Validate the access token and return the decoded payload.
     Used by role-specific dependencies below.
     """
-    return await _validate_token(token)
+    payload = await _validate_token(token)
+    from app.models.user import User
+
+    try:
+        user = await db.get(User, UUID(payload["sub"]))
+    except (ValueError, KeyError):
+        raise TokenInvalidError() from None
+    if (
+        user is None
+        or user.deleted_at is not None
+        or payload.get("role") != user.role.value
+        or payload.get("ver", 0) != user.auth_version
+    ):
+        raise TokenInvalidError(message="Session is no longer valid; please sign in again")
+    if not user.has_verified_email:
+        raise EmailNotVerifiedError()
+    return payload
 
 
 async def get_optional_user_payload(
     token: str | None = Depends(_extract_token),
+    db: AsyncSession = Depends(get_db),
 ) -> dict | None:
     """
     Like get_current_user_payload but returns None for unauthenticated requests.
@@ -98,13 +118,11 @@ async def get_optional_user_payload(
     """
     if not token:
         return None
-    try:
-        return await _validate_token(token)
-    except Exception:
-        return None
+    return await get_current_user_payload(token, db)
 
 
 # ── Role-based dependencies ───────────────────────────────────────────────────
+
 
 async def require_customer(
     payload: dict = Depends(get_current_user_payload),
@@ -122,16 +140,15 @@ async def require_seller(
     Injects seller_id into the payload for convenience.
     """
     role = payload.get("role")
-    if role not in ("seller", "admin"):
-        raise PermissionDeniedError(
-            message="A seller account is required to perform this action."
-        )
+    if role != "seller":
+        raise PermissionDeniedError(message="A seller account is required to perform this action.")
 
     if role == "seller":
         # Verify seller status (lazy import to avoid circular deps)
         from app.repositories.seller_repo import SellerRepository
+
         seller = await SellerRepository(db).get_by_user_id(UUID(payload["sub"]))
-        if not seller:
+        if not seller or seller.deleted_at:
             raise PermissionDeniedError(message="Seller account not found.")
         if seller.status.value == "suspended":
             raise SellerSuspendedError()
@@ -147,13 +164,12 @@ async def require_admin(
 ) -> dict:
     """Require an admin user. Most restrictive — admins only."""
     if payload.get("role") != "admin":
-        raise PermissionDeniedError(
-            message="Administrator access is required."
-        )
+        raise PermissionDeniedError(message="Administrator access is required.")
     return payload
 
 
 # ── Ownership verification helpers ───────────────────────────────────────────
+
 
 def assert_owns_resource(
     payload: dict,
@@ -165,7 +181,7 @@ def assert_owns_resource(
     Admins bypass this check if allow_admin=True.
     """
     user_id = payload.get("sub")
-    role    = payload.get("role")
+    role = payload.get("role")
     if allow_admin and role == "admin":
         return
     if str(user_id) != str(resource_user_id):
@@ -190,7 +206,7 @@ def assert_owns_seller_resource(
 
 # ── Typed dependency aliases (for clean route signatures) ─────────────────────
 
-CurrentUser   = Annotated[dict, Depends(require_customer)]
+CurrentUser = Annotated[dict, Depends(require_customer)]
 CurrentSeller = Annotated[dict, Depends(require_seller)]
-CurrentAdmin  = Annotated[dict, Depends(require_admin)]
-OptionalUser  = Annotated[dict | None, Depends(get_optional_user_payload)]
+CurrentAdmin = Annotated[dict, Depends(require_admin)]
+OptionalUser = Annotated[dict | None, Depends(get_optional_user_payload)]

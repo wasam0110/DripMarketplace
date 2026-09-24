@@ -14,7 +14,8 @@ from sqlalchemy.orm import selectinload, joinedload
 from app.models.product import (
     Product, ProductImage, ProductVariant, ProductInventory, Category, Tag, product_tags
 )
-from app.models.seller import Seller
+from app.models.seller import Seller, SellerStatus
+from app.core.exceptions import BusinessRuleError
 
 
 class ProductRepository:
@@ -40,12 +41,14 @@ class ProductRepository:
     # ── Reads ──────────────────────────────────────────────────────────────────
 
     async def get_by_id(
-        self, product_id: UUID, *, load_full: bool = False
+        self, product_id: UUID, *, load_full: bool = False, lock: bool = False
     ) -> Optional[Product]:
         q = select(Product).where(
             Product.id == product_id,
             Product.deleted_at.is_(None),
         )
+        if lock:
+            q = q.with_for_update()
         if load_full:
             q = q.options(
                 selectinload(Product.images),
@@ -56,7 +59,7 @@ class ProductRepository:
             )
         else:
             q = q.options(selectinload(Product.images), selectinload(Product.variants))
-        result = await self.db.execute(q)
+        result = await self.db.execute(q.execution_options(populate_existing=True))
         return result.scalar_one_or_none()
 
     async def get_by_slug(self, slug: str) -> Optional[Product]:
@@ -133,7 +136,8 @@ class ProductRepository:
         limit: int = 20,
         cursor: Optional[str] = None,
     ) -> tuple[Sequence[Product], Optional[str]]:
-        query = select(Product).where(
+        query = select(Product).join(Seller).where(
+            Seller.status == SellerStatus.active, Seller.deleted_at.is_(None),
             Product.deleted_at.is_(None),
             Product.is_published.is_(True),
             Product.admin_hidden.is_(False),
@@ -143,10 +147,10 @@ class ProductRepository:
             query = query.where(Product.category_id == category_id)
         if seller_id:
             query = query.where(Product.seller_id == seller_id)
-        if min_price:
-            query = query.where(Product.price >= min_price)
-        if max_price:
-            query = query.where(Product.price <= max_price)
+        if min_price is not None:
+            query = query.where(func.coalesce(Product.sale_price, Product.price) >= min_price)
+        if max_price is not None:
+            query = query.where(func.coalesce(Product.sale_price, Product.price) <= max_price)
         if on_sale:
             query = query.where(Product.sale_price.isnot(None))
         if is_new:
@@ -157,49 +161,45 @@ class ProductRepository:
             query = query.where(
                 or_(Product.name.ilike(search), Product.description.ilike(search))
             )
-        if size_alpha or size_numeric:
-            size_vals = list(size_alpha or []) + list(size_numeric or [])
-            query = query.join(ProductVariant, Product.id == ProductVariant.product_id).where(
-                ProductVariant.size_value.in_(size_vals),
-                ProductVariant.is_active.is_(True),
-            )
-        if colours:
-            query = query.join(ProductVariant, Product.id == ProductVariant.product_id, isouter=True).where(
-                ProductVariant.colour.in_(colours)
-            )
-
-        # Cursor decode
+        # One correlated variant filter prevents duplicate joins and mismatched colours/sizes.
+        if size_alpha or size_numeric or colours:
+            variant_filter = [ProductVariant.is_active.is_(True)]
+            sizes = []
+            if size_alpha:
+                sizes.append(and_(ProductVariant.size_type == "alpha", ProductVariant.size_value.in_(size_alpha)))
+            if size_numeric:
+                sizes.append(and_(ProductVariant.size_type == "numeric", ProductVariant.size_value.in_(size_numeric)))
+            if sizes:
+                variant_filter.append(or_(*sizes))
+            if colours:
+                variant_filter.append(ProductVariant.colour.in_(colours))
+            query = query.where(Product.variants.any(and_(*variant_filter)))
+        if min_price is not None and max_price is not None and min_price > max_price:
+            raise BusinessRuleError("min_price must not exceed max_price")
+        sort_column = {"price_asc": func.coalesce(Product.sale_price, Product.price),
+                       "price_desc": func.coalesce(Product.sale_price, Product.price),
+                       "rating": Product.avg_rating, "trending": Product.view_count}.get(sort, Product.created_at)
+        ascending = sort == "price_asc"
         if cursor:
             try:
-                cursor_data = json.loads(base64.b64decode(cursor))
-                cursor_dt   = datetime.fromisoformat(cursor_data["created_at"])
-                cursor_id   = UUID(cursor_data["id"])
-                query = query.where(
-                    or_(
-                        Product.created_at < cursor_dt,
-                        and_(Product.created_at == cursor_dt, Product.id < cursor_id),
-                    )
-                )
-            except Exception:
-                pass
-
-        # Sort
-        if sort == "price_asc":
-            query = query.order_by(asc(Product.price), desc(Product.created_at))
-        elif sort == "price_desc":
-            query = query.order_by(desc(Product.price), desc(Product.created_at))
-        elif sort == "rating":
-            query = query.order_by(desc(Product.avg_rating), desc(Product.created_at))
-        elif sort == "trending":
-            query = query.order_by(desc(Product.view_count), desc(Product.created_at))
-        else:  # newest
-            query = query.order_by(desc(Product.created_at), desc(Product.id))
+                data = json.loads(base64.b64decode(cursor, validate=True))
+                if data.get("sort") != sort:
+                    raise ValueError("sort mismatch")
+                cursor_id = UUID(data["id"])
+                value = datetime.fromisoformat(data["value"]) if sort == "newest" else Decimal(data["value"])
+                if isinstance(value, Decimal) and not value.is_finite():
+                    raise ValueError("invalid value")
+                comparison = sort_column > value if ascending else sort_column < value
+                query = query.where(or_(comparison, and_(sort_column == value, Product.id < cursor_id)))
+            except (ValueError, KeyError, TypeError) as exc:
+                raise BusinessRuleError("Invalid catalogue cursor") from exc
+        query = query.order_by(asc(sort_column) if ascending else desc(sort_column), desc(Product.id))
 
         query = query.options(
             selectinload(Product.images),
             selectinload(Product.variants).selectinload(ProductVariant.inventory),
             selectinload(Product.seller),
-        ).distinct().limit(limit + 1)
+        ).limit(limit + 1)
 
         result  = await self.db.execute(query)
         rows    = result.scalars().all()
@@ -210,7 +210,7 @@ class ProductRepository:
         if has_next and rows:
             last = rows[-1]
             next_cursor = base64.b64encode(
-                json.dumps({"created_at": last.created_at.isoformat(), "id": str(last.id)}).encode()
+                json.dumps({"sort": sort, "id": str(last.id), "value": str(last.effective_price if sort.startswith("price_") else last.avg_rating if sort == "rating" else last.view_count if sort == "trending" else last.created_at.isoformat())}).encode()
             ).decode()
 
         return rows, next_cursor
@@ -223,6 +223,8 @@ class ProductRepository:
                 .options(selectinload(Product.images), selectinload(Product.seller))
                 .where(
                     Product.name.ilike(search),
+                    Product.admin_hidden.is_(False),
+                    Product.seller.has(and_(Seller.status == SellerStatus.active, Seller.deleted_at.is_(None))),
                     Product.is_published.is_(True),
                     Product.deleted_at.is_(None),
                 )
@@ -233,7 +235,7 @@ class ProductRepository:
         sellers = (
             await self.db.execute(
                 select(Seller).where(
-                    Seller.brand_name.ilike(search),
+                    Seller.brand_name.ilike(search), Seller.status == SellerStatus.active,
                     Seller.deleted_at.is_(None),
                 ).limit(limit)
             )

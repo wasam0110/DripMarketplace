@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, CurrentAdmin
 from app.schemas.admin import PaginatedAdminOrders
+from app.models.order import OrderStatus, PaymentMethod
 from app.services.admin_service import AdminService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -18,10 +19,9 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 async def list_all_orders(
     db:             DB,
     current_admin:  CurrentAdmin,
-    status:         Optional[str] = Query(default=None),
+    status:         Optional[OrderStatus] = Query(default=None),
     seller_id:      Optional[UUID] = Query(default=None),
-    payment_method: Optional[str] = Query(default=None,
-                    pattern="^(jazzcash|easypaisa|card|cod)$"),
+    payment_method: Optional[PaymentMethod] = Query(default=None),
     page:           int = Query(default=1, ge=1),
     per_page:       int = Query(default=25, ge=1, le=100),
 ) -> PaginatedAdminOrders:

@@ -6,12 +6,21 @@ from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException, 
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, CurrentUser
 from app.schemas.seller import (
-    SellerRegistrationRequest, SellerRegistrationResponse,
-    SlotPricingResponse, SlotPurchaseRequest, SlotPurchaseResponse,
-    SellerProfileResponse, SellerProfileUpdateRequest, LogoUploadResponse,
-    SellerDashboardResponse, PaginatedSellerOrders, PagePagination,
-    SellerOrderDetailResponse, UpdateOrderStatusRequest,
-    BankAccountResponse, CreateBankAccountRequest,
+    SellerRegistrationRequest,
+    SellerRegistrationResponse,
+    SlotPricingResponse,
+    SlotPurchaseRequest,
+    SlotPurchaseResponse,
+    SellerProfileResponse,
+    SellerProfileUpdateRequest,
+    LogoUploadResponse,
+    SellerDashboardResponse,
+    PaginatedSellerOrders,
+    PagePagination,
+    SellerOrderDetailResponse,
+    UpdateOrderStatusRequest,
+    BankAccountResponse,
+    CreateBankAccountRequest,
 )
 from app.services.seller_service import SellerService
 from app.services.slot_service import SlotService
@@ -23,6 +32,7 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 
 # ── PUBLIC ─────────────────────────────────────────────────────────────────────
 
+
 @router.post("/register", response_model=SellerRegistrationResponse, status_code=201)
 async def register_seller(payload: SellerRegistrationRequest, db: DB) -> SellerRegistrationResponse:
     """Creates a new User (role=seller) and Seller profile in one step. No auth required."""
@@ -31,12 +41,14 @@ async def register_seller(payload: SellerRegistrationRequest, db: DB) -> SellerR
 
 @router.get("/register/slot-price", response_model=SlotPricingResponse)
 async def get_slot_pricing(
-    extra_slots: int = Query(default=0, ge=0, le=10_000)
+    db: DB,
+    extra_slots: int = Query(default=0, ge=0, le=10_000),
 ) -> SlotPricingResponse:
-    return SlotService.calculate_pricing(extra_slots)
+    return await SlotService(db).get_pricing(extra_slots)
 
 
 # ── PROFILE ────────────────────────────────────────────────────────────────────
+
 
 @router.get("/me", response_model=SellerProfileResponse)
 async def get_seller_profile(db: DB, current_user: CurrentUser) -> SellerProfileResponse:
@@ -58,31 +70,36 @@ async def upload_logo(
     current_user: CurrentUser,
     logo: UploadFile = File(...),
 ) -> LogoUploadResponse:
-    allowed = {"image/jpeg", "image/png", "image/webp"}
-    if logo.content_type not in allowed:
-        raise HTTPException(status_code=422, detail="Allowed types: jpeg, png, webp")
+    from app.repositories.seller_repo import SellerRepository
+    from app.services.image_service import ImageService
+    from app.core.config import settings
+    from app.core.exceptions import NotFoundError
 
-    contents = await logo.read()
+    user_id = UUID(current_user["sub"])
+    seller = await SellerRepository(db).get_by_user_id(user_id)
+    if not seller:
+        raise NotFoundError("Seller account not found")
+    contents = await logo.read(2 * 1024 * 1024 + 1)
     if len(contents) > 2 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Logo must be under 2 MB")
-
-    user_id  = UUID(current_user["sub"])
-    logo_url = f"https://cdn.drip.pk/logos/{user_id}/{logo.filename}"
+    logo_url = await ImageService().process_and_upload(
+        contents, str(seller.id), bucket=settings.SUPABASE_STORAGE_BUCKET_BRANDS
+    )
     return await SellerService(db).update_logo(user_id=user_id, logo_url=logo_url)
 
 
 # ── SLOTS ──────────────────────────────────────────────────────────────────────
 
+
 @router.post("/slots/purchase", response_model=SlotPurchaseResponse)
 async def purchase_slots(
     payload: SlotPurchaseRequest, db: DB, current_user: CurrentUser
 ) -> SlotPurchaseResponse:
-    return await SlotService(db).purchase_slots(
-        user_id=UUID(current_user["sub"]), payload=payload
-    )
+    return await SlotService(db).purchase_slots(user_id=UUID(current_user["sub"]), payload=payload)
 
 
 # ── DASHBOARD ──────────────────────────────────────────────────────────────────
+
 
 @router.get("/dashboard", response_model=SellerDashboardResponse)
 async def get_dashboard(
@@ -90,46 +107,14 @@ async def get_dashboard(
     current_user: CurrentUser,
     period: str = Query(default="month", pattern="^(today|week|month|quarter|year)$"),
 ) -> SellerDashboardResponse:
-    return await SellerService(db).get_dashboard(
-        user_id=UUID(current_user["sub"]), period=period
-    )
+    return await SellerService(db).get_dashboard(user_id=UUID(current_user["sub"]), period=period)
 
 
 # ── ORDERS (stubs — Block 5) ───────────────────────────────────────────────────
 
-@router.get("/orders", response_model=PaginatedSellerOrders)
-async def list_seller_orders(
-    db: DB,
-    current_user: CurrentUser,
-    order_status: str = Query(default="all", alias="status",
-                              pattern="^(all|pending|processing|shipped|delivered|cancelled)$"),
-    page:     int = Query(default=1, ge=1),
-    per_page: int = Query(default=25, ge=1, le=100),
-) -> PaginatedSellerOrders:
-    return PaginatedSellerOrders(
-        data=[],
-        pagination=PagePagination(page=page, per_page=per_page, total=0, total_pages=0),
-    )
-
-
-@router.get("/orders/{seller_order_id}", response_model=SellerOrderDetailResponse)
-async def get_seller_order(
-    seller_order_id: UUID, db: DB, current_user: CurrentUser
-) -> SellerOrderDetailResponse:
-    raise HTTPException(status_code=501, detail="Implemented in Block 5")
-
-
-@router.put("/orders/{seller_order_id}/status", status_code=200)
-async def update_order_status(
-    seller_order_id: UUID,
-    payload: UpdateOrderStatusRequest,
-    db: DB,
-    current_user: CurrentUser,
-) -> dict:
-    raise HTTPException(status_code=501, detail="Implemented in Block 5")
-
 
 # ── BANK ACCOUNTS ──────────────────────────────────────────────────────────────
+
 
 @router.get("/bank-accounts", response_model=list[BankAccountResponse])
 async def list_bank_accounts(db: DB, current_user: CurrentUser) -> list[BankAccountResponse]:
@@ -146,9 +131,7 @@ async def add_bank_account(
 
 
 @router.delete("/bank-accounts/{account_id}")
-async def delete_bank_account(
-    account_id: UUID, db: DB, current_user: CurrentUser
-) -> Response:
+async def delete_bank_account(account_id: UUID, db: DB, current_user: CurrentUser) -> Response:
     await SellerService(db).delete_bank_account(
         user_id=UUID(current_user["sub"]), account_id=account_id
     )

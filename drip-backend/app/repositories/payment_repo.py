@@ -105,7 +105,7 @@ class PaymentRepository:
         page: int = 1,
         per_page: int = 25,
     ) -> tuple[Sequence[Payment], int]:
-        q = select(Payment)
+        q = select(Payment).options(selectinload(Payment.order))
         if status:
             q = q.where(Payment.status == PaymentStatus(status))
         if method:

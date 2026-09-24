@@ -16,8 +16,9 @@ from app.schemas.order import (
 )
 
 CART_TTL       = 7 * 24 * 3600   # 7 days
-SHIPPING_FREE  = 5000
-SHIPPING_FEE   = 200
+from app.core.config import settings
+SHIPPING_FREE = settings.FREE_SHIPPING_THRESHOLD
+SHIPPING_FEE = settings.STANDARD_SHIPPING_FEE
 
 
 def _cart_key(user_id: UUID) -> str:
@@ -54,14 +55,14 @@ class CartService:
         items: list[CartItemResponse] = []
         for vid, qty in quantities.items():
             v = variants.get(vid)
-            if not v or not v.product.is_published:
+            if not v or not v.product.is_published or v.product.admin_hidden or v.product.deleted_at or not v.product.seller.is_active or v.product.seller.deleted_at:
                 await self.redis.hdel(_cart_key(user_id), str(vid))
                 continue
 
             p             = v.product
             inv           = v.inventory
             primary_image = next((i.url for i in p.images if i.is_primary), None)
-            price         = int(v.price_override if v.price_override else p.price)
+            price         = v.price_override if v.price_override is not None else p.effective_price
 
             items.append(CartItemResponse(
                 variant_id      = v.id,
@@ -79,7 +80,9 @@ class CartService:
                 seller_id       = p.seller_id,
             ))
 
-        return self._build_cart_response(items)
+        from app.services.platform_settings import get_platform_settings
+        policy = await get_platform_settings(self.db)
+        return self._build_cart_response(items, free_threshold=policy.free_shipping_threshold, shipping_fee=policy.standard_shipping_fee)
 
     async def add_item(self, user_id: UUID, payload: AddToCartRequest) -> CartResponse:
         variant = await self._get_variant(payload.variant_id)
@@ -93,10 +96,13 @@ class CartService:
         current_qty = int(existing) if existing else 0
         new_qty     = current_qty + payload.quantity
 
-        if new_qty > (inv.available_stock if inv else 0):
+        if new_qty > 100 or new_qty > (inv.available_stock if inv else 0):
             raise BusinessRuleError("Cannot add more than available stock")
 
         await self.redis.hset(_cart_key(user_id), str(payload.variant_id), new_qty)
+        from app.models.analytics import AnalyticsEvent
+        self.db.add(AnalyticsEvent(kind="add_to_cart", product_id=variant.product_id))
+        await self.db.commit()
         await self.redis.expire(_cart_key(user_id), CART_TTL)
         return await self.get_cart(user_id)
 
@@ -144,12 +150,12 @@ class CartService:
             select(ProductVariant)
             .options(
                 selectinload(ProductVariant.inventory),
-                selectinload(ProductVariant.product),
+                selectinload(ProductVariant.product).selectinload(Product.seller),
             )
             .where(ProductVariant.id == variant_id, ProductVariant.is_active.is_(True))
         )
         v = result.scalar_one_or_none()
-        if not v:
+        if not v or not v.product.is_published or v.product.admin_hidden or v.product.deleted_at or not v.product.seller.is_active or v.product.seller.deleted_at:
             raise NotFoundError(f"Variant {variant_id} not found or unavailable")
         return v
 
@@ -157,13 +163,13 @@ class CartService:
     def _empty_cart() -> CartResponse:
         return CartResponse(
             items=[], grouped_by_seller=[], item_count=0,
-            subtotal=0, shipping_fee=SHIPPING_FEE, total=SHIPPING_FEE,
+            subtotal=0, shipping_fee=0, total=0,
         )
 
     @staticmethod
-    def _build_cart_response(items: list[CartItemResponse]) -> CartResponse:
+    def _build_cart_response(items: list[CartItemResponse], *, free_threshold=SHIPPING_FREE, shipping_fee=SHIPPING_FEE) -> CartResponse:
         subtotal = sum(i.subtotal for i in items)
-        shipping = 0 if subtotal >= SHIPPING_FREE else SHIPPING_FEE
+        shipping = 0 if not items or subtotal >= free_threshold else shipping_fee
 
         groups: dict[UUID, SellerCartGroup] = {}
         for item in items:

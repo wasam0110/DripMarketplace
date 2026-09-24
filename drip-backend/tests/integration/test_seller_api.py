@@ -22,6 +22,10 @@ def client():
 
     app = FastAPI()
     app.include_router(seller_router)
+    from app.api.v1.orders import router as orders_router
+    from app.api.v1.analytics.seller import router as analytics_router
+    app.include_router(orders_router)
+    app.include_router(analytics_router)
 
     # Register the same exception handler the real app uses
     @app.exception_handler(DRIPException)
@@ -34,7 +38,9 @@ def client():
     # Override get_db so tests never touch the real database
     async def mock_db():
         session = MagicMock()
-        session.execute  = AsyncMock()
+        result = MagicMock()
+        result.scalars.return_value.all.return_value = []
+        session.execute = AsyncMock(return_value=result)
         session.commit   = AsyncMock()
         session.rollback = AsyncMock()
         session.flush    = AsyncMock()
@@ -136,7 +142,7 @@ class TestPrivateEndpoints:
         r = client.get("/seller/orders?status=unknown")
         assert r.status_code in (401, 422)
 
-    def test_order_detail_stub(self, client):
+    def test_order_detail_requires_auth(self, client):
         r = client.get(f"/seller/orders/{uuid4()}")
         assert r.status_code in (401, 422, 501)
 

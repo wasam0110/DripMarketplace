@@ -1,4 +1,5 @@
 from __future__ import annotations
+from decimal import Decimal
 
 from uuid import UUID
 from datetime import datetime
@@ -11,10 +12,10 @@ from pydantic import BaseModel, Field
 
 class AdminDashboardResponse(BaseModel):
     period:           str
-    total_gmv:        int
-    platform_revenue: int
-    slot_revenue:     int
-    total_revenue:    int
+    total_gmv:        Decimal
+    platform_revenue: Decimal
+    slot_revenue:     Decimal
+    total_revenue:    Decimal
     total_orders:     int
     active_sellers:   int
     pending_sellers:  int
@@ -32,9 +33,9 @@ class AdminSellerRowResponse(BaseModel):
     slots_used:        int
     total_slots:       int
     product_count:     int
-    total_gmv:         int
-    platform_cut:      int
-    available_balance: int
+    total_gmv:         Decimal
+    platform_cut:      Decimal
+    available_balance: Decimal
     joined_at:         datetime
 
     model_config = {"from_attributes": True}
@@ -47,8 +48,8 @@ class AdminSellerDetailResponse(AdminSellerRowResponse):
     instagram_handle: Optional[str]
     logo_url:         Optional[str]
     return_policy:    Optional[str]
-    pending_balance:  int
-    registration_fee: int
+    pending_balance:  Decimal
+    registration_fee: Decimal
     rejected_reason:  Optional[str]
 
 
@@ -76,9 +77,9 @@ class AdminOrderRowResponse(BaseModel):
     status:         str
     customer_name:  str
     seller_count:   int
-    subtotal:       int
-    total:          int
-    commission:     int
+    subtotal:       Decimal
+    total:          Decimal
+    commission:     Decimal
     payment_method: str
     created_at:     datetime
 
@@ -86,8 +87,8 @@ class AdminOrderRowResponse(BaseModel):
 
 
 class OrderTotals(BaseModel):
-    total_gmv:        int
-    total_commission: int
+    total_gmv:        Decimal
+    total_commission: Decimal
     order_count:      int
 
 
@@ -105,7 +106,7 @@ class CODQueueItem(BaseModel):
     order_number:      str
     customer_name:     str
     customer_phone:    str
-    total:             int
+    total:             Decimal
     brand_names:       list[str]
     placed_at:         datetime
     expires_at:        datetime
@@ -146,10 +147,24 @@ class UpdateSettingsRequest(BaseModel):
 
 
 class PlatformSettingsResponse(BaseModel):
-    commission_rate:         float
-    registration_fee:        int
-    extra_slot_price:        int
-    free_shipping_threshold: int
-    standard_shipping_fee:   int
-    cod_timeout_minutes:     int
-    wallet_hold_days:        int
+    commission_rate:         float = Field(ge=0, le=1)
+    registration_fee:        int = Field(ge=0)
+    extra_slot_price:        int = Field(ge=0)
+    free_shipping_threshold: int = Field(ge=0)
+    standard_shipping_fee:   int = Field(ge=0)
+    cod_timeout_minutes:     int = Field(ge=5, le=1440)
+    wallet_hold_days:        int = Field(ge=0, le=30)
+
+class UpdateBannerRequest(BaseModel):
+    title: str | None = Field(default=None, min_length=1, max_length=200)
+    link_url: str | None = Field(default=None, max_length=500)
+    position: str | None = Field(default=None, pattern="^(homepage_hero|homepage_secondary|category_top)$")
+    sort_order: int | None = Field(default=None, ge=0)
+    is_active: bool | None = None
+    valid_from: datetime | None = None
+    valid_until: datetime | None = None
+
+
+class SellerRegistrationPaymentRequest(BaseModel):
+    amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    reference: str = Field(min_length=3, max_length=255)

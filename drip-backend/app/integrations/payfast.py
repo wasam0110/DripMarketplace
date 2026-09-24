@@ -1,3 +1,5 @@
+# LEGACY ADAPTER: merchant protocol has not been independently verified.
+# Disabled by PAYFAST_ENABLED by default. See BACKEND_HANDOFF.md before enabling.
 """
 app/integrations/payfast.py
 ────────────────────────────
@@ -17,6 +19,7 @@ Live:    https://www.payfast.com.pk
 
 from __future__ import annotations
 
+from decimal import Decimal, InvalidOperation
 import hashlib
 import hmac
 import logging
@@ -90,7 +93,7 @@ class PayFastClient:
             "merchant_id":    self.merchant_id,
             "order_id":       order_id,
             "currency":       "PKR",
-            "amount":         str(amount),
+            "amount":         format(Decimal(amount), ".2f"),
             "description":    description[:255],
             "return_url":     return_url,
             "cancel_url":     cancel_url,
@@ -121,6 +124,8 @@ class PayFastClient:
 
         Raises ValueError if the signature is invalid.
         """
+        if not self.merchant_id or not self.secured_key:
+            raise ValueError("PayFast is not configured")
         if not self.verify_ipn({k: str(v) for k, v in payload.items()}):
             raise ValueError("PayFast IPN signature verification failed")
 
@@ -131,12 +136,21 @@ class PayFastClient:
             "PENDING":  "pending",
         }
         raw_status = str(payload.get("payment_status", "")).upper()
-        status     = status_map.get(raw_status, "failed")
+        status     = status_map.get(raw_status)
+        if status not in ("completed", "failed", "pending"):
+            raise ValueError("Unsupported payment notification status")
+        try:
+            amount = Decimal(str(payload.get("amount", "0")))
+            if not amount.is_finite() or amount <= 0:
+                raise ValueError("Invalid payment amount")
+        except InvalidOperation as exc:
+            raise ValueError("Invalid payment amount") from exc
 
         return {
             "order_id": str(payload.get("order_id", "")),
             "status":   status,
-            "amount":   int(float(payload.get("amount", 0))),
+            "amount":   Decimal(str(payload.get("amount", "0"))),
+            "currency": str(payload.get("currency", "")),
             "txn_id":   str(payload.get("transaction_id", "")),
             "raw":      dict(payload),
         }

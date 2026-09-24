@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import random
+import secrets
 import string
 from decimal import Decimal
 from uuid import UUID
@@ -12,26 +12,38 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import BusinessRuleError, NotFoundError, PermissionDeniedError
-from app.models.order import Order, OrderStatus, PaymentMethod, SellerOrderStatus
-from app.models.product import ProductVariant
+from app.models.order import Order, OrderStatus, PaymentMethod, SellerOrderStatus, SellerOrder
+from app.models.product import ProductVariant, Product
+from app.models.seller import Seller, SellerStatus
+from app.models.coupon import CouponUsage
+from app.core.config import settings
+from app.services.order_access import create_guest_token, authorized_order
 from app.repositories.order_repo import OrderRepository, SellerOrderRepository
 from app.repositories.inventory_repo import InventoryRepository
 from app.services.cart_service import CartService, SHIPPING_FREE, SHIPPING_FEE
 from app.services.coupon_service import CouponService
 from app.schemas.order import (
-    CreateOrderRequest, CreateGuestOrderRequest, CreateOrderResponse,
-    OrderDetailResponse, OrderItemResponse, SellerOrderResponse,
-    ShippingAddressResponse, PaginatedOrders, OrderRowResponse, PageInfo,
-    CancelOrderRequest, UpdateSellerOrderRequest,
+    CreateOrderRequest,
+    CreateGuestOrderRequest,
+    CreateOrderResponse,
+    OrderDetailResponse,
+    OrderItemResponse,
+    SellerOrderResponse,
+    ShippingAddressResponse,
+    PaginatedOrders,
+    OrderRowResponse,
+    PageInfo,
+    CancelOrderRequest,
+    UpdateSellerOrderRequest,
 )
 
 MAX_COD_AMOUNT = Decimal("25000")
 
 
 def _generate_order_number() -> str:
-    now    = datetime.utcnow()
-    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=6))
-    return f"DRIP-{now.strftime('%Y%m')}-{suffix}"
+    now = datetime.utcnow()
+    suffix = "".join([secrets.choice(string.ascii_uppercase + string.digits) for _ in range(9)])
+    return f"WHZ-{now.strftime('%Y%m')}-{suffix}"
 
 
 def _whatsapp_url(order_number: str, drip_number: str) -> str:
@@ -48,11 +60,11 @@ CANCELLABLE_STATUSES = {
 
 class OrderService:
     def __init__(self, db: AsyncSession, redis=None) -> None:
-        self.db         = db
-        self.redis      = redis
+        self.db = db
+        self.redis = redis
         self.order_repo = OrderRepository(db)
-        self.so_repo    = SellerOrderRepository(db)
-        self.inv_repo   = InventoryRepository(db)
+        self.so_repo = SellerOrderRepository(db)
+        self.inv_repo = InventoryRepository(db)
 
     # ── Place Order (authenticated) ────────────────────────────────────────────
 
@@ -68,40 +80,40 @@ class OrderService:
             raise BusinessRuleError("Your cart is empty")
 
         return await self._build_order(
-            payload       = payload,
-            variant_qtys  = raw_cart,
-            user_id       = user_id,
-            cart_svc      = cart_svc,
+            payload=payload,
+            variant_qtys=raw_cart,
+            user_id=user_id,
+            cart_svc=cart_svc,
         )
 
     # ── Place Order (guest) ────────────────────────────────────────────────────
 
-    async def create_guest_order(
-        self, payload: CreateGuestOrderRequest
-    ) -> CreateOrderResponse:
-        variant_qtys = {item.variant_id: item.quantity for item in payload.items}
+    async def create_guest_order(self, payload: CreateGuestOrderRequest) -> CreateOrderResponse:
+        variant_qtys = {}
+        for item in payload.items:
+            variant_qtys[item.variant_id] = variant_qtys.get(item.variant_id, 0) + item.quantity
 
         return await self._build_order(
-            payload      = payload,
-            variant_qtys = variant_qtys,
-            user_id      = None,
-            cart_svc     = None,
-            guest_email  = payload.guest_email,
-            guest_name   = payload.guest_name,
-            guest_phone  = payload.guest_phone,
+            payload=payload,
+            variant_qtys=variant_qtys,
+            user_id=None,
+            cart_svc=None,
+            guest_email=payload.guest_email,
+            guest_name=payload.guest_name,
+            guest_phone=payload.guest_phone,
         )
 
     # ── Core order builder ─────────────────────────────────────────────────────
 
     async def _build_order(
         self,
-        payload:      CreateOrderRequest,
+        payload: CreateOrderRequest,
         variant_qtys: dict[UUID, int],
-        user_id:      Optional[UUID],
-        cart_svc:     Optional[CartService],
-        guest_email:  Optional[str] = None,
-        guest_name:   Optional[str] = None,
-        guest_phone:  Optional[str] = None,
+        user_id: Optional[UUID],
+        cart_svc: Optional[CartService],
+        guest_email: Optional[str] = None,
+        guest_name: Optional[str] = None,
+        guest_phone: Optional[str] = None,
     ) -> CreateOrderResponse:
         # 1. Fetch + validate all variants
         variants = await self._fetch_and_validate_variants(variant_qtys)
@@ -113,23 +125,29 @@ class OrderService:
 
         for variant, qty in variants:
             product = variant.product
-            price   = variant.price_override if variant.price_override else product.price
+            price = (
+                variant.price_override
+                if variant.price_override is not None
+                else (product.sale_price if product.sale_price is not None else product.price)
+            )
             line_subtotal = price * qty
-            subtotal     += line_subtotal
+            subtotal += line_subtotal
 
             label = f"{variant.size_value} / {variant.colour}"
             primary = next((i.url for i in product.images if i.is_primary), None)
 
-            line_items.append({
-                "seller_id":     product.seller_id,
-                "product_id":    product.id,
-                "variant_id":    variant.id,
-                "product_name":  product.name,
-                "variant_label": label,
-                "unit_price":    price,
-                "quantity":      qty,
-                "subtotal":      line_subtotal,
-            })
+            line_items.append(
+                {
+                    "seller_id": product.seller_id,
+                    "product_id": product.id,
+                    "variant_id": variant.id,
+                    "product_name": product.name,
+                    "variant_label": label,
+                    "unit_price": price,
+                    "quantity": qty,
+                    "subtotal": line_subtotal,
+                }
+            )
             seller_subtotals[product.seller_id] = (
                 seller_subtotals.get(product.seller_id, Decimal("0")) + line_subtotal
             )
@@ -137,16 +155,35 @@ class OrderService:
         # 3. Coupon
         discount = Decimal("0")
         coupon_svc = CouponService(self.db)
-        coupon_id  = None
+        coupon_id = None
+        if payload.coupon_code:
+            if not user_id:
+                raise BusinessRuleError("Sign in to use a coupon")
+            coupon = await coupon_svc._get_valid_coupon(
+                payload.coupon_code, subtotal, user_id, lock=True
+            )
+            discount = coupon_svc._calc_discount(coupon, subtotal)
+            coupon_id = coupon.id
 
         # 4. Shipping
-        shipping_fee = Decimal("0") if subtotal >= SHIPPING_FREE else Decimal(str(SHIPPING_FEE))
+        from app.services.platform_settings import get_platform_settings
+        policy = await get_platform_settings(self.db)
+        shipping_fee = (
+            Decimal("0")
+            if subtotal >= policy.free_shipping_threshold
+            else Decimal(policy.standard_shipping_fee)
+        )
 
         # 5. COD limit
         pm = PaymentMethod(payload.payment_method)
-        if pm == PaymentMethod.cod and (subtotal - discount) > MAX_COD_AMOUNT:
+        if pm == PaymentMethod.payfast and not settings.PAYFAST_ENABLED:
+            raise BusinessRuleError("Online payments are unavailable; choose COD")
+        if (
+            pm == PaymentMethod.cod
+            and (subtotal - discount + shipping_fee) > settings.MAX_COD_ORDER_AMOUNT
+        ):
             raise BusinessRuleError(
-                f"COD is not available for orders above PKR {int(MAX_COD_AMOUNT):,}"
+                f"COD is not available for orders above PKR {settings.MAX_COD_ORDER_AMOUNT:,}"
             )
 
         total = subtotal - discount + shipping_fee
@@ -164,42 +201,47 @@ class OrderService:
 
         # 8. Create Order
         order = await self.order_repo.create(
-            user_id        = user_id,
-            order_number   = order_number,
-            status         = status,
-            guest_email    = guest_email,
-            guest_name     = guest_name,
-            guest_phone    = guest_phone,
-            subtotal       = subtotal,
-            discount_amount= discount,
-            shipping_fee   = shipping_fee,
-            total          = total,
-            payment_method = pm,
-            coupon_id      = coupon_id,
-            notes          = payload.notes,
+            user_id=user_id,
+            order_number=order_number,
+            status=status,
+            guest_email=guest_email,
+            guest_name=guest_name,
+            guest_phone=guest_phone,
+            subtotal=subtotal,
+            discount_amount=discount,
+            shipping_fee=shipping_fee,
+            total=total,
+            payment_method=pm,
+            coupon_id=coupon_id,
+            notes=payload.notes,
         )
 
         # 9. Address
         addr = payload.shipping_address
         await self.order_repo.create_address(
             order.id,
-            recipient_name = addr.recipient_name,
-            phone          = addr.phone,
-            street         = addr.street,
-            city           = addr.city,
-            province       = addr.province,
-            note           = addr.note,
+            recipient_name=addr.recipient_name,
+            phone=addr.phone,
+            street=addr.street,
+            city=addr.city,
+            province=addr.province,
+            note=addr.note,
         )
 
         # 10. Order items
         for li in line_items:
             await self.order_repo.create_item(order_id=order.id, **li)
 
-        # 11. Seller orders
-        for seller_id, sub in seller_subtotals.items():
-            await self.so_repo.create(
-                order_id=order.id, seller_id=seller_id, subtotal=sub
+        # Allocate the platform coupon proportionally; the final share absorbs rounding.
+        remaining_discount = discount
+        for index, (seller_id, sub) in enumerate(seller_subtotals.items()):
+            share = (
+                remaining_discount
+                if index == len(seller_subtotals) - 1
+                else (discount * sub / subtotal).quantize(Decimal("0.01"))
             )
+            remaining_discount -= share
+            await self.so_repo.create(order_id=order.id, seller_id=seller_id, subtotal=sub - share)
 
         # 12. Reserve inventory (atomic per variant)
         for variant, qty in variants:
@@ -209,37 +251,37 @@ class OrderService:
                     f"Stock changed during checkout for {variant.sku}. Please refresh your cart."
                 )
 
-        # 13. Apply coupon (record usage) if provided
-        if payload.coupon_code and user_id:
-            discount = await coupon_svc.apply_to_order(
-                payload.coupon_code, subtotal, user_id, order.id
-            )
-
-        # 14. Clear cart
-        if cart_svc and user_id:
-            await cart_svc.clear(user_id)
-
-        # 15. Enqueue tasks (Block 5 ARQ tasks — deferred import to avoid circular)
-        if pm == PaymentMethod.cod:
-            await self._enqueue_cod_timeout(str(order.id))
-
+        if coupon_id:
+            self.db.add(CouponUsage(coupon_id=coupon_id, user_id=user_id, order_id=order.id))
+            coupon.uses_count += 1
         await self.db.commit()
 
+        # Redis is a separate store; never clear the cart before the SQL commit.
+        if cart_svc and user_id:
+            try:
+                await cart_svc.clear(user_id)
+            except Exception:
+                from app.core.logging import get_logger
+
+                get_logger(__name__).warning("checkout.cart_clear_failed", order_id=str(order.id))
+        if pm == PaymentMethod.cod:
+            await self._enqueue_cod_timeout(str(order.id), policy.cod_timeout_minutes)
+
         # 16. Build response
-        from app.core.config import settings
         whatsapp_url = None
         if pm == PaymentMethod.cod:
             drip_wa = getattr(settings, "DRIP_WHATSAPP_NUMBER", "923001234567")
             whatsapp_url = _whatsapp_url(order_number, drip_wa)
 
         return CreateOrderResponse(
-            order_id      = order.id,
-            order_number  = order_number,
-            status        = status.value,
-            total         = int(total),
-            payment_method= pm.value,
-            whatsapp_url  = whatsapp_url,
-            payment_url   = None,  # Wired in Block 6
+            order_id=order.id,
+            order_number=order_number,
+            status=status.value,
+            total=total,
+            guest_token=create_guest_token(order.id) if user_id is None else None,
+            payment_method=pm.value,
+            whatsapp_url=whatsapp_url,
+            payment_url=None,  # Wired in Block 6
         )
 
     # ── Get order ──────────────────────────────────────────────────────────────
@@ -251,29 +293,34 @@ class OrderService:
         return self._to_detail(order)
 
     async def get_order_by_number(
-        self, order_number: str, email: str
+        self,
+        order_number: str,
+        email: str | None = None,
+        user_id: UUID | None = None,
+        guest_token: str | None = None,
     ) -> OrderDetailResponse:
+        if user_id is None and not guest_token:
+            from app.core.exceptions import AuthenticationError
+
+            raise AuthenticationError("Sign in or provide a guest order token")
         order = await self.order_repo.get_by_number(order_number)
         if not order:
             raise NotFoundError("Order not found")
-        if order.guest_email and order.guest_email.lower() != email.lower():
-            raise NotFoundError("Order not found")
+        order = await authorized_order(self.db, order.id, user_id, guest_token)
         return self._to_detail(order)
 
-    async def get_customer_orders(
-        self, user_id: UUID, page: int = 1
-    ) -> PaginatedOrders:
+    async def get_customer_orders(self, user_id: UUID, page: int = 1) -> PaginatedOrders:
         orders, total = await self.order_repo.get_customer_orders(user_id, page)
-        total_pages   = max(1, (total + 9) // 10)
+        total_pages = max(1, (total + 9) // 10)
         return PaginatedOrders(
             data=[
                 OrderRowResponse(
-                    id           = o.id,
-                    order_number = o.order_number,
-                    status       = o.status.value,
-                    total        = int(o.total),
-                    item_count   = sum(i.quantity for i in o.items),
-                    created_at   = o.created_at,
+                    id=o.id,
+                    order_number=o.order_number,
+                    status=o.status.value,
+                    total=o.total,
+                    item_count=sum(i.quantity for i in o.items),
+                    created_at=o.created_at,
                 )
                 for o in orders
             ],
@@ -288,14 +335,27 @@ class OrderService:
         user_id: UUID,
         payload: CancelOrderRequest,
     ) -> dict:
-        order = await self.order_repo.get_by_id(order_id, user_id=user_id)
+        order = await self.order_repo.get_by_id(order_id, user_id=user_id, for_update=True)
         if not order:
             raise NotFoundError("Order not found")
         if order.status not in CANCELLABLE_STATUSES:
-            raise BusinessRuleError(
-                f"Order cannot be cancelled at status '{order.status.value}'"
-            )
+            raise BusinessRuleError(f"Order cannot be cancelled at status '{order.status.value}'")
 
+        if any(
+            so.status not in (SellerOrderStatus.pending, SellerOrderStatus.processing)
+            for so in order.seller_orders
+        ):
+            raise BusinessRuleError("A dispatched order must use the returns process")
+        from app.models.payment import Payment, PaymentStatus
+
+        paid = await self.db.scalar(
+            select(Payment.id).where(
+                Payment.order_id == order.id,
+                Payment.status.in_([PaymentStatus.completed, PaymentStatus.refunded]),
+            )
+        )
+        if paid:
+            raise BusinessRuleError("Contact support to cancel and refund a paid order")
         # Release inventory
         for item in order.items:
             await self.inv_repo.release(item.variant_id, item.quantity)
@@ -325,12 +385,15 @@ class OrderService:
         total_pages = max(1, (total + 24) // 25)
         return {
             "data": [self._to_seller_order_response(so) for so in seller_orders],
-            "pagination": {"page": page, "per_page": 25, "total": total, "total_pages": total_pages},
+            "pagination": {
+                "page": page,
+                "per_page": 25,
+                "total": total,
+                "total_pages": total_pages,
+            },
         }
 
-    async def get_seller_order_detail(
-        self, seller_id: UUID, seller_order_id: UUID
-    ) -> dict:
+    async def get_seller_order_detail(self, seller_id: UUID, seller_order_id: UUID) -> dict:
         so = await self.so_repo.get_by_id(seller_order_id, seller_id)
         if not so:
             raise NotFoundError("Seller order not found")
@@ -346,35 +409,87 @@ class OrderService:
         if not so:
             raise NotFoundError("Seller order not found")
 
+        # Lock the parent before refreshing all fulfilment state. This serializes brands.
+        order = await self.order_repo.get_by_id(so.order_id, for_update=True)
+        await self.db.refresh(so)
+        transitions = {
+            SellerOrderStatus.pending: SellerOrderStatus.processing,
+            SellerOrderStatus.processing: SellerOrderStatus.shipped,
+            SellerOrderStatus.shipped: SellerOrderStatus.delivered,
+        }
+        target = SellerOrderStatus(payload.status)
+        if so.status == target:
+            return {"message": "Seller order already has this status"}
+        if transitions.get(so.status) != target:
+            raise BusinessRuleError("Invalid fulfilment status transition")
+        if order.status not in (
+            OrderStatus.payment_confirmed,
+            OrderStatus.processing,
+            OrderStatus.shipped,
+        ):
+            raise BusinessRuleError("The order must be paid or COD verified before fulfilment")
+        if target == SellerOrderStatus.shipped:
+            for item in order.items:
+                if item.seller_id == seller_id:
+                    await self.inv_repo.deduct(item.variant_id, item.quantity)
+        old_status = so.status.value
         await self.so_repo.update_status(
-            seller_order_id,
-            SellerOrderStatus(payload.status),
+            so.id,
+            target,
             tracking_number=payload.tracking_number,
             courier_name=payload.courier_name,
         )
-        await self.db.commit()
+        await self.order_repo.add_status_history(
+            seller_order_id=so.id, old_status=old_status, new_status=target.value
+        )
+        await self.db.flush()
+        states = list(
+            (
+                await self.db.scalars(
+                    select(SellerOrder.status).where(SellerOrder.order_id == order.id)
+                )
+            ).all()
+        )
+        parent_status = (
+            OrderStatus.delivered
+            if all(v == SellerOrderStatus.delivered for v in states)
+            else OrderStatus.shipped
+            if all(v in (SellerOrderStatus.shipped, SellerOrderStatus.delivered) for v in states)
+            else OrderStatus.processing
+        )
+        await self.order_repo.update_status(order.id, parent_status)
+        if target == SellerOrderStatus.delivered:
+            # Persist settlement with delivery; COD earnings wait for recorded collection.
+            from app.models.payment import Payment, PaymentStatus
 
-        # Trigger commission settlement when delivered
-        if payload.status == "delivered":
-            try:
-                from arq import create_pool
-                from arq.connections import RedisSettings
-                from app.core.config import settings
-                pool = await create_pool(RedisSettings.from_dsn(str(settings.REDIS_URL)))
-                await pool.enqueue_job("settle_commission", str(seller_order_id))
-                await pool.aclose()
-            except Exception:
-                pass  # Non-critical — can be triggered manually
+            paid = await self.db.scalar(
+                select(Payment.id).where(
+                    Payment.order_id == order.id, Payment.status == PaymentStatus.completed
+                )
+            )
+            if paid:
+                from app.services.commission_service import CommissionService
+
+                await CommissionService(self.db).settle(so.id, commit=False)
+        await self.db.commit()
 
         return {"message": f"Seller order status updated to '{payload.status}'"}
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
-    async def _fetch_and_validate_variants(
-        self, variant_qtys: dict[UUID, int]
-    ) -> list[tuple]:
+    async def _fetch_and_validate_variants(self, variant_qtys: dict[UUID, int]) -> list[tuple]:
+        if (
+            not variant_qtys
+            or len(variant_qtys) > 100
+            or any(qty < 1 or qty > 100 for qty in variant_qtys.values())
+        ):
+            raise BusinessRuleError(
+                "A checkout allows 1–100 units per variant and at most 100 variants"
+            )
         result = await self.db.execute(
             select(ProductVariant)
+            .join(Product)
+            .join(Seller)
             .options(
                 selectinload(ProductVariant.product).selectinload(
                     __import__("app.models.product", fromlist=["Product"]).Product.images
@@ -384,6 +499,10 @@ class OrderService:
             .where(
                 ProductVariant.id.in_(list(variant_qtys)),
                 ProductVariant.is_active.is_(True),
+                Product.is_published.is_(True),
+                Product.admin_hidden.is_(False),
+                Product.deleted_at.is_(None),
+                Seller.status == SellerStatus.active,
             )
         )
         variants = result.scalars().all()
@@ -404,14 +523,21 @@ class OrderService:
             validated.append((v, qty))
         return validated
 
-    async def _enqueue_cod_timeout(self, order_id: str) -> None:
+    async def _enqueue_cod_timeout(self, order_id: str, minutes: int = 30) -> None:
         """Enqueue a 30-min COD verification timeout task."""
+        if settings.ENVIRONMENT == "test":
+            return
         try:
             from arq import create_pool
             from arq.connections import RedisSettings
-            from app.core.config import settings
+
             pool = await create_pool(RedisSettings.from_dsn(str(settings.REDIS_URL)))
-            await pool.enqueue_job("cod_verification_timeout", order_id, _defer_by=1800)
+            await pool.enqueue_job(
+                "cod_verification_timeout",
+                order_id,
+                _defer_by=minutes * 60,
+                _job_id=f"cod-timeout:{order_id}",
+            )
             await pool.aclose()
         except Exception:
             pass  # Non-critical — task will be retried on next worker start
@@ -419,39 +545,50 @@ class OrderService:
     @staticmethod
     def _to_detail(order: Order) -> OrderDetailResponse:
         return OrderDetailResponse(
-            id              = order.id,
-            order_number    = order.order_number,
-            status          = order.status.value,
-            payment_method  = order.payment_method.value,
-            subtotal        = int(order.subtotal),
-            discount_amount = int(order.discount_amount),
-            shipping_fee    = int(order.shipping_fee),
-            total           = int(order.total),
-            notes           = order.notes,
-            address         = ShippingAddressResponse(
-                recipient_name = order.address.recipient_name,
-                phone          = order.address.phone,
-                street         = order.address.street,
-                city           = order.address.city,
-                province       = order.address.province,
-                note           = order.address.note,
-            ) if order.address else None,
+            id=order.id,
+            order_number=order.order_number,
+            status=order.status.value,
+            payment_method=order.payment_method.value,
+            subtotal=order.subtotal,
+            discount_amount=order.discount_amount,
+            shipping_fee=order.shipping_fee,
+            total=order.total,
+            notes=order.notes,
+            address=ShippingAddressResponse(
+                recipient_name=order.address.recipient_name,
+                phone=order.address.phone,
+                street=order.address.street,
+                city=order.address.city,
+                province=order.address.province,
+                note=order.address.note,
+            )
+            if order.address
+            else None,
             items=[
                 OrderItemResponse(
-                    id=i.id, seller_id=i.seller_id, product_id=i.product_id,
-                    variant_id=i.variant_id, product_name=i.product_name,
-                    variant_label=i.variant_label, unit_price=int(i.unit_price),
-                    quantity=i.quantity, subtotal=int(i.subtotal),
+                    id=i.id,
+                    seller_id=i.seller_id,
+                    product_id=i.product_id,
+                    variant_id=i.variant_id,
+                    product_name=i.product_name,
+                    variant_label=i.variant_label,
+                    unit_price=i.unit_price,
+                    quantity=i.quantity,
+                    subtotal=i.subtotal,
                 )
                 for i in order.items
             ],
             seller_orders=[
                 SellerOrderResponse(
-                    id=so.id, seller_id=so.seller_id,
+                    id=so.id,
+                    seller_id=so.seller_id,
                     brand_name=so.seller.brand_name if so.seller else "",
-                    status=so.status.value, subtotal=int(so.subtotal),
-                    tracking_number=so.tracking_number, courier_name=so.courier_name,
-                    shipped_at=so.shipped_at, delivered_at=so.delivered_at,
+                    status=so.status.value,
+                    subtotal=so.subtotal,
+                    tracking_number=so.tracking_number,
+                    courier_name=so.courier_name,
+                    shipped_at=so.shipped_at,
+                    delivered_at=so.delivered_at,
                 )
                 for so in order.seller_orders
             ],
@@ -461,31 +598,33 @@ class OrderService:
     @staticmethod
     def _to_seller_order_response(so, include_items: bool = False) -> dict:
         base = {
-            "id":             str(so.id),
-            "order_id":       str(so.order_id),
-            "order_number":   so.order.order_number if so.order else "",
-            "status":         so.status.value,
-            "subtotal":       int(so.subtotal),
+            "id": str(so.id),
+            "order_id": str(so.order_id),
+            "order_number": so.order.order_number if so.order else "",
+            "status": so.status.value,
+            "subtotal": so.subtotal,
             "tracking_number": so.tracking_number,
-            "courier_name":   so.courier_name,
-            "shipped_at":     so.shipped_at.isoformat() if so.shipped_at else None,
-            "delivered_at":   so.delivered_at.isoformat() if so.delivered_at else None,
-            "created_at":     so.created_at.isoformat(),
+            "courier_name": so.courier_name,
+            "shipped_at": so.shipped_at.isoformat() if so.shipped_at else None,
+            "delivered_at": so.delivered_at.isoformat() if so.delivered_at else None,
+            "created_at": so.created_at.isoformat(),
         }
         if include_items and so.order:
             base["shipping_address"] = {
                 "recipient_name": so.order.address.recipient_name if so.order.address else "",
-                "phone":          so.order.address.phone if so.order.address else "",
-                "city":           so.order.address.city if so.order.address else "",
-                "province":       so.order.address.province if so.order.address else "",
+                "phone": so.order.address.phone if so.order.address else "",
+                "city": so.order.address.city if so.order.address else "",
+                "province": so.order.address.province if so.order.address else "",
+                "street": so.order.address.street if so.order.address else "",
+                "note": so.order.address.note if so.order.address else None,
             }
             base["items"] = [
                 {
-                    "product_name":  i.product_name,
+                    "product_name": i.product_name,
                     "variant_label": i.variant_label,
-                    "unit_price":    int(i.unit_price),
-                    "quantity":      i.quantity,
-                    "subtotal":      int(i.subtotal),
+                    "unit_price": i.unit_price,
+                    "quantity": i.quantity,
+                    "subtotal": i.subtotal,
                 }
                 for i in so.order.items
                 if i.seller_id == so.seller_id

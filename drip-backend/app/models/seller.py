@@ -50,6 +50,9 @@ class Seller(Base, TimestampMixin, SoftDeleteMixin):
     total_slots:      Mapped[int]            = mapped_column(Integer, default=50)
     slots_used:       Mapped[int]            = mapped_column(Integer, default=0)
     registration_fee: Mapped[Decimal]        = mapped_column(Numeric(10, 2), default=Decimal("5000.00"))
+    registration_payment_reference: Mapped[str | None] = mapped_column(String(255))
+    registration_paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    registration_paid_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
     rejected_reason:  Mapped[str | None]     = mapped_column(Text)
     approved_by:      Mapped[UUID | None]    = mapped_column(ForeignKey("users.id"))
     approved_at:      Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -121,3 +124,8 @@ class SellerBankAccount(Base):
                       )
 
     seller: Mapped["Seller"] = relationship(back_populates="bank_accounts")
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from app.models.product import Product
+    from app.models.order import SellerOrder
+    from app.models.wallet import WalletTransaction, Payout

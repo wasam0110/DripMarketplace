@@ -138,7 +138,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
             algorithms=[settings.JWT_ALGORITHM],
             audience="drip-client",
             issuer="drip-api",
-            options={"verify_exp": True},
+            options={"verify_exp": True, "require_exp": True, "require_sub": True, "require_jti": True},
         )
         return payload
     except JWTError as exc:
@@ -155,9 +155,8 @@ async def is_token_revoked(jti: str) -> bool:
         result = await get_redis().get(RedisKeys.jwt_blocklist(jti))
         return result is not None
     except Exception:
-        # Redis unavailable: assume not revoked (fail-open)
-        logger.warning("security.revocation_check_failed", jti=jti[:8])
-        return False
+        from app.core.exceptions import ExternalServiceError
+        raise ExternalServiceError("Session validation is temporarily unavailable") from None
 
 
 async def revoke_token(jti: str, expires_at: datetime) -> None:
@@ -168,7 +167,8 @@ async def revoke_token(jti: str, expires_at: datetime) -> None:
         remaining = max(1, int((expires_at - now).total_seconds()))
         await get_redis().setex(RedisKeys.jwt_blocklist(jti), remaining, "1")
     except Exception as exc:
-        logger.error("security.revocation_failed", jti=jti[:8], error=str(exc))
+        from app.core.exceptions import ExternalServiceError
+        raise ExternalServiceError("Sign-out could not be completed; please retry") from exc
 
 
 # ── Refresh tokens ────────────────────────────────────────────────────────────
@@ -255,7 +255,7 @@ def get_totp_uri(secret: str, email: str) -> str:
     """Return the otpauth:// URI for QR code generation."""
     return pyotp.totp.TOTP(secret).provisioning_uri(
         name=email,
-        issuer_name="DRIP Marketplace",
+        issuer_name="WearHowZ",
     )
 
 

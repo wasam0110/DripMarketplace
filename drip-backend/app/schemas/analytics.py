@@ -106,9 +106,7 @@ class PaymentMethodStat(BaseModel):
 
 class PaymentMethodsResponse(BaseModel):
     period:    str
-    jazzcash:  PaymentMethodStat
-    easypaisa: PaymentMethodStat
-    card:      PaymentMethodStat
+    payfast:   PaymentMethodStat
     cod:       PaymentMethodStat
 
 
@@ -125,6 +123,8 @@ class CitiesResponse(BaseModel):
 
 
 class ConversionResponse(BaseModel):
+    measurement: str = "server_event_counts"
+    tracked_since: str | None = None
     period:             str
     product_views:      int
     add_to_cart:        int
@@ -141,5 +141,6 @@ class SearchQueryRow(BaseModel):
 
 
 class SearchQueriesResponse(BaseModel):
+    tracked_since: str | None = None
     period: str
     data:   list[SearchQueryRow]
