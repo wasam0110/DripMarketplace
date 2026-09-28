@@ -267,8 +267,11 @@ class PaymentService:
             if refund.gateway_ref != reference:
                 raise BusinessRuleError("Refund already confirmed with a different reference")
             return self._refund_response(refund)
+
+        # ── Step 1: inventory restock and return status ───────────────────────
+        returned = None
         if refund.return_id:
-            from app.models.return_ import Return, ReturnStatus
+            from app.models.return_ import ReturnStatus
             from app.models.order import OrderItem
             from app.models.product import ProductInventory
             from app.repositories.return_repo import ReturnRepository
@@ -285,10 +288,35 @@ class PaymentService:
                     )
                 returned.status = ReturnStatus.refunded
                 returned.resolved_at = datetime.now(UTC)
-        refund.gateway_ref = reference
+
+        # ── Step 2: mark refund as confirmed ─────────────────────────────────
+        refund.gateway_ref  = reference
         refund.processed_at = datetime.now(UTC)
         refund.processed_by = admin_id
         await self.db.flush()
+
+        # ── Step 3: reverse seller earnings (idempotent, best-effort) ─────────
+        # All mutations are in the same transaction so either all commit or none do.
+        from app.services.commission_service import CommissionService
+        comm = CommissionService(self.db)
+        if returned is not None:
+            # Return-linked refund: reverse exactly this seller_order's ledger.
+            await comm.reverse_for_refund(
+                refund.id,
+                seller_order_id=returned.seller_order_id,
+                refund_amount=refund.amount,
+                commit=False,
+            )
+        else:
+            # Direct admin refund: split proportionally across all settled sellers.
+            await comm.reverse_for_refund(
+                refund.id,
+                order_id=payment.order_id,
+                refund_amount=refund.amount,
+                commit=False,
+            )
+
+        # ── Step 4: mark payment fully refunded when total confirmed ──────────
         from sqlalchemy import func
 
         confirmed = await self.db.scalar(
@@ -298,6 +326,7 @@ class PaymentService:
         )
         if confirmed >= payment.amount:
             payment.status = PaymentStatus.refunded
+
         await self.db.commit()
         return self._refund_response(refund)
 

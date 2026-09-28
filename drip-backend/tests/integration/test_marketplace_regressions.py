@@ -7,7 +7,6 @@ from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import select, func
-
 from app.models.user import User, UserRole
 from app.models.seller import Seller, SellerStatus, SellerWallet
 from app.models.product import Product, ProductVariant, ProductInventory, ProductImage, SizeType
@@ -668,3 +667,368 @@ async def test_dashboard_periods_precision_and_filtered_order_totals(client, db,
     assert response.status_code == 200 and response.json()['total'] == 0
     bad_filter = await client.get('/api/v1/admin/orders?status=not-real', headers=actor_headers(market.admin))
     assert bad_filter.status_code == 422
+
+# ── Task 2: Refund and return accounting ───────────────────────────────────────
+
+async def _fulfil_and_collect_cod(db, market, isolated_redis):
+    """
+    Shared helper: logged-in user COD order → fully fulfilled → COD collected.
+    Returns (order, so, payment, wallet) with commission settled into pending_balance.
+    """
+    from app.services.admin_service import AdminService
+    from app.models.order import OrderItem
+
+    await isolated_redis.hset(f"cart:{market.buyer.id}", str(market.variant.id), 2)
+    created = await OrderService(db, isolated_redis).create_order(
+        market.buyer.id,
+        CreateOrderRequest(shipping_address=ADDRESS, payment_method="cod"),
+    )
+    payment_init = await PaymentService(db).initiate(created.order_id, user_id=market.buyer.id)
+    await AdminService(db).verify_cod(created.order_id, market.admin.id)
+    so = await db.scalar(select(SellerOrder).where(SellerOrder.order_id == created.order_id))
+    svc = OrderService(db)
+    await svc.update_seller_order_status(market.seller.id, so.id, UpdateSellerOrderRequest(status="processing"))
+    await svc.update_seller_order_status(
+        market.seller.id, so.id,
+        UpdateSellerOrderRequest(status="shipped", tracking_number="TRK01", courier_name="TCS"),
+    )
+    await svc.update_seller_order_status(market.seller.id, so.id, UpdateSellerOrderRequest(status="delivered"))
+    await PaymentService(db).record_cod_collection(payment_init.payment_id, market.admin.id, "COD-TEST-001")
+
+    order   = await db.get(Order, created.order_id)
+    payment = await db.get(Payment, payment_init.payment_id)
+    wallet  = await db.scalar(select(SellerWallet).where(SellerWallet.seller_id == market.seller.id))
+    return order, so, payment, wallet
+
+
+async def _do_return_and_process(db, market, order, so):
+    """Create return → approve → receive → process_refund. Returns refund_id."""
+    from uuid import UUID
+    from app.models.order import OrderItem
+    from app.services.return_service import ReturnService
+    from app.schemas.return_ import CreateReturnRequest, AdminReturnActionRequest
+
+    order_item = await db.scalar(select(OrderItem).where(OrderItem.order_id == order.id))
+
+    ret = await ReturnService(db).request_return(
+        market.buyer.id,
+        CreateReturnRequest(
+            seller_order_id=so.id,
+            reason="Item arrived damaged and not as described in the listing",
+            items=[{"order_item_id": str(order_item.id), "quantity": 1}],
+        ),
+    )
+    await ReturnService(db).approve_return(ret.id, market.admin.id, AdminReturnActionRequest())
+    await ReturnService(db).mark_received(ret.id, market.admin.id, AdminReturnActionRequest())
+    result = await ReturnService(db).process_refund(
+        ret.id, market.admin.id, AdminReturnActionRequest(admin_note="Approved")
+    )
+    return UUID(result["refund_id"])
+
+
+async def test_return_refund_reverses_seller_pending_balance(db, market, isolated_redis):
+    """
+    Full happy path: COD collected → commission in pending → return 1 of 2 units
+    → confirm refund → pending_balance reduced proportionally.
+
+    Order: 2 units × 1200 = 2400 subtotal, 200 shipping = 2600 total.
+    Commission: 2400 × 0.15 = 360 → seller earns 2040 in pending.
+    Refund: 1 unit = 1200 (no discount).
+    Expected debit: 2040 × (1200 / 2400) = 1020.
+    Expected pending after: 2040 − 1020 = 1020.
+    """
+    from app.models.wallet import WalletTransaction, WalletTxType
+
+    order, so, payment, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
+    assert wallet.pending_balance == Decimal("2040.00")
+
+    refund_id = await _do_return_and_process(db, market, order, so)
+    await PaymentService(db).confirm_refund(refund_id, market.admin.id, "BANK-REF-001")
+
+    await db.refresh(wallet)
+    assert wallet.pending_balance   == Decimal("1020.00")
+    assert wallet.available_balance == Decimal("0.00")
+
+    tx = await db.scalar(
+        select(WalletTransaction).where(
+            WalletTransaction.reference       == f"return-refund:{refund_id}",
+            WalletTransaction.type            == WalletTxType.debit_adjustment,
+            WalletTransaction.seller_order_id == so.id,
+        )
+    )
+    assert tx is not None
+    assert tx.amount == Decimal("1020.00")
+
+    # Stock: 8 original − 2 sold + 1 returned = 7.
+    await db.refresh(market.inventory)
+    assert market.inventory.stock == 7
+
+
+async def test_return_refund_reverses_seller_available_balance(db, market, isolated_redis):
+    """
+    When funds have been released from the hold period (released_at set), the
+    reversal targets available_balance, not pending_balance.
+    """
+    from app.models.wallet import CommissionLedger, WalletTransaction, WalletTxType
+
+    order, so, payment, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
+    assert wallet.pending_balance == Decimal("2040.00")
+
+    # Simulate hold release: funds moved from pending to available.
+    ledger = await db.scalar(
+        select(CommissionLedger).where(CommissionLedger.seller_order_id == so.id)
+    )
+    from datetime import datetime, UTC
+    ledger.released_at      = datetime.now(UTC)
+    wallet.available_balance = wallet.pending_balance
+    wallet.pending_balance   = Decimal("0.00")
+    await db.commit()
+
+    refund_id = await _do_return_and_process(db, market, order, so)
+    await PaymentService(db).confirm_refund(refund_id, market.admin.id, "BANK-REF-002")
+
+    await db.refresh(wallet)
+    assert wallet.pending_balance   == Decimal("0.00")
+    assert wallet.available_balance == Decimal("1020.00")   # 2040 − 1020
+
+    tx = await db.scalar(
+        select(WalletTransaction).where(
+            WalletTransaction.reference == f"return-refund:{refund_id}",
+            WalletTransaction.type      == WalletTxType.debit_adjustment,
+        )
+    )
+    assert tx.amount == Decimal("1020.00")
+
+
+async def test_return_refund_idempotent_no_double_reversal(db, market, isolated_redis):
+    """
+    Calling confirm_refund twice with the same reference must not:
+    - Debit the wallet a second time.
+    - Restock inventory a second time.
+    - Create a second WalletTransaction.
+    """
+    from sqlalchemy import func
+    from app.models.wallet import WalletTransaction, WalletTxType
+
+    order, so, payment, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
+    refund_id = await _do_return_and_process(db, market, order, so)
+
+    await PaymentService(db).confirm_refund(refund_id, market.admin.id, "BANK-REF-003")
+    await PaymentService(db).confirm_refund(refund_id, market.admin.id, "BANK-REF-003")
+
+    await db.refresh(wallet)
+    assert wallet.pending_balance == Decimal("1020.00")   # touched exactly once
+
+    tx_count = await db.scalar(
+        select(func.count(WalletTransaction.id)).where(
+            WalletTransaction.reference == f"return-refund:{refund_id}",
+            WalletTransaction.type      == WalletTxType.debit_adjustment,
+        )
+    )
+    assert tx_count == 1
+
+    await db.refresh(market.inventory)
+    assert market.inventory.stock == 7   # 8 − 2 + 1, restocked once
+
+
+async def test_refund_before_settlement_reduces_gross_at_settle_time(db, market, isolated_redis):
+    """
+    Edge case: admin confirms a direct refund before COD is collected.
+    When settle() runs, the pre-confirmed refund reduces gross_amount so the
+    seller is never over-credited.
+
+    Order: 2400 subtotal.  Direct refund of 1200 confirmed before COD.
+    Expected gross at settle: 2400 − 1200 = 1200.
+    Expected seller_amount: 1200 × 0.85 = 1020.
+    """
+    from app.services.admin_service import AdminService
+    from app.models.wallet import CommissionLedger
+
+    await isolated_redis.hset(f"cart:{market.buyer.id}", str(market.variant.id), 2)
+    created = await OrderService(db, isolated_redis).create_order(
+        market.buyer.id,
+        CreateOrderRequest(shipping_address=ADDRESS, payment_method="cod"),
+    )
+    payment_init = await PaymentService(db).initiate(created.order_id, user_id=market.buyer.id)
+    await AdminService(db).verify_cod(created.order_id, market.admin.id)
+    so = await db.scalar(select(SellerOrder).where(SellerOrder.order_id == created.order_id))
+    svc = OrderService(db)
+    await svc.update_seller_order_status(market.seller.id, so.id, UpdateSellerOrderRequest(status="processing"))
+    await svc.update_seller_order_status(
+        market.seller.id, so.id,
+        UpdateSellerOrderRequest(status="shipped", tracking_number="TRK02", courier_name="TCS"),
+    )
+    await svc.update_seller_order_status(market.seller.id, so.id, UpdateSellerOrderRequest(status="delivered"))
+    # Order is now delivered but COD not yet collected → no commission ledger yet.
+
+    # Admin creates and immediately confirms a direct refund of 1200.
+    payment = await db.get(Payment, payment_init.payment_id)
+    from app.models.payment import Refund
+    refund = Refund(
+        payment_id=payment.id,
+        amount=Decimal("1200.00"),
+        reason="Quality issue — refund before COD",
+        processed_by=market.admin.id,
+        idempotency_key="pre-cod-refund-001",
+    )
+    db.add(refund)
+    # Manually mark payment completed so confirm_refund can run.
+    payment.status = PaymentStatus.completed
+    await db.commit()
+
+    await PaymentService(db).confirm_refund(refund.id, market.admin.id, "BANK-PRE-001")
+    # No CommissionLedger exists yet → _reverse_one is a no-op.
+
+    # Now admin collects COD → settle() sees the pre-confirmed refund.
+    await PaymentService(db).record_cod_collection(payment.id, market.admin.id, "COD-POST-001")
+
+    ledger = await db.scalar(
+        select(CommissionLedger).where(CommissionLedger.seller_order_id == so.id)
+    )
+    assert ledger.gross_amount      == Decimal("1200.00")   # 2400 − 1200
+    assert ledger.seller_amount     == Decimal("1020.00")   # 1200 × 0.85
+    assert ledger.commission_amount == Decimal("180.00")    # 1200 × 0.15
+
+    wallet = await db.scalar(select(SellerWallet).where(SellerWallet.seller_id == market.seller.id))
+    assert wallet.pending_balance == Decimal("1020.00")
+
+
+async def test_direct_refund_prorates_across_two_sellers(db, market):
+    """
+    Multi-brand order with two settled sellers.
+    A direct admin refund (no return) is split proportionally across both
+    seller ledgers.
+
+    Seller 1 subtotal: 1200  (share = 60%)
+    Seller 2 subtotal:  800  (share = 40%)
+    Total subtotal:    2000
+
+    Direct refund: 1000
+
+    Seller 1 proportional: 1000 × 0.60 = 600 → debit = 1020 × (600/1200) = 510
+    Seller 2 proportional: 1000 × 0.40 = 400 → debit =  680 × (400/ 800) = 340
+    """
+    from app.models.user import User, UserRole
+    from app.models.seller import Seller, SellerStatus
+    from app.models.order import SellerOrder as SO, SellerOrderStatus, PaymentMethod
+    from app.models.payment import Payment as Pmt, PaymentStatus as PS, Refund
+    from app.models.wallet import CommissionLedger, WalletTransaction, WalletTxType
+    from app.services.commission_service import CommissionService
+
+    # ── Second seller ────────────────────────────────────────────────────────
+    u2 = User(email="seller2-mb@test.com", password_hash="x", role=UserRole.seller, has_verified_email=True)
+    db.add(u2)
+    await db.flush()
+    s2 = Seller(user_id=u2.id, brand_name="Brand Two MB", slug="brand-two-mb",
+                status=SellerStatus.active, total_slots=50)
+    db.add(s2)
+    await db.flush()
+    wallet2 = SellerWallet(seller_id=s2.id)
+    db.add(wallet2)
+
+    # ── Minimal multi-brand order ────────────────────────────────────────────
+    order = Order(
+        order_number="TEST-MB-002",
+        user_id=market.buyer.id,
+        status=OrderStatus.delivered,
+        subtotal=Decimal("2000"),
+        discount_amount=Decimal("0"),
+        shipping_fee=Decimal("200"),
+        total=Decimal("2200"),
+        payment_method=PaymentMethod.cod,
+        shipping_address={
+            "recipient_name": "Test", "phone": "03001234567",
+            "street": "1 Test", "city": "Karachi", "province": "Sindh",
+        },
+    )
+    db.add(order)
+    await db.flush()
+
+    so1 = SO(order_id=order.id, seller_id=market.seller.id,
+             subtotal=Decimal("1200"), status=SellerOrderStatus.delivered)
+    so2 = SO(order_id=order.id, seller_id=s2.id,
+             subtotal=Decimal("800"), status=SellerOrderStatus.delivered)
+    db.add_all([so1, so2])
+    pmt = Pmt(order_id=order.id, method="cod", status=PS.completed,
+              amount=Decimal("2200"), currency="PKR")
+    db.add(pmt)
+    await db.flush()
+
+    cl1 = CommissionLedger(
+        seller_order_id=so1.id, seller_id=market.seller.id,
+        gross_amount=Decimal("1200"), commission_rate=Decimal("0.15"),
+        commission_amount=Decimal("180"), seller_amount=Decimal("1020"),
+    )
+    cl2 = CommissionLedger(
+        seller_order_id=so2.id, seller_id=s2.id,
+        gross_amount=Decimal("800"), commission_rate=Decimal("0.15"),
+        commission_amount=Decimal("120"), seller_amount=Decimal("680"),
+    )
+    db.add_all([cl1, cl2])
+
+    wallet1 = await db.scalar(select(SellerWallet).where(SellerWallet.seller_id == market.seller.id))
+    wallet1.pending_balance = Decimal("1020")
+    wallet2.pending_balance = Decimal("680")
+    await db.commit()
+
+    # ── Direct admin refund of 1000 (no return) ─────────────────────────────
+    refund = Refund(payment_id=pmt.id, amount=Decimal("1000"),
+                    reason="Multi-brand quality complaint", processed_by=market.admin.id)
+    db.add(refund)
+    await db.commit()
+
+    await CommissionService(db).reverse_for_refund(
+        refund.id, order_id=order.id, refund_amount=Decimal("1000"), commit=True,
+    )
+
+    await db.refresh(wallet1)
+    await db.refresh(wallet2)
+    assert wallet1.pending_balance == Decimal("510.00")   # 1020 − 510
+    assert wallet2.pending_balance == Decimal("340.00")   # 680  − 340
+
+    txs = (await db.execute(
+        select(WalletTransaction).where(
+            WalletTransaction.reference.like(f"return-refund:{refund.id}%"),
+            WalletTransaction.type == WalletTxType.debit_adjustment,
+        )
+    )).scalars().all()
+    assert len(txs) == 2
+
+
+async def test_seller_already_withdrawn_platform_absorbs_shortfall(db, market, isolated_redis):
+    """
+    If the seller has already withdrawn all funds (available_balance = 0,
+    pending_balance = 0), the refund reversal floors at zero and logs the
+    full intended debit amount for platform reconciliation.
+    """
+    from app.models.wallet import CommissionLedger, WalletTransaction, WalletTxType
+    from datetime import datetime, UTC
+
+    order, so, payment, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
+    assert wallet.pending_balance == Decimal("2040.00")
+
+    # Simulate: hold released AND seller fully withdrew.
+    ledger = await db.scalar(
+        select(CommissionLedger).where(CommissionLedger.seller_order_id == so.id)
+    )
+    ledger.released_at       = datetime.now(UTC)
+    wallet.pending_balance   = Decimal("0.00")
+    wallet.available_balance = Decimal("0.00")   # fully withdrawn
+    await db.commit()
+
+    refund_id = await _do_return_and_process(db, market, order, so)
+    await PaymentService(db).confirm_refund(refund_id, market.admin.id, "BANK-REF-ABSORBED")
+
+    await db.refresh(wallet)
+    assert wallet.pending_balance   == Decimal("0.00")   # cannot go negative
+    assert wallet.available_balance == Decimal("0.00")   # cannot go negative
+
+    # Full intended debit still logged for platform reconciliation.
+    tx = await db.scalar(
+        select(WalletTransaction).where(
+            WalletTransaction.reference == f"return-refund:{refund_id}",
+            WalletTransaction.type      == WalletTxType.debit_adjustment,
+        )
+    )
+    assert tx is not None
+    assert tx.amount == Decimal("1020.00")   # intended, not actual (for audit)
