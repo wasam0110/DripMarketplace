@@ -125,7 +125,7 @@ class CreateOrderResponse(BaseModel):
     total:         Decimal
     payment_method: str
     guest_token:   Optional[str] = None
-    payment_url:   Optional[str] = None   # JazzCash/Easypaisa/Stripe — wired in Block 6
+    payment_url:   Optional[str] = None   # PayFast checkout URL
     whatsapp_url:  Optional[str] = None   # COD verification link
 
 

@@ -198,7 +198,9 @@ async def cleanup_orphaned_images(ctx: dict) -> None:
 
             if exists is None:
                 try:
-                    await storage.delete(url)
+                    # delete() needs (bucket, path) — not the full URL.
+                    file_name = file_info.get("name", "")
+                    await storage.delete("products", file_name)
                     deleted += 1
                 except Exception as exc:
                     logger.warning("cleanup_orphaned_image_delete_error", url=url, error=str(exc))

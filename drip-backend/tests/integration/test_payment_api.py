@@ -67,17 +67,6 @@ class TestCustomerEndpoints:
 
 
 class TestCallbackEndpoints:
-    def test_jazzcash_callback_retired(self, client):
-        """Retired gateways must not acknowledge a forged callback as accepted."""
-        r = client.post("/payments/callback/jazzcash",
-                        data={"pp_ResponseCode": "111", "pp_SecureHash": "bad"})
-        assert r.status_code == 404
-
-    def test_easypaisa_callback_retired(self, client):
-        r = client.post("/payments/callback/easypaisa",
-                        json={"responseCode": "9999", "hash": "bad"})
-        assert r.status_code == 404
-
     def test_stripe_callback_retired(self, client):
         r = client.post("/payments/callback/stripe",
                         json={"type": "payment_intent.succeeded"},

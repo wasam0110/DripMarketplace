@@ -116,8 +116,6 @@ class SellerBankAccount(Base):
     bank_name:        Mapped[str | None] = mapped_column(String(100))
     account_title:    Mapped[str | None] = mapped_column(String(200))
     account_number:   Mapped[str | None] = mapped_column(String(50))
-    jazzcash_number:  Mapped[str | None] = mapped_column(String(20))
-    easypaisa_number: Mapped[str | None] = mapped_column(String(20))
     is_default:       Mapped[bool]       = mapped_column(Boolean, default=False)
     created_at:       Mapped[datetime]   = mapped_column(
                           DateTime(timezone=True), server_default="now()"

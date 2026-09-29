@@ -101,16 +101,9 @@ class WalletService:
         if not bank_account:
             raise NotFoundError("Bank account not found")
 
-        # Determine payment method + detail
-        if bank_account.jazzcash_number:
-            method = "jazzcash"
-            detail = bank_account.jazzcash_number
-        elif bank_account.easypaisa_number:
-            method = "easypaisa"
-            detail = bank_account.easypaisa_number
-        else:
-            method = "bank_transfer"
-            detail = f"{bank_account.bank_name} — {bank_account.account_number}"
+# Determine payout method + detail
+        method = "bank_transfer"
+        detail = f"{bank_account.bank_name} — {bank_account.account_number}"
 
         # Debit available balance
         await self.wallet_repo.debit_available(seller_id, amount)

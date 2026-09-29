@@ -5,7 +5,7 @@ Email delivery via Resend. All templates are inline HTML here.
 In v2 move templates to a dedicated templates/ folder with Jinja2.
 """
 from __future__ import annotations
-
+import asyncio
 import resend
 
 from app.core.config import settings
@@ -38,7 +38,9 @@ async def send_email(
         if reply_to:
             params["reply_to"] = reply_to
 
-        resend.Emails.send(params)
+        # resend.Emails.send is synchronous; run in a thread pool so we
+        # don't block the ARQ worker's event loop during the HTTP round-trip.
+        await asyncio.to_thread(resend.Emails.send, params)
         logger.info("email.sent", to=recipients[0], subject=subject)
         return True
     except Exception as exc:
@@ -79,10 +81,10 @@ def _base_template(title: str, body: str) -> str:
 </head>
 <body>
   <div class="container">
-    <div class="logo">DRIP<span style="color:#555">.</span></div>
+    <div class="logo">WEARHOWZ<span style="color:#555">.</span></div>
     {body}
     <div class="footer">
-      <p>© 2026 DRIP Marketplace. Pakistan's online fashion mall.</p>
+      <p>© 2026 WearHowZ. Pakistan's premier streetwear marketplace.</p>
       <p>If you did not request this email, you can safely ignore it.</p>
     </div>
   </div>
@@ -94,7 +96,7 @@ async def send_verification_email(email: str, first_name: str, token: str) -> bo
     verify_url = f"{settings.ALLOWED_ORIGINS[0]}/verify-email?token={token}"
     body = f"""
     <h1>Verify your email</h1>
-    <p>Hi {first_name}, welcome to DRIP! Click the button below to verify your email address.</p>
+    <p>Hi {first_name}, welcome to WearHowZ! Click the button below to verify your email address.</p>
     <a href="{verify_url}" class="btn">Verify Email</a>
     <p>This link expires in <strong>24 hours</strong>.</p>
     <p>Or copy this URL into your browser:<br>
@@ -102,8 +104,8 @@ async def send_verification_email(email: str, first_name: str, token: str) -> bo
     """
     return await send_email(
         to=email,
-        subject="Verify your DRIP account",
-        html=_base_template("Verify your email — DRIP", body),
+        subject="Verify your WearHowZ account",
+        html=_base_template("Verify your email — WearHowZ", body),
     )
 
 
@@ -111,14 +113,14 @@ async def send_password_reset_email(email: str, first_name: str, token: str) -> 
     reset_url = f"{settings.ALLOWED_ORIGINS[0]}/reset-password?token={token}"
     body = f"""
     <h1>Reset your password</h1>
-    <p>Hi {first_name}, we received a request to reset your DRIP password.</p>
+    <p>Hi {first_name}, we received a request to reset your WearHowZ password.</p>
     <a href="{reset_url}" class="btn">Reset Password</a>
     <p>This link expires in <strong>1 hour</strong>. If you didn't request this, ignore this email — your password won't change.</p>
     """
     return await send_email(
         to=email,
-        subject="Reset your DRIP password",
-        html=_base_template("Password reset — DRIP", body),
+        subject="Reset your WearHowZ password",
+        html=_base_template("Password reset — WearHowZ", body),
     )
 
 
@@ -146,7 +148,7 @@ async def send_order_confirmation_email(
     return await send_email(
         to=email,
         subject=f"Order confirmed — {order_number}",
-        html=_base_template(f"Order {order_number} confirmed — DRIP", body),
+        html=_base_template(f"Order {order_number} confirmed — WearHowZ", body),
     )
 
 
@@ -168,8 +170,8 @@ async def send_shipping_notification_email(
     """
     return await send_email(
         to=email,
-        subject=f"Your DRIP order is shipped — {order_number}",
-        html=_base_template("Order shipped — DRIP", body),
+        subject=f"Your WearHowZ order is shipped — {order_number}",
+        html=_base_template("Order shipped — WearHowZ", body),
     )
 
 
@@ -179,25 +181,25 @@ async def send_cod_timeout_email(email: str, name: str, order_number: str) -> bo
     <p>Hi {name}, your Cash on Delivery order <strong style="color:#fff">{order_number}</strong>
     was automatically cancelled because it wasn't verified within 30 minutes.</p>
     <p>If this was a mistake, please place your order again at
-    <a href="{settings.ALLOWED_ORIGINS[0]}" style="color:#DFFF00">drip.pk</a></p>
+    <a href="{settings.FRONTEND_URL}" style="color:#DFFF00">wearhowz.pk</a></p>
     """
     return await send_email(
         to=email,
         subject=f"Order cancelled — {order_number}",
-        html=_base_template("Order cancelled — DRIP", body),
+        html=_base_template("Order cancelled — WearHowZ", body),
     )
 
 
 async def send_seller_approved_email(email: str, brand_name: str, dashboard_url: str) -> bool:
     body = f"""
     <h1>Your brand is live!</h1>
-    <p>Congratulations! <strong style="color:#DFFF00">{brand_name}</strong> has been approved on DRIP.</p>
+    <p>Congratulations! <strong style="color:#DFFF00">{brand_name}</strong> has been approved on WearHowZ.</p>
     <p>You now have 50 product slots ready to fill. Log in to your dashboard to start listing.</p>
     <a href="{dashboard_url}" class="btn">Go to Dashboard</a>
     <p>If you have any questions, WhatsApp us at <strong style="color:#25D366">+92 300 0000000</strong></p>
     """
     return await send_email(
         to=email,
-        subject="Your brand is approved on DRIP!",
-        html=_base_template(f"{brand_name} is live — DRIP", body),
+        subject="Your brand is approved on WearHowZ!",
+        html=_base_template(f"{brand_name} is live — WearHowZ", body),
     )

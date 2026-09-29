@@ -128,12 +128,11 @@ class TestProfileUpdateSchema:
 
 class TestBankAccountSchema:
     def test_empty_rejected(self):
-        with pytest.raises(ValidationError, match="Provide either"):
+        with pytest.raises(
+            ValidationError,
+            match="Provide both bank_name and account_number",
+        ):
             CreateBankAccountRequest()
-
-    def test_jazzcash_only_ok(self):
-        req = CreateBankAccountRequest(jazzcash_number="03001234567")
-        assert req.jazzcash_number == "03001234567"
 
     def test_bank_fields_ok(self):
         req = CreateBankAccountRequest(

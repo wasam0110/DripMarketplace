@@ -195,18 +195,13 @@ class CreateBankAccountRequest(BaseModel):
     bank_name:        Optional[str] = Field(default=None, max_length=100)
     account_title:    Optional[str] = Field(default=None, max_length=200)
     account_number:   Optional[str] = Field(default=None, max_length=50)
-    jazzcash_number:  Optional[str] = Field(default=None, max_length=20)
-    easypaisa_number: Optional[str] = Field(default=None, max_length=20)
     is_default:       bool = False
 
     @model_validator(mode="after")
     def at_least_one_payment_method(self) -> "CreateBankAccountRequest":
-        has_bank = bool(self.bank_name and self.account_number)
-        has_jazz = bool(self.jazzcash_number)
-        has_easy = bool(self.easypaisa_number)
-        if not (has_bank or has_jazz or has_easy):
+        if not (self.bank_name and self.account_number):
             raise ValueError(
-                "Provide either (bank_name + account_number), jazzcash_number, or easypaisa_number"
+                "Provide both bank_name and account_number"
             )
         return self
 
@@ -216,8 +211,6 @@ class BankAccountResponse(BaseModel):
     bank_name:        Optional[str]
     account_title:    Optional[str]
     account_number:   Optional[str]
-    jazzcash_number:  Optional[str]
-    easypaisa_number: Optional[str]
     is_default:       bool
     created_at:       datetime
 
