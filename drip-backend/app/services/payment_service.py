@@ -256,6 +256,7 @@ class PaymentService:
     async def confirm_refund(
         self, refund_id: UUID, admin_id: UUID, reference: str
     ) -> RefundResponse:
+        """Confirm a refund with a given reference."""
         refund = await self.db.get(Refund, refund_id)
         if not refund:
             raise NotFoundError("Refund not found")

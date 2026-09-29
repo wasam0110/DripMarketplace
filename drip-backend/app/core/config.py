@@ -143,7 +143,12 @@ class Settings(BaseSettings):
     PAYFAST_SECURED_KEY: str  = ""
     PAYFAST_SANDBOX:     bool = True
     # Enable only after the merchant-specific protocol and sandbox flow are verified.
-    PAYFAST_ENABLED: bool = False
+    PAYFAST_ENABLED:    bool      = False
+    # Comma-separated list of PayFast IPN server IPs for allowlisting.
+    # Empty list = accept from any IP (safe for sandbox / local dev).
+    # Populate with PayFast Pakistan's published IPN IP ranges before go-live.
+    # REQUIRES_LIVE_VERIFICATION: obtain IP list from PayFast Pakistan support.
+    PAYFAST_IPN_IPS:    list[str] = []
     GUEST_ORDER_TOKEN_DAYS: int = 7
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""

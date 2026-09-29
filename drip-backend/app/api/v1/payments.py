@@ -82,6 +82,21 @@ async def retry_payment(
 
 @router.post("/callback/payfast", include_in_schema=False)
 async def payfast_callback(request: Request, db: DB) -> dict:
+    # ── IP allowlist ──────────────────────────────────────────────────────────
+    # When PAYFAST_IPN_IPS is populated, only accept requests from those IPs.
+    # X-Forwarded-For is used when the service sits behind a reverse proxy.
+    from app.core.config import settings
+    allowed_ips = settings.PAYFAST_IPN_IPS
+    if allowed_ips:
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        client_ip = (
+            forwarded.split(",")[0].strip()
+            if forwarded
+            else (request.client.host if request.client else "")
+        )
+        if client_ip not in allowed_ips:
+            raise HTTPException(403, "Forbidden")
+
     if int(request.headers.get("content-length", "0")) > 16384:
         raise HTTPException(413, "Callback too large")
     body = await request.body()
