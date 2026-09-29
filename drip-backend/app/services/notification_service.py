@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from app.core.config import settings
 import uuid
 from typing import Optional
 from uuid import UUID
@@ -187,11 +188,11 @@ class NotificationService:
             <p><strong>Shipping fee:</strong> PKR {int(order.shipping_fee):,}</p>
             <p><strong>Total:</strong> PKR {int(order.total):,}</p>
             <p>Payment method: {order.payment_method.value.upper()}</p>
-            <p><a href="https://drip.pk/orders/{order.id}">Track your order →</a></p>
+            <p><a href="{settings.FRONTEND_URL}/orders/{order.id}">Track your order →</a></p>
             """
             await self.send_email(
                 to          = recipient,
-                subject     = f"DRIP Order #{order.order_number} Confirmed",
+                subject = f"WearHowZ Order #{order.order_number} Confirmed",
                 html        = html,
                 template_id = "order_placed",
             )
@@ -266,7 +267,7 @@ class NotificationService:
             return
 
         if approved:
-            title = f"🎉 {seller.brand_name} is now live on DRIP!"
+            title = f"🎉 {seller.brand_name} is now live on WearHowZ!"
             body  = "Your seller application has been approved. Start listing products."
             type_ = NotifType.SELLER_APPROVED
             url   = "/seller/products"

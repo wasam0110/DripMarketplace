@@ -95,7 +95,7 @@ class ProductService:
         # Create variants + inventory
         for v in payload.variants:
             sku = (
-                v.sku or f"DRIP-{str(product.id)[:8].upper()}-{v.size_value}-{v.colour[:3].upper()}"
+                v.sku or f"WHZ-{str(product.id)[:8].upper()}-{v.size_value}-{v.colour[:3].upper()}"
             )
             variant = await self.variant_repo.create(
                 product_id=product.id,

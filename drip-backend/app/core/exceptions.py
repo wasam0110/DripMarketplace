@@ -1,7 +1,7 @@
 """
 app/core/exceptions.py
 ──────────────────────
-Custom exception hierarchy for DRIP.
+Custom exception hierarchy for WearHowZ.
 
 Design rules:
   • Every exception maps to exactly one HTTP status code.

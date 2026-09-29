@@ -1,8 +1,7 @@
 """
 main.py
 ───────
-FastAPI application factory for DRIP Marketplace API.
-
+FastAPI application factory for WearHowZ API.
 Startup sequence:
   1. Configure structured logging
   2. Initialise database connection pool
@@ -88,7 +87,7 @@ def create_application() -> FastAPI:
         title=settings.APP_NAME,
         version=settings.APP_VERSION,
         description=(
-            "DRIP Marketplace API — multi-vendor streetwear & casual fashion platform. "
+            "WearHowZ API — multi-vendor streetwear & casual fashion platform. "
             "Built on FastAPI + PostgreSQL + Redis."
         ),
         docs_url=settings.docs_url,

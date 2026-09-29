@@ -620,7 +620,7 @@ class CustomerService:
         await self.db.execute(
             update(User).where(User.id == user_id).values(
                 deleted_at=datetime.now(timezone.utc),
-                email=f"deleted_{user_id}@drip.deleted",
+                email=f"deleted_{user_id}@wearhowz.deleted",
             )
         )
         # Invalidate sessions
