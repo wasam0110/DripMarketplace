@@ -24,6 +24,7 @@ _test_database_url = os.environ.get("TEST_DATABASE_URL", "")
 _test_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
 os.environ.update({
     "ENVIRONMENT": "test",
+    "DEBUG": "false",
     "DATABASE_URL": _test_database_url or "postgresql+asyncpg://test:test@127.0.0.1:55432/wearhowz_test",
     "REDIS_URL": "redis://127.0.0.1:56379/15",
     "JWT_PRIVATE_KEY": _test_key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8, serialization.NoEncryption()).decode(),

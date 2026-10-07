@@ -122,7 +122,7 @@ class DisputeRepository:
     async def list_admin(
         self, status: Optional[str] = None, page: int = 1, per_page: int = 25
     ) -> tuple[Sequence[Dispute], int]:
-        q = select(Dispute)
+        q = select(Dispute).options(selectinload(Dispute.messages))
         if status:
             q = q.where(Dispute.status == DisputeStatus(status))
 

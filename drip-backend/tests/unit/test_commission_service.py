@@ -33,7 +33,19 @@ def _make_service(
     """Return a CommissionService wired to mocked repos and a mock DB session."""
     from app.models.payment import PaymentStatus
     db = AsyncMock()
-    db.scalar = AsyncMock(return_value=MagicMock(status=PaymentStatus.completed))
+    payment = MagicMock(id=uuid4(), status=PaymentStatus.completed)
+    from app.models.seller import SellerWallet
+    from app.models.payment import Payment
+
+    async def scalar_result(statement):
+        entity = statement.column_descriptions[0].get("entity")
+        if entity is Payment:
+            return payment
+        if entity is SellerWallet:
+            return MagicMock(pending_balance=Decimal("2550.00"))
+        return Decimal("0")  # No pre-confirmed refunds.
+
+    db.scalar = AsyncMock(side_effect=scalar_result)
 
     svc = CommissionService(db)
     svc.comm_repo  = AsyncMock()

@@ -872,8 +872,8 @@ async def test_refund_before_settlement_reduces_gross_at_settle_time(db, market,
         idempotency_key="pre-cod-refund-001",
     )
     db.add(refund)
-    # Manually mark payment completed so confirm_refund can run.
-    payment.status = PaymentStatus.completed
+    # Confirm the recorded refund before collection; leave COD pending so the
+    # collection operation can record the later receipt and settle earnings.
     await db.commit()
 
     await PaymentService(db).confirm_refund(refund.id, market.admin.id, "BANK-PRE-001")
@@ -936,10 +936,6 @@ async def test_direct_refund_prorates_across_two_sellers(db, market):
         shipping_fee=Decimal("200"),
         total=Decimal("2200"),
         payment_method=PaymentMethod.cod,
-        shipping_address={
-            "recipient_name": "Test", "phone": "03001234567",
-            "street": "1 Test", "city": "Karachi", "province": "Sindh",
-        },
     )
     db.add(order)
     await db.flush()

@@ -1,11 +1,11 @@
 # WearHowZ implementation status
 
-Task 1 is complete: wallet/payout behaviours, runtime pricing/settings, zero-fee registration, dashboard totals and guest checkout were verified. The source can be maintained and committed in the original repository using the supplied terminal update.
+Updated 7 October 2026. Work is limited to user-selected Task 6; no later task has started. The checkout contains prior Task 1–5 implementation work.
 
-This replaces the inherited progress document's outdated completion and default-credential claims. It does not mean the whole backend is production-ready.
+Task 6 has reached the unchanged coverage gate: **583 passed, 1 skipped, 85.96%**. Native PostgreSQL migration/race regressions and Redis email retry/exhaustion checks pass. OpenAPI, endpoint inventory, setup, known limits and source packaging are included. See [the verification report](docs/TASK_6_REPORT.md).
 
-Remaining work: refund and return accounting; verified PayFast integration; live Google/storage/email/worker checks; remaining WearHowZ branding/configuration cleanup; native PostgreSQL concurrency and 85% coverage/release checks; design alignment and frontend implementation. Work on these tasks remains under the user's numbered task selections.
+Task 6 is **not release-complete**. Dependency advisories, scheduled storage-cleanup safety, historical settlement reconciliation and documented verification limits remain. Prior provider-completion descriptions exceed the evidence: PayFast stays disabled and real Google/Supabase/Resend journeys need configured test accounts. No historical balance was reopened, live migration applied, repository pushed or deployment published.
 
 The two original utility filenames are retained with safe implementations: seed_users.py prompts for explicitly configured credentials, and fix_migration.py delegates to normal Alembic commands. Neither embeds a database password.
 
-See README.md and UPDATE_NOTES.md for setup, verification and delivery limitations.
+See [SETUP.md](SETUP.md), [KNOWN_LIMITS.md](KNOWN_LIMITS.md) and [docs/TASK_6_REPORT.md](docs/TASK_6_REPORT.md). UPDATE_NOTES.md describes the historical terminal bundle, not the Task 6 review ZIP. Tasks 7–12 remain under the user's next numbered selection.

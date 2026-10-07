@@ -6,6 +6,8 @@ These run in the worker process, not the API process.
 """
 from __future__ import annotations
 
+from arq import Retry
+
 from app.core.logging import get_logger
 from app.integrations.resend_client import (
     send_cod_timeout_email,
@@ -29,7 +31,7 @@ async def task_send_verification_email(
     ok = await send_verification_email(email, first_name, token)
     if not ok:
         logger.error("task.verification_email_failed", email=email)
-        raise RuntimeError("Email delivery failed — will retry")
+        raise Retry(defer=30 * ctx.get("job_try", 1))
 
 
 async def task_send_password_reset_email(
@@ -42,7 +44,7 @@ async def task_send_password_reset_email(
     ok = await send_password_reset_email(email, first_name, token)
     if not ok:
         logger.error("task.password_reset_email_failed", email=email)
-        raise RuntimeError("Email delivery failed — will retry")
+        raise Retry(defer=30 * ctx.get("job_try", 1))
 
 
 async def task_send_order_confirmation(
@@ -56,7 +58,7 @@ async def task_send_order_confirmation(
     ok = await send_order_confirmation_email(email, name, order_number, total, items)
     if not ok:
         logger.error("task.order_confirmation_failed", order_number=order_number)
-        raise RuntimeError("Email delivery failed — will retry")
+        raise Retry(defer=30 * ctx.get("job_try", 1))
 
 
 async def task_send_shipping_notification(
@@ -73,7 +75,7 @@ async def task_send_shipping_notification(
     )
     if not ok:
         logger.error("task.shipping_notification_failed", order_number=order_number)
-        raise RuntimeError("Email delivery failed — will retry")
+        raise Retry(defer=30 * ctx.get("job_try", 1))
 
 
 async def task_send_cod_timeout(
@@ -85,6 +87,7 @@ async def task_send_cod_timeout(
     ok = await send_cod_timeout_email(email, name, order_number)
     if not ok:
         logger.error("task.cod_timeout_email_failed", order_number=order_number)
+        raise Retry(defer=30 * ctx.get("job_try", 1))
 
 
 async def task_send_seller_approved(
@@ -96,3 +99,4 @@ async def task_send_seller_approved(
     ok = await send_seller_approved_email(email, brand_name, dashboard_url)
     if not ok:
         logger.error("task.seller_approved_email_failed", brand_name=brand_name)
+        raise Retry(defer=30 * ctx.get("job_try", 1))

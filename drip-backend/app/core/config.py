@@ -7,6 +7,7 @@ Validated at startup: missing required vars crash immediately with a clear messa
 """
 
 from functools import lru_cache
+import os
 from typing import Literal
 
 from pydantic import field_validator, model_validator, PostgresDsn
@@ -51,6 +52,7 @@ class Settings(BaseSettings):
     SUPABASE_URL: str
     SUPABASE_SERVICE_ROLE_KEY: str   # NEVER expose to frontend
     SUPABASE_STORAGE_BUCKET_PRODUCTS: str = "products"
+    SUPABASE_STORAGE_BUCKET_AVATARS: str = "avatars"
     SUPABASE_STORAGE_BUCKET_BRANDS: str = "brands"
     SUPABASE_STORAGE_BUCKET_INVOICES: str = "invoices"
 
@@ -165,7 +167,8 @@ class Settings(BaseSettings):
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    return Settings()
+    # A test process must never inherit application secrets from the local .env.
+    return Settings(_env_file=None if os.environ.get("ENVIRONMENT") == "test" else ".env")
 
 
 # Module-level singleton — import this everywhere

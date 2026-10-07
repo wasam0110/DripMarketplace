@@ -16,6 +16,17 @@ logger = get_logger(__name__)
 resend.api_key = settings.RESEND_API_KEY
 
 
+class ResendClient:
+    """Async adapter returning the provider receipt used by EmailLog."""
+
+    async def send(self, *, to: str, subject: str, html: str) -> str:
+        response = await asyncio.to_thread(resend.Emails.send, {
+            "from": f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
+            "to": [to], "subject": subject, "html": html,
+        })
+        return response["id"]
+
+
 async def send_email(
     to: str | list[str],
     subject: str,

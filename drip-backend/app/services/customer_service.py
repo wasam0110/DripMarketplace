@@ -62,7 +62,7 @@ class CustomerService:
     # ── helpers ───────────────────────────────────────────────────────────────
 
     async def _get_user(self, user_id: uuid.UUID) -> User:
-        user = await UserRepository.get(self.db, user_id)
+        user = await UserRepository.get_by_id(self.db, user_id)
         if user is None:
             raise NotFoundError("User")
         return user
@@ -138,10 +138,10 @@ class CustomerService:
         content_type: str,
     ) -> AvatarUploadResponse:
         from app.services.image_service import ImageService
-        avatar_url = await ImageService().upload(
-            data=file_bytes,
-            content_type=content_type,
-            folder=f"avatars/{user_id}",
+        from app.core.config import settings
+        await self._get_user(user_id)
+        avatar_url = await ImageService().process_and_upload(
+            file_bytes, str(user_id), bucket=settings.SUPABASE_STORAGE_BUCKET_AVATARS
         )
         await self.db.execute(
             update(User).where(User.id == user_id).values(avatar_url=avatar_url)
@@ -159,7 +159,9 @@ class CustomerService:
             raise BusinessRuleError("Current password is incorrect.")
         new_hash = hash_password(payload.new_password)
         await self.db.execute(
-            update(User).where(User.id == user_id).values(password_hash=new_hash)
+            update(User).where(User.id == user_id).values(
+                password_hash=new_hash, auth_version=User.auth_version + 1
+            )
         )
         # Invalidate all active sessions
         from app.models.user import UserSession
@@ -557,16 +559,17 @@ class CustomerService:
         redis = get_redis()
         key = f"notif_prefs:{user_id}"
         raw = await redis.hgetall(key)
+        raw = {(k.decode() if isinstance(k, bytes) else k): v for k, v in raw.items()}
         def _bool(v: Optional[bytes], default: bool = True) -> bool:
             if v is None:
                 return default
             return v in (b"1", b"true", "1", "true")
         return NotificationPreferencesResponse(
-            email_order_updates    = _bool(raw.get(b"email_order_updates"),  True),
-            email_promotions       = _bool(raw.get(b"email_promotions"),     True),
-            email_new_arrivals     = _bool(raw.get(b"email_new_arrivals"),   False),
-            sms_order_updates      = _bool(raw.get(b"sms_order_updates"),    False),
-            whatsapp_order_updates = _bool(raw.get(b"whatsapp_order_updates"), True),
+            email_order_updates    = _bool(raw.get("email_order_updates"),  True),
+            email_promotions       = _bool(raw.get("email_promotions"),     True),
+            email_new_arrivals     = _bool(raw.get("email_new_arrivals"),   False),
+            sms_order_updates      = _bool(raw.get("sms_order_updates"),    False),
+            whatsapp_order_updates = _bool(raw.get("whatsapp_order_updates"), True),
         )
 
     async def update_notification_prefs(

@@ -116,7 +116,7 @@ class AuthService:
                 code="INVALID_VERIFY_TOKEN",
             )
 
-        user = await UserRepository.get_by_id_or_raise(db, user_id, resource="User")
+        user = await UserRepository.get_by_id_or_raise(db, user_id)
         if user.has_verified_email:
             raise BusinessRuleError(message="Email address is already verified.", code="ALREADY_VERIFIED")
 

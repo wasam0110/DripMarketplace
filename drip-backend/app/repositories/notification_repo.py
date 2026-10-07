@@ -27,7 +27,9 @@ class NotificationRepository:
         page:        int  = 1,
         per_page:    int  = 20,
     ) -> tuple[Sequence[Notification], int]:
-        q = select(Notification).where(Notification.user_id == user_id)
+        q = select(Notification).where(
+            Notification.user_id == user_id, Notification.is_archived.is_(False)
+        )
         if unread_only:
             q = q.where(Notification.is_read.is_(False))
 
@@ -43,6 +45,7 @@ class NotificationRepository:
             select(func.count(Notification.id)).where(
                 Notification.user_id == user_id,
                 Notification.is_read.is_(False),
+                Notification.is_archived.is_(False),
             )
         )
         return result.scalar_one() or 0
@@ -51,7 +54,7 @@ class NotificationRepository:
         result = await self.db.execute(
             update(Notification)
             .where(Notification.id == notification_id, Notification.user_id == user_id)
-            .values(is_read=True)
+            .values(is_read=True, read_at=func.coalesce(Notification.read_at, func.now()))
             .returning(Notification.id)
         )
         return result.scalar_one_or_none() is not None
@@ -60,7 +63,7 @@ class NotificationRepository:
         result = await self.db.execute(
             update(Notification)
             .where(Notification.user_id == user_id, Notification.is_read.is_(False))
-            .values(is_read=True)
+            .values(is_read=True, read_at=func.coalesce(Notification.read_at, func.now()))
             .returning(Notification.id)
         )
         return len(result.scalars().all())

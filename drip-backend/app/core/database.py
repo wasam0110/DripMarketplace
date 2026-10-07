@@ -93,11 +93,19 @@ async def init_db() -> None:
 
 async def close_db() -> None:
     """Called at app shutdown. Disposes the connection pool."""
-    global _engine
+    global _engine, _session_factory
     if _engine:
         await _engine.dispose()
         logger.info("database.disconnected")
         _engine = None
+    _session_factory = None
+
+
+def AsyncSessionLocal() -> AsyncSession:
+    """Create a worker session from the factory initialized at worker startup."""
+    if _session_factory is None:
+        raise RuntimeError("Database not initialised. Call init_db() first.")
+    return _session_factory()
 
 
 # ── Request-scoped session dependency ─────────────────────────────────────────
