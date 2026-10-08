@@ -4,22 +4,24 @@ app/api/v1/payments.py — PayFast + COD only.
 
 from __future__ import annotations
 
+import ipaddress
+from typing import Annotated
 from uuid import UUID
-from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Query, Request, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, OptionalUser, CurrentAdmin
+from app.api.deps import CurrentAdmin, OptionalUser, get_db
 from app.schemas.payment import (
+    GatewayStatusResponse,
     InitiatePaymentRequest,
+    PaginatedPayments,
+    PayFastReconcileResponse,
     PaymentInitResponse,
     PaymentStatusResponse,
-    RetryPaymentRequest,
     RefundRequest,
     RefundResponse,
-    GatewayStatusResponse,
-    PaginatedPayments,
+    RetryPaymentRequest,
     TransferConfirmationRequest,
 )
 from app.services.payment_service import PaymentService
@@ -35,6 +37,7 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 @router.post("/initiate", response_model=PaymentInitResponse)
 async def initiate_payment(
     payload: InitiatePaymentRequest,
+    request: Request,
     db: DB,
     current_user: OptionalUser,
     guest_token: str | None = Header(default=None, alias="X-Guest-Token"),
@@ -44,6 +47,7 @@ async def initiate_payment(
         order_id=payload.order_id,
         user_id=UUID(current_user["sub"]) if current_user else None,
         guest_token=guest_token,
+        customer_ip=_client_ip(request),
     )
 
 
@@ -65,6 +69,7 @@ async def get_payment_status(
 async def retry_payment(
     order_id: UUID,
     payload: RetryPaymentRequest,
+    request: Request,
     db: DB,
     current_user: OptionalUser,
     guest_token: str | None = Header(default=None, alias="X-Guest-Token"),
@@ -74,36 +79,60 @@ async def retry_payment(
         user_id=UUID(current_user["sub"]) if current_user else None,
         guest_token=guest_token,
         payload=payload,
+        customer_ip=_client_ip(request),
     )
 
 
 # ── PayFast IPN callback (no auth — called by PayFast) ────────────────────────
 
 
-@router.post("/callback/payfast", include_in_schema=False)
+def _matches_ip(value: str, allowed: list[str]) -> bool:
+    try:
+        address = ipaddress.ip_address(value)
+        return any(address in ipaddress.ip_network(item, strict=False) for item in allowed)
+    except ValueError:
+        return False
+
+
+def _client_ip(request: Request) -> str:
+    """Trust forwarding headers only from explicitly configured reverse proxies."""
+    peer = request.client.host if request.client else ""
+    from app.core.config import settings
+
+    if peer and _matches_ip(peer, settings.PAYFAST_TRUSTED_PROXY_IPS):
+        forwarded = request.headers.get("X-Forwarded-For", "")
+        if forwarded:
+            candidate = forwarded.split(",", 1)[0].strip()
+            try:
+                return str(ipaddress.ip_address(candidate))
+            except ValueError:
+                pass
+    return peer
+
+
+@router.api_route("/callback/payfast", methods=["GET", "POST"], include_in_schema=False)
 async def payfast_callback(request: Request, db: DB) -> dict:
     # ── IP allowlist ──────────────────────────────────────────────────────────
     # When PAYFAST_IPN_IPS is populated, only accept requests from those IPs.
-    # X-Forwarded-For is used when the service sits behind a reverse proxy.
     from app.core.config import settings
-    allowed_ips = settings.PAYFAST_IPN_IPS
-    if allowed_ips:
-        forwarded = request.headers.get("X-Forwarded-For", "")
-        client_ip = (
-            forwarded.split(",")[0].strip()
-            if forwarded
-            else (request.client.host if request.client else "")
-        )
-        if client_ip not in allowed_ips:
-            raise HTTPException(403, "Forbidden")
 
-    if int(request.headers.get("content-length", "0")) > 16384:
+    allowed_ips = settings.PAYFAST_IPN_IPS
+    if allowed_ips and not _matches_ip(_client_ip(request), allowed_ips):
+        raise HTTPException(403, "Forbidden")
+
+    try:
+        declared_length = int(request.headers.get("content-length", "0"))
+    except ValueError as exc:
+        raise HTTPException(400, "Invalid content length") from exc
+    if declared_length > 16384:
         raise HTTPException(413, "Callback too large")
-    body = await request.body()
-    if len(body) > 16384:
-        raise HTTPException(413, "Callback too large")
-    form_data = dict(await request.form())
-    await PaymentService(db).handle_payfast_callback(form_data)
+    callback_data = dict(request.query_params)
+    if request.method == "POST":
+        body = await request.body()
+        if len(body) > 16384:
+            raise HTTPException(413, "Callback too large")
+        callback_data.update(dict(await request.form()))
+    await PaymentService(db).handle_payfast_callback(callback_data)
     return {"status": "ok"}
 
 
@@ -115,14 +144,22 @@ async def gateway_status(db: DB, current_admin: CurrentAdmin) -> GatewayStatusRe
     return await PaymentService(db).gateway_status()
 
 
+@router.post("/{order_id}/reconcile", response_model=PayFastReconcileResponse)
+async def reconcile_payfast_payment(
+    order_id: UUID, db: DB, current_admin: CurrentAdmin
+) -> PayFastReconcileResponse:
+    """Query PayFast for a missed callback and safely reconcile the order."""
+    return await PaymentService(db).reconcile_payfast(order_id)
+
+
 @router.get("", response_model=PaginatedPayments)
 async def list_payments(
     db: DB,
     current_admin: CurrentAdmin,
-    status: Optional[str] = Query(
+    status: str | None = Query(
         default=None, pattern="^(pending|processing|completed|failed|refunded)$"
     ),
-    method: Optional[str] = Query(default=None, pattern="^(payfast|cod)$"),
+    method: str | None = Query(default=None, pattern="^(payfast|cod)$"),
     page: int = Query(default=1, ge=1),
 ) -> PaginatedPayments:
     return await PaymentService(db).list_admin(status=status, method=method, page=page)

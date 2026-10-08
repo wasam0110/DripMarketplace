@@ -82,8 +82,10 @@ async def finish_google_login(request, db):
     stored = await get_redis().getdel("google-state:" + state)
     if not stored:
         raise AuthenticationError("Google sign-in expired; please try again")
-    flow = json.loads(stored)
     try:
+        flow = json.loads(stored)
+        if not isinstance(flow, dict) or not flow.get("nonce") or not flow.get("verifier"):
+            raise ValueError("invalid stored OAuth flow")
         async with httpx.AsyncClient(timeout=15) as client:
             token_response = await client.post(
                 "https://oauth2.googleapis.com/token",

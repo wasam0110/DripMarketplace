@@ -1,6 +1,6 @@
-# Release limitations — Task 6 review
+# Backend release limitations
 
-Reviewed 7 October 2026. Passing coverage is not production approval.
+Reviewed 8 October 2026. Passing coverage is not production approval.
 
 ## Release blockers
 
@@ -15,15 +15,12 @@ Reviewed 7 October 2026. Passing coverage is not production approval.
   were supplied. Legacy release protection remains unchanged. Follow SETUP.md before
   reopening any historical pending balance. Local synthetic races do not reconcile
   a merchant's real books or approve platform absorption of refund shortfalls.
-- **Provider verification remains gated:** local signatures, HTTP mocks and worker
-  tests do not prove real PayFast endpoints, merchant callbacks, reconciliation,
-  Google sign-in, Supabase permissions or Resend delivery. Keep PayFast disabled.
-  The earlier Task 3/4 completion descriptions must not be read as live-provider
-  certification. No real charges or external emails/uploads were performed.
-- **Scheduled image cleanup needs review before real storage use:** it scans the
-  hard-coded `products` bucket and checks only ProductImage references. Other image
-  owners and missing/invalid timestamps are not safely covered. Do not enable the
-  scheduled worker against valuable storage until this is corrected and tested.
+- **Live provider acceptance remains gated:** PayFast now follows the published hosted
+  checkout/token/callback protocol and has safe status reconciliation; Google, Supabase,
+  Resend and worker flows have local signed/mocked coverage. These checks do not prove
+  merchant-specific endpoints, source IPs, real Google consent, Supabase permissions or
+  Resend delivery. Keep PayFast and Supabase orphan deletion disabled until the staging
+  checklists pass. No real charge, email or upload was performed in this review.
 
 ## Verification boundaries and technical debt
 
@@ -32,16 +29,16 @@ Reviewed 7 October 2026. Passing coverage is not production approval.
   sweeps. They are controlled two-contender regressions, not a load test or proof of
   every interleaving, crash/restart or distributed failure mode.
 - Real Redis tests prove explicit email-task retry and exhaustion with provider
-  transports mocked. Other notification paths catch/log some exceptions and can
-  acknowledge a failed delivery; durable outbox/deduplication and provider delivery
-  reconciliation are not established by these tests. No exactly-once email claim.
+  transports mocked. Notification jobs now retry database failures and broadcast
+  inserts are deterministic, but a durable outbox and provider delivery reconciliation
+  are not established by these tests. No exactly-once email claim.
 - The inherited `tests/security/test_auth.py` is module-skipped and obsolete.
   Other active tests cover authorization and callback protections, but this is not
   a comprehensive penetration test. The skipped module is reported, not counted
   as passing security coverage.
-- PayFast callback IP filtering currently reads `X-Forwarded-For`; deployment must
-  not trust client-supplied forwarding headers. Trusted-proxy handling and provider
-  ranges need validation before enabling the gateway.
+- PayFast forwarding headers are accepted only from configured trusted proxies. The
+  actual proxy and PayFast callback IP/CIDR lists remain deployment-specific and must be
+  confirmed before enabling the gateway.
 - Health returns HTTP 200 with `status=degraded` when a dependency is unavailable.
   The Docker curl health check tests HTTP status only. Readiness monitoring must
   inspect the body or be corrected before relying on it for routing.
@@ -54,4 +51,4 @@ Reviewed 7 October 2026. Passing coverage is not production approval.
 - API/worker image build success alone does not prove deployment, health, secrets,
   network policy, scheduled delivery, backup/restore or operational monitoring.
 
-Only Task 6 is in scope. No Task 7–12 work or publishing is authorized by this review.
+This review covers backend Tasks 3, 4 and 6. No Task 7-12 frontend work or publishing was performed.

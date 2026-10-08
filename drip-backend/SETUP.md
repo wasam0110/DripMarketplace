@@ -1,6 +1,6 @@
 # WearHowZ backend setup and release checks
 
-Task 6 review candidate, 7 October 2026. Not approved for production; see
+Backend review candidate, refreshed 8 October 2026. Not approved for production; see
 [known limits](KNOWN_LIMITS.md) and [verification report](docs/TASK_6_REPORT.md).
 Run commands from `drip-backend`. Never replace an existing local `.env`.
 
@@ -19,9 +19,10 @@ The database driver URL is `postgresql+asyncpg://...`. Keep `PAYFAST_ENABLED=fal
 Do not reuse the historical sample database password; its owner must rotate it if active.
 
 Configure `FRONTEND_URL`, allowed origins and Google callback URLs consistently.
-For storage, provision the configured product, brand and avatar buckets; the new
-`SUPABASE_STORAGE_BUCKET_AVATARS` defaults to `avatars`. Keep the service-role key
-server-side. Live Google, Supabase and Resend credentials are not validated by local tests.
+For storage, provision the configured product, brand and avatar buckets; keep the
+service-role key server-side. Follow [connected-services setup](docs/CONNECTED_SERVICES_SETUP.md)
+for opt-in upload/delete and email checks. Follow [PayFast setup](docs/PAYFAST_SETUP.md)
+before enabling the gateway. Live provider accounts are not validated by local tests.
 
 Back up an existing database and inspect the migration state before applying anything:
 
@@ -37,9 +38,9 @@ downgrading 013 removes these columns and their data. Never delete/stamp Alembic
 version table to bypass migrations. See the legacy-settlement restriction below.
 
 The Linux worker entrypoint is `python -m arq app.tasks.worker.WorkerSettings`.
-Do not start the scheduled worker against valuable storage until the orphan-image
-cleanup limitation in KNOWN_LIMITS.md is resolved. For local review, use disposable
-services and fake provider transports. ARQ 0.26.1 has Unix-signal assumptions on Windows;
+Orphan-image deletion is disabled by default and must remain disabled until its storage
+smoke test passes. For local review, use disposable services and fake provider transports.
+ARQ 0.26.1 has Unix-signal assumptions on Windows;
 the Redis tests explicitly control worker lifecycle rather than calling its Unix close path.
 
 Create an admin explicitly with `python seed_users.py --email YOUR_EMAIL --role admin --verified`.

@@ -13,13 +13,13 @@ class SupabaseStorage:
     """
 
     def __init__(self) -> None:
-        self.base_url    = str(settings.SUPABASE_URL).rstrip("/")
+        self.base_url = str(settings.SUPABASE_URL).rstrip("/")
         self.service_key = settings.SUPABASE_SERVICE_ROLE_KEY
 
     def _headers(self, content_type: str | None = None) -> dict:
         h = {
             "Authorization": f"Bearer {self.service_key}",
-            "apikey":        self.service_key,
+            "apikey": self.service_key,
         }
         if content_type:
             h["Content-Type"] = content_type
@@ -27,9 +27,9 @@ class SupabaseStorage:
 
     async def upload(
         self,
-        bucket:       str,
-        path:         str,
-        data:         bytes,
+        bucket: str,
+        path: str,
+        data: bytes,
         content_type: str,
     ) -> str:
         """Upload bytes to Supabase Storage and return the public URL."""
@@ -79,21 +79,49 @@ class SupabaseStorage:
         Body: {"prefix": "", "limit": 1000, "offset": 0}
         """
         list_url = f"{self.base_url}/storage/v1/object/list/{bucket}"
+        files: list[dict] = []
         try:
             async with httpx.AsyncClient(timeout=30) as client:
-                r = await client.post(
-                    list_url,
-                    json={"prefix": prefix, "limit": 1000, "offset": 0},
-                    headers=self._headers("application/json"),
-                )
-                r.raise_for_status()
-                files: list[dict] = r.json()
-        except httpx.HTTPError as exc:
+                pending = [prefix.strip("/")]
+                visited: set[str] = set()
+                while pending:
+                    current = pending.pop()
+                    if current in visited:
+                        continue
+                    visited.add(current)
+                    offset = 0
+                    while True:
+                        response = await client.post(
+                            list_url,
+                            json={"prefix": current, "limit": 1000, "offset": offset},
+                            headers=self._headers("application/json"),
+                        )
+                        response.raise_for_status()
+                        page = response.json()
+                        if not isinstance(page, list):
+                            raise StorageError("Storage listing returned invalid data")
+                        for item in page:
+                            name = str(item.get("name") or "").strip("/")
+                            if not name or name in {".", ".."}:
+                                continue
+                            full_name = (
+                                name
+                                if not current or name.startswith(current + "/")
+                                else f"{current}/{name}"
+                            )
+                            if item.get("id") is None and item.get("metadata") is None:
+                                pending.append(full_name)
+                            else:
+                                files.append(
+                                    {
+                                        **item,
+                                        "name": full_name,
+                                        "url": self.get_public_url(bucket, full_name),
+                                    }
+                                )
+                        if len(page) < 1000:
+                            break
+                        offset += len(page)
+        except (httpx.HTTPError, ValueError) as exc:
             raise StorageError("Storage listing failed") from exc
-
-        # Attach the public URL so callers can compare against ProductImage.url.
-        return [
-            {**f, "url": self.get_public_url(bucket, f["name"])}
-            for f in files
-            if f.get("name")
-        ]
+        return files

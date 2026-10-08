@@ -1,6 +1,6 @@
 # WearHowZ endpoint inventory
 
-Generated from the application: 172 HTTP operations.
+Generated from the application: 174 HTTP operations.
 
 Dependency names show route-level access checks. Guest capability tokens, resource ownership, payment verification and business-state checks also run inside handlers/services; consult the OpenAPI schema and implementation.
 
@@ -117,10 +117,12 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | GET | `/api/v1/orders/{order_id}` | get_optional_user_payload | `app.api.v1.orders.get_order` |
 | POST | `/api/v1/orders/{order_id}/cancel` | get_current_user_payload, require_customer | `app.api.v1.orders.cancel_order` |
 | GET | `/api/v1/payments` | get_current_user_payload, require_admin | `app.api.v1.payments.list_payments` |
+| GET | `/api/v1/payments/callback/payfast` | Public / handler checks | `app.api.v1.payments.payfast_callback` |
 | POST | `/api/v1/payments/callback/payfast` | Public / handler checks | `app.api.v1.payments.payfast_callback` |
 | GET | `/api/v1/payments/gateway-status` | get_current_user_payload, require_admin | `app.api.v1.payments.gateway_status` |
 | POST | `/api/v1/payments/initiate` | get_optional_user_payload | `app.api.v1.payments.initiate_payment` |
 | POST | `/api/v1/payments/refunds/{refund_id}/confirm` | get_current_user_payload, require_admin | `app.api.v1.payments.confirm_refund` |
+| POST | `/api/v1/payments/{order_id}/reconcile` | get_current_user_payload, require_admin | `app.api.v1.payments.reconcile_payfast_payment` |
 | POST | `/api/v1/payments/{order_id}/retry` | get_optional_user_payload | `app.api.v1.payments.retry_payment` |
 | GET | `/api/v1/payments/{order_id}/status` | get_optional_user_payload | `app.api.v1.payments.get_payment_status` |
 | POST | `/api/v1/payments/{payment_id}/cod-collection` | get_current_user_payload, require_admin | `app.api.v1.payments.record_cod_collection` |

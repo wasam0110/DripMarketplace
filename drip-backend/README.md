@@ -1,6 +1,6 @@
 # WearHowZ backend
 
-This checkout contains accumulated marketplace repairs through Task 5 and Task 6 release-check work. The Task 6 full suite passes the unchanged 85% coverage gate, but release approval remains blocked. PayFast stays disabled by default. See [SETUP.md](SETUP.md), [KNOWN_LIMITS.md](KNOWN_LIMITS.md), and the [Task 6 report](docs/TASK_6_REPORT.md) for current evidence and remaining prerequisites.
+This checkout contains the backend marketplace repairs, Task 3/4 provider hardening and Task 6 release-check work. The full suite passes the unchanged 85% coverage gate, but release approval remains blocked. PayFast stays disabled by default. See [SETUP.md](SETUP.md), [PayFast setup](docs/PAYFAST_SETUP.md), [connected-services setup](docs/CONNECTED_SERVICES_SETUP.md), [KNOWN_LIMITS.md](KNOWN_LIMITS.md), and the [Task 6 report](docs/TASK_6_REPORT.md).
 
 ## Applying the supplied terminal update
 
@@ -14,7 +14,7 @@ Use Python 3.13, PostgreSQL 15+ and Redis 7. Task 6 tests use Python 3.13.14 and
 2. Copy `.env.example` to `.env` only if you do not already have a local environment file. Fill in your own database, Redis, RS256 signing keys and provider settings. Keep `.env` and private keys out of Git. For a fresh local database, `docker compose up -d postgres redis` uses the development database settings in the example.
 3. Use a backed-up development database to inspect `python fix_migration.py --check`, then apply pending migrations with `python fix_migration.py --upgrade`. This performs normal Alembic upgrades. Do not use an old script that deletes/stamps the migration version table. For an existing populated database, inspect and reconcile historical wallet settlements before upgrading a live environment; revision 012 intentionally prevents automatic duplicate release of legacy ledger entries.
 4. Start the API: `python -m uvicorn main:app --reload`.
-5. Review KNOWN_LIMITS.md before starting the worker: `arq app.tasks.worker.WorkerSettings`. Its image-cleanup schedule must not run against valuable storage until the documented cleanup issue is resolved.
+5. Review KNOWN_LIMITS.md before starting the worker: `arq app.tasks.worker.WorkerSettings`. Orphan-image deletion remains disabled until `SUPABASE_ORPHAN_CLEANUP_ENABLED=true` is explicitly set after the documented storage smoke test.
 
 The original configuration included an embedded database credential. Rotate it if active, including copies in repository history or old deployments. The source update removes embedded credentials from the sample and legacy utilities; it does not rotate a provider password for you.
 
@@ -26,7 +26,7 @@ The utility reads DATABASE_URL from your environment/local `.env`, prompts for a
 
 ## Validation and API notes
 
-Historical Task 1 verification used PGlite PostgreSQL/WASM with 412 passing tests and 71.16% coverage. Task 6 supersedes that evidence with 583 passing tests, one skipped security module and 85.96% coverage, using native PostgreSQL and dedicated Redis worker tests. See `docs/TASK_6_REPORT.md`; `UPDATE_NOTES.md` describes the historical terminal bundle, not this review package.
+Historical Task 1 verification used PGlite PostgreSQL/WASM with 412 passing tests and 71.16% coverage. The refreshed backend suite supersedes that evidence with 570 passing tests, one skipped security module and 85.62% coverage, using native PostgreSQL and dedicated Redis worker tests. See `docs/TASK_6_REPORT.md`; `UPDATE_NOTES.md` describes the historical terminal bundle, not this review package.
 
 For native tests, set TEST_DATABASE_URL to a dedicated PostgreSQL database ending in `_test`, separate from DATABASE_URL, then run `python -m pytest`. Tests create disposable schemas; never point them at a production database.
 

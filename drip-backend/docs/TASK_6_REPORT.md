@@ -1,14 +1,14 @@
 # Task 6 — backend release-check report
 
-7 October 2026. **Coverage/check deliverables achieved; production release blocked.**
-Only Task 6 was selected. No work on the frontend queue, deployment, push, real
+Refreshed 8 October 2026 after backend Task 3/4 hardening. **Coverage/check deliverables achieved; production release blocked.**
+No work on the frontend queue, deployment, push, real
 charges or historical wallet corrections was performed.
 
 ## Verified results
 
 | Check | Result |
 |---|---|
-| Full suite, Python 3.13.14 | 583 passed, 1 skipped; 85.96% line coverage |
+| Full suite, Python 3.13.14 | 570 passed, 1 skipped; 85.62% line coverage |
 | Coverage gate | Original 85% requirement unchanged; passed |
 | Database | Native PostgreSQL 15, isolated random schemas in `wearhowz_test` |
 | Migration | Fresh base → 013, 013 → 012_marketplace_gaps → 013; all 39 model tables readable |
@@ -17,9 +17,9 @@ charges or historical wallet corrections was performed.
 | Lifecycle | Native DB/Redis worker startup, healthy dependency checks and shutdown |
 | API image | Local `wearhowz-task6-api:review` Docker build passed; shell-CMD signal warning remains |
 | Worker image | Local `wearhowz-task6-worker:review` Docker build passed; scheduled jobs not started against live providers |
-| Contract | OpenAPI 3.1: 170 schema operations, 180 schemas; inventory includes 172 operations including hidden routes |
+| Contract | OpenAPI 3.1: 171 schema operations, 181 schemas; inventory includes 174 operations including hidden routes |
 | Compilation | `compileall` on app, scripts and tests passed |
-| Lint | All eight new Task 6 test/script files pass Ruff and format checks; full repository remains non-clean (1,269 findings) |
+| Lint | Changed files were formatted; the inherited repository-wide Ruff backlog remains and no clean lint claim is made |
 | Dependency consistency | `pip check` passed; this does not clear security advisories |
 | Typing | mypy unavailable in checked-in dev environment; no clean type-check claim |
 | Dependency audit | 45 advisory entries across 9 installed packages; unresolved |
@@ -66,10 +66,10 @@ in-place updater or production-approved release. Packaging excludes local settin
 keys, Git metadata, virtual environments and caches; archive integrity and source
 hashes are checked by the packaging script.
 
-Task 6 cannot be signed off as a backend release while dependency security findings,
-unsafe scheduled image-cleanup assumptions and historical ledger reconciliation
-remain unresolved. Full-repository lint/type validation also remains open.
-Provider certification belongs to Tasks 3/4 and stays gated. See KNOWN_LIMITS.md for
+Task 6 cannot be signed off as a backend release while dependency security findings
+and historical ledger reconciliation remain unresolved. Full-repository lint/type
+validation also remains open. Storage cleanup is now opt-in and reference-aware, but
+live provider acceptance for Tasks 3/4 stays gated. See KNOWN_LIMITS.md for
 the exact distinctions and SETUP.md for the accounting-owner reconciliation procedure.
 No legacy `released_at` marker was cleared and no real balances were reopened.
 

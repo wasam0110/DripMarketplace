@@ -8,7 +8,7 @@ import pytest
 from arq import Retry
 
 from app.core import database
-from app.tasks import cleanup_tasks, email_tasks, worker
+from app.tasks import cleanup_tasks, email_tasks, notification_tasks, worker
 
 
 @pytest.fixture
@@ -122,6 +122,7 @@ async def test_database_cleanup_commits(worker_db, task):
 
 
 async def test_orphan_cleanup_retains_recent_and_referenced_files(worker_db, monkeypatch):
+    from app.core.config import settings
     from app.integrations.supabase_storage import SupabaseStorage
 
     now = datetime.now(UTC)
@@ -134,12 +135,99 @@ async def test_orphan_cleanup_retains_recent_and_referenced_files(worker_db, mon
             "updated_at": (now - timedelta(days=2)).isoformat(),
         },
     ]
+    monkeypatch.setattr(settings, "SUPABASE_ORPHAN_CLEANUP_ENABLED", True)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_BUCKET_PRODUCTS", "products")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_BUCKET_AVATARS", "products")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_BUCKET_BRANDS", "products")
     monkeypatch.setattr(SupabaseStorage, "list_all_files", AsyncMock(return_value=files))
     delete = AsyncMock()
     monkeypatch.setattr(SupabaseStorage, "delete", delete)
-    worker_db.execute.side_effect = [
-        SimpleNamespace(scalar_one_or_none=lambda: "image-id"),
-        SimpleNamespace(scalar_one_or_none=lambda: None),
+    worker_db.scalars.side_effect = [
+        SimpleNamespace(all=lambda: ["used"]),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(all=lambda: []),
+        SimpleNamespace(all=lambda: []),
     ]
     await cleanup_tasks.cleanup_orphaned_images({})
     delete.assert_awaited_once_with("products", "orphan.webp")
+
+
+async def test_orphan_cleanup_skips_unverifiable_timestamps(worker_db, monkeypatch):
+    from app.core.config import settings
+    from app.integrations.supabase_storage import SupabaseStorage
+
+    monkeypatch.setattr(settings, "SUPABASE_ORPHAN_CLEANUP_ENABLED", True)
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_BUCKET_PRODUCTS", "same")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_BUCKET_AVATARS", "same")
+    monkeypatch.setattr(settings, "SUPABASE_STORAGE_BUCKET_BRANDS", "same")
+    monkeypatch.setattr(
+        SupabaseStorage,
+        "list_all_files",
+        AsyncMock(
+            return_value=[
+                {"name": "missing.webp", "url": "missing", "updated_at": None},
+                {"name": "invalid.webp", "url": "invalid", "updated_at": "not-a-date"},
+                {"name": "../escape.webp", "url": "escape", "updated_at": "2020-01-01T00:00:00Z"},
+            ]
+        ),
+    )
+    delete = AsyncMock()
+    monkeypatch.setattr(SupabaseStorage, "delete", delete)
+    worker_db.scalars.side_effect = [SimpleNamespace(all=lambda: []) for _ in range(5)]
+
+    await cleanup_tasks.cleanup_orphaned_images({})
+
+    delete.assert_not_awaited()
+
+
+@pytest.mark.parametrize(
+    ("task_name", "service_method", "args"),
+    [
+        (
+            "send_order_confirmation",
+            "notify_order_placed",
+            ("00000000-0000-0000-0000-000000000001",),
+        ),
+        (
+            "send_order_status_update",
+            "notify_order_status",
+            ("00000000-0000-0000-0000-000000000001", "shipped"),
+        ),
+        (
+            "send_payout_notification",
+            "notify_payout",
+            ("00000000-0000-0000-0000-000000000001", "completed"),
+        ),
+        (
+            "notify_seller_decision",
+            "notify_seller_decision",
+            ("00000000-0000-0000-0000-000000000001", True, None),
+        ),
+    ],
+)
+async def test_notification_tasks_retry_failures(
+    worker_db, monkeypatch, task_name, service_method, args
+):
+    from app.services.notification_service import NotificationService
+
+    monkeypatch.setattr(
+        NotificationService, service_method, AsyncMock(side_effect=RuntimeError("temporary"))
+    )
+    with pytest.raises(Retry) as exc:
+        await getattr(notification_tasks, task_name)({"job_try": 2}, *args)
+    assert exc.value.defer_score == 60_000
+
+
+async def test_broadcast_task_rolls_back_and_retries(worker_db):
+    worker_db.execute.side_effect = RuntimeError("temporary")
+    with pytest.raises(Retry):
+        await notification_tasks.broadcast_notification(
+            {"job_try": 1},
+            ["00000000-0000-0000-0000-000000000001"],
+            "Title",
+            "Body",
+            None,
+            "task-1",
+        )
+    worker_db.rollback.assert_awaited_once()

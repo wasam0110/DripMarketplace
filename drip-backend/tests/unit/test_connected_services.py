@@ -11,6 +11,7 @@ Covers contracts for:
 
 All network calls are mocked — no credentials or live services required.
 """
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -23,36 +24,36 @@ import pytest
 # GOOGLE OAUTH
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestGoogleOAuth:
 
+class TestGoogleOAuth:
     def test_require_configuration_raises_when_unconfigured(self):
         from app.services.google_oauth import require_configuration
         from app.core.exceptions import ExternalServiceError
         from app.core.config import settings
 
-        original_id     = settings.GOOGLE_CLIENT_ID
+        original_id = settings.GOOGLE_CLIENT_ID
         original_secret = settings.GOOGLE_CLIENT_SECRET
         try:
-            settings.GOOGLE_CLIENT_ID     = ""
+            settings.GOOGLE_CLIENT_ID = ""
             settings.GOOGLE_CLIENT_SECRET = ""
             with pytest.raises(ExternalServiceError, match="not configured"):
                 require_configuration()
         finally:
-            settings.GOOGLE_CLIENT_ID     = original_id
+            settings.GOOGLE_CLIENT_ID = original_id
             settings.GOOGLE_CLIENT_SECRET = original_secret
 
     def test_require_configuration_passes_when_set(self):
         from app.services.google_oauth import require_configuration
         from app.core.config import settings
 
-        original_id     = settings.GOOGLE_CLIENT_ID
+        original_id = settings.GOOGLE_CLIENT_ID
         original_secret = settings.GOOGLE_CLIENT_SECRET
         try:
-            settings.GOOGLE_CLIENT_ID     = "test-client-id.apps.googleusercontent.com"
+            settings.GOOGLE_CLIENT_ID = "test-client-id.apps.googleusercontent.com"
             settings.GOOGLE_CLIENT_SECRET = "test-secret"
             require_configuration()
         finally:
-            settings.GOOGLE_CLIENT_ID     = original_id
+            settings.GOOGLE_CLIENT_ID = original_id
             settings.GOOGLE_CLIENT_SECRET = original_secret
 
     @pytest.mark.asyncio
@@ -60,10 +61,10 @@ class TestGoogleOAuth:
         from app.services.google_oauth import start_google_login
         from app.core.config import settings
 
-        original_id     = settings.GOOGLE_CLIENT_ID
+        original_id = settings.GOOGLE_CLIENT_ID
         original_secret = settings.GOOGLE_CLIENT_SECRET
         try:
-            settings.GOOGLE_CLIENT_ID     = "test-client.apps.googleusercontent.com"
+            settings.GOOGLE_CLIENT_ID = "test-client.apps.googleusercontent.com"
             settings.GOOGLE_CLIENT_SECRET = "test-secret"
 
             fake_response = MagicMock()
@@ -77,7 +78,7 @@ class TestGoogleOAuth:
                 result = await start_google_login(fake_response)
 
         finally:
-            settings.GOOGLE_CLIENT_ID     = original_id
+            settings.GOOGLE_CLIENT_ID = original_id
             settings.GOOGLE_CLIENT_SECRET = original_secret
 
         auth_url = result["authorization_url"]
@@ -97,10 +98,10 @@ class TestGoogleOAuth:
         from app.services.google_oauth import start_google_login
         from app.core.config import settings
 
-        original_id     = settings.GOOGLE_CLIENT_ID
+        original_id = settings.GOOGLE_CLIENT_ID
         original_secret = settings.GOOGLE_CLIENT_SECRET
         try:
-            settings.GOOGLE_CLIENT_ID     = "test-client.apps.googleusercontent.com"
+            settings.GOOGLE_CLIENT_ID = "test-client.apps.googleusercontent.com"
             settings.GOOGLE_CLIENT_SECRET = "test-secret"
 
             fake_response = MagicMock()
@@ -114,7 +115,7 @@ class TestGoogleOAuth:
                 await start_google_login(fake_response)
 
         finally:
-            settings.GOOGLE_CLIENT_ID     = original_id
+            settings.GOOGLE_CLIENT_ID = original_id
             settings.GOOGLE_CLIENT_SECRET = original_secret
 
         assert fake_response.set_cookie.called
@@ -128,10 +129,10 @@ class TestGoogleOAuth:
         from app.services.google_oauth import start_google_login
         from app.core.config import settings
 
-        original_id     = settings.GOOGLE_CLIENT_ID
+        original_id = settings.GOOGLE_CLIENT_ID
         original_secret = settings.GOOGLE_CLIENT_SECRET
         try:
-            settings.GOOGLE_CLIENT_ID     = "cid"
+            settings.GOOGLE_CLIENT_ID = "cid"
             settings.GOOGLE_CLIENT_SECRET = "cs"
 
             states = []
@@ -145,7 +146,7 @@ class TestGoogleOAuth:
                 with patch("app.services.google_oauth.get_redis", return_value=mock_redis):
                     await start_google_login(fake_response)
         finally:
-            settings.GOOGLE_CLIENT_ID     = original_id
+            settings.GOOGLE_CLIENT_ID = original_id
             settings.GOOGLE_CLIENT_SECRET = original_secret
 
         assert len(states) == 2
@@ -156,12 +157,13 @@ class TestGoogleOAuth:
 # SUPABASE STORAGE
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestSupabaseStorage:
 
+class TestSupabaseStorage:
     def _make_storage(self):
         from app.integrations.supabase_storage import SupabaseStorage
         from app.core.config import settings
-        settings.SUPABASE_URL              = "https://test.supabase.co"
+
+        settings.SUPABASE_URL = "https://test.supabase.co"
         settings.SUPABASE_SERVICE_ROLE_KEY = "test-service-key"
         return SupabaseStorage()
 
@@ -189,8 +191,8 @@ class TestSupabaseStorage:
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__  = AsyncMock(return_value=False)
-        mock_client.post       = AsyncMock(return_value=mock_response)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             result = await s.upload("products", "a/b.jpg", b"data", "image/jpeg")
@@ -202,14 +204,15 @@ class TestSupabaseStorage:
     @pytest.mark.asyncio
     async def test_upload_raises_storage_error_on_bad_status(self):
         from app.core.exceptions import StorageError
+
         s = self._make_storage()
         mock_response = MagicMock()
         mock_response.status_code = 403
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__  = AsyncMock(return_value=False)
-        mock_client.post       = AsyncMock(return_value=mock_response)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             with pytest.raises(StorageError):
@@ -224,8 +227,8 @@ class TestSupabaseStorage:
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__  = AsyncMock(return_value=False)
-        mock_client.delete     = AsyncMock(return_value=mock_response)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.delete = AsyncMock(return_value=mock_response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             await s.delete("products", "seller/image.jpg")
@@ -241,8 +244,8 @@ class TestSupabaseStorage:
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__  = AsyncMock(return_value=False)
-        mock_client.delete     = AsyncMock(return_value=mock_response)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.delete = AsyncMock(return_value=mock_response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             await s.delete("products", "gone.jpg")  # Must not raise.
@@ -253,15 +256,17 @@ class TestSupabaseStorage:
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.raise_for_status = MagicMock()
-        mock_response.json = MagicMock(return_value=[
-            {"name": "seller/img1.jpg", "updated_at": "2026-01-01T00:00:00Z"},
-            {"name": "seller/img2.jpg", "updated_at": "2026-01-02T00:00:00Z"},
-        ])
+        mock_response.json = MagicMock(
+            return_value=[
+                {"id": "1", "name": "seller/img1.jpg", "updated_at": "2026-01-01T00:00:00Z"},
+                {"id": "2", "name": "seller/img2.jpg", "updated_at": "2026-01-02T00:00:00Z"},
+            ]
+        )
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__  = AsyncMock(return_value=False)
-        mock_client.post       = AsyncMock(return_value=mock_response)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             files = await s.list_all_files("products")
@@ -277,14 +282,16 @@ class TestSupabaseStorage:
         s = self._make_storage()
         mock_response = MagicMock()
         mock_response.raise_for_status = MagicMock()
-        mock_response.json = MagicMock(return_value=[
-            {"name": "folder/photo.webp", "updated_at": "2026-01-01T00:00:00Z"},
-        ])
+        mock_response.json = MagicMock(
+            return_value=[
+                {"id": "1", "name": "folder/photo.webp", "updated_at": "2026-01-01T00:00:00Z"},
+            ]
+        )
 
         mock_client = AsyncMock()
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__  = AsyncMock(return_value=False)
-        mock_client.post       = AsyncMock(return_value=mock_response)
+        mock_client.__aexit__ = AsyncMock(return_value=False)
+        mock_client.post = AsyncMock(return_value=mock_response)
 
         with patch("httpx.AsyncClient", return_value=mock_client):
             files = await s.list_all_files("products")
@@ -296,7 +303,13 @@ class TestSupabaseStorage:
 # RESEND EMAIL CLIENT
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 class TestResendEmailClient:
+    @pytest.fixture(autouse=True)
+    def _configured_resend(self, monkeypatch):
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "RESEND_API_KEY", "re_test_only")
 
     @pytest.mark.asyncio
     async def test_send_email_calls_resend_sdk(self):
@@ -352,7 +365,9 @@ class TestResendEmailClient:
         with patch("asyncio.to_thread", new_callable=AsyncMock) as mock_thread:
             mock_thread.return_value = {}
             await send_email(
-                to="x@test.com", subject="s", html="h",
+                to="x@test.com",
+                subject="s",
+                html="h",
                 reply_to="support@wearhowz.com",
             )
 
@@ -367,7 +382,7 @@ class TestResendEmailClient:
 
         async def fake_send(to, subject, html, reply_to=None):
             captured["subject"] = subject
-            captured["html"]    = html
+            captured["html"] = html
             return True
 
         with patch("app.integrations.resend_client.send_email", side_effect=fake_send):
@@ -385,7 +400,7 @@ class TestResendEmailClient:
 
         async def fake_send(to, subject, html, reply_to=None):
             captured["subject"] = subject
-            captured["html"]    = html
+            captured["html"] = html
             return True
 
         with patch("app.integrations.resend_client.send_email", side_effect=fake_send):
@@ -402,13 +417,15 @@ class TestResendEmailClient:
 
         async def fake_send(to, subject, html, reply_to=None):
             captured["subject"] = subject
-            captured["html"]    = html
+            captured["html"] = html
             return True
 
         with patch("app.integrations.resend_client.send_email", side_effect=fake_send):
             await send_order_confirmation_email(
-                "buyer@test.com", "Ali",
-                "WH-000123", 2600,
+                "buyer@test.com",
+                "Ali",
+                "WH-000123",
+                2600,
                 [{"product_name": "Hoodie", "quantity": 1, "subtotal": 2600}],
             )
 
@@ -427,8 +444,12 @@ class TestResendEmailClient:
 
         with patch("app.integrations.resend_client.send_email", side_effect=fake_send):
             await send_shipping_notification_email(
-                "buyer@test.com", "Ali", "WH-000456",
-                "TCS-12345", "TCS", "Brand X",
+                "buyer@test.com",
+                "Ali",
+                "WH-000456",
+                "TCS-12345",
+                "TCS",
+                "Brand X",
             )
 
         assert "TCS-12345" in captured["html"]
@@ -439,10 +460,11 @@ class TestResendEmailClient:
 # ARQ WORKER REGISTRATION
 # ══════════════════════════════════════════════════════════════════════════════
 
-class TestWorkerRegistration:
 
+class TestWorkerRegistration:
     def setup_method(self):
         from app.tasks.worker import WorkerSettings
+
         self.ws = WorkerSettings
 
     def _function_names(self) -> set[str]:
@@ -504,6 +526,7 @@ class TestWorkerRegistration:
 
     def test_send_order_confirmation_resolves_to_notification_tasks(self):
         from app.tasks.notification_tasks import send_order_confirmation as notif_version
+
         registered = next(
             fn for fn in self.ws.functions if fn.__name__ == "send_order_confirmation"
         )

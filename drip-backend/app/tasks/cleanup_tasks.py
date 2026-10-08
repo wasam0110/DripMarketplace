@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 # CART CLEANUP
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 async def cleanup_abandoned_carts(ctx: dict) -> None:
     """
     Delete Redis cart keys that have had no activity for 30 days.
@@ -32,7 +33,7 @@ async def cleanup_abandoned_carts(ctx: dict) -> None:
     """
     from app.core.redis import get_redis
 
-    redis   = get_redis()
+    redis = get_redis()
     pattern = "cart:*"
     deleted = 0
 
@@ -52,6 +53,7 @@ async def cleanup_abandoned_carts(ctx: dict) -> None:
 # SESSION CLEANUP
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 async def cleanup_expired_sessions(ctx: dict) -> None:
     """
     Hard-delete UserSession rows whose expires_at is in the past.
@@ -64,9 +66,7 @@ async def cleanup_expired_sessions(ctx: dict) -> None:
     cutoff = datetime.now(UTC)
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            delete(UserSession).where(UserSession.expires_at < cutoff)
-        )
+        result = await db.execute(delete(UserSession).where(UserSession.expires_at < cutoff))
         await db.commit()
         logger.info("cleanup_expired_sessions", deleted=result.rowcount)
 
@@ -74,6 +74,7 @@ async def cleanup_expired_sessions(ctx: dict) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 # SOFT-DELETED USER CLEANUP
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 async def cleanup_soft_deleted_users(ctx: dict) -> None:
     """
@@ -102,6 +103,7 @@ async def cleanup_soft_deleted_users(ctx: dict) -> None:
 # EXPIRED RESET-TOKEN CLEANUP
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 async def cleanup_expired_reset_tokens(ctx: dict) -> None:
     """
     Password-reset tokens are stored in Redis with a 1-hour TTL.
@@ -111,9 +113,9 @@ async def cleanup_expired_reset_tokens(ctx: dict) -> None:
     """
     from app.core.redis import get_redis
 
-    redis   = get_redis()
+    redis = get_redis()
     members = await redis.smembers("reset_tokens:all")
-    pruned  = 0
+    pruned = 0
 
     for token_key in members:
         exists = await redis.exists(token_key)
@@ -127,6 +129,7 @@ async def cleanup_expired_reset_tokens(ctx: dict) -> None:
 # ══════════════════════════════════════════════════════════════════════════════
 # OLD NOTIFICATION ARCHIVE
 # ══════════════════════════════════════════════════════════════════════════════
+
 
 async def archive_old_notifications(ctx: dict) -> None:
     """
@@ -160,6 +163,7 @@ async def archive_old_notifications(ctx: dict) -> None:
 # ORPHANED IMAGE CLEANUP
 # ══════════════════════════════════════════════════════════════════════════════
 
+
 async def cleanup_orphaned_images(ctx: dict) -> None:
     """
     Scan Supabase storage for product/avatar images that have no matching
@@ -169,41 +173,83 @@ async def cleanup_orphaned_images(ctx: dict) -> None:
     Safety: only deletes files older than 24 hours to avoid racing with
     in-progress uploads.
     """
-    from app.core.database import AsyncSessionLocal
-    from app.integrations.supabase_storage import SupabaseStorage
-    from app.models.product import ProductImage
     from sqlalchemy import select
 
+    from app.core.config import settings
+    from app.core.database import AsyncSessionLocal
+    from app.integrations.supabase_storage import SupabaseStorage
+    from app.models.admin import Banner
+    from app.models.product import Category, ProductImage
+    from app.models.seller import Seller
+    from app.models.user import User
+
+    if not settings.SUPABASE_ORPHAN_CLEANUP_ENABLED:
+        logger.info("cleanup_orphaned_images_disabled")
+        return
+
     storage = SupabaseStorage()
-    cutoff  = datetime.now(UTC) - timedelta(hours=24)
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
     deleted = 0
     skipped = 0
 
-    try:
-        files = await storage.list_all_files(bucket="products")
-    except Exception as exc:
-        logger.error("cleanup_orphaned_images_list_error", error=str(exc))
-        return
+    bucket_columns: dict[str, list] = {}
+    for bucket, columns in (
+        (
+            settings.SUPABASE_STORAGE_BUCKET_PRODUCTS,
+            [ProductImage.url, Category.image_url, Banner.image_url],
+        ),
+        (settings.SUPABASE_STORAGE_BUCKET_AVATARS, [User.avatar_url]),
+        (settings.SUPABASE_STORAGE_BUCKET_BRANDS, [Seller.logo_url]),
+    ):
+        bucket_columns.setdefault(bucket, []).extend(columns)
 
     async with AsyncSessionLocal() as db:
-        for file_info in files:
-            url       = file_info.get("url", "")
-            updated   = file_info.get("updated_at")
-
-            if updated and updated > cutoff.isoformat():
-                skipped += 1
+        for bucket, columns in bucket_columns.items():
+            referenced: set[str] = set()
+            for column in columns:
+                values = await db.scalars(select(column).where(column.is_not(None)))
+                referenced.update(str(value) for value in values.all() if value)
+            try:
+                files = await storage.list_all_files(bucket=bucket)
+            except Exception as exc:
+                logger.error("cleanup_orphaned_images_list_error", bucket=bucket, error=str(exc))
                 continue
-
-            stmt = select(ProductImage.id).where(ProductImage.url == url).limit(1)
-            exists = (await db.execute(stmt)).scalar_one_or_none()
-
-            if exists is None:
+            for file_info in files:
+                url = str(file_info.get("url") or "")
+                file_name = str(file_info.get("name") or "").strip("/")
+                updated = _storage_timestamp(file_info.get("updated_at"))
+                if (
+                    not url
+                    or not file_name
+                    or ".." in file_name.split("/")
+                    or updated is None
+                    or updated > cutoff
+                    or url in referenced
+                ):
+                    skipped += 1
+                    continue
                 try:
                     # delete() needs (bucket, path) — not the full URL.
-                    file_name = file_info.get("name", "")
-                    await storage.delete("products", file_name)
+                    await storage.delete(bucket, file_name)
                     deleted += 1
                 except Exception as exc:
-                    logger.warning("cleanup_orphaned_image_delete_error", url=url, error=str(exc))
+                    logger.warning(
+                        "cleanup_orphaned_image_delete_error",
+                        bucket=bucket,
+                        url=url,
+                        error=str(exc),
+                    )
 
     logger.info("cleanup_orphaned_images", deleted=deleted, skipped=skipped)
+
+
+def _storage_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        return None
+    return parsed.astimezone(UTC)

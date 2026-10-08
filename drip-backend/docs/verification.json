@@ -1,17 +1,17 @@
 {
   "task": 6,
-  "review_date": "2026-10-07",
+  "review_date": "2026-10-08",
   "release_approved": false,
   "python": "3.13.14",
   "full_suite": {
-    "passed": 583,
+    "passed": 570,
     "failed": 0,
     "skipped": 1,
     "skipped_module": "tests/security/test_auth.py",
-    "line_coverage_percent": 85.96270161290323,
+    "line_coverage_percent": 85.62354952974228,
     "required_coverage_percent": 85,
-    "covered_statements": 6822,
-    "total_statements": 7936
+    "covered_statements": 7010,
+    "total_statements": 8187
   },
   "native_services": {
     "postgresql": "15-alpine; isolated disposable test schemas",
@@ -25,15 +25,15 @@
     "worker_docker_image": "passed",
     "compileall": "passed",
     "pip_check": "passed",
-    "new_tests_and_scripts_ruff": "passed",
-    "repository_ruff_findings": 1269,
+    "changed_files_format": "passed",
+    "repository_ruff": "not clean; inherited backlog remains",
     "mypy": "not installed; not validated"
   },
   "contract": {
     "openapi_version": "3.1.0",
-    "schema_operations": 170,
-    "schema_components": 180,
-    "inventory_operations_including_hidden": 172
+    "schema_operations": 171,
+    "schema_components": 181,
+    "inventory_operations_including_hidden": 174
   },
   "dependency_audit": {
     "advisory_entries": 45,

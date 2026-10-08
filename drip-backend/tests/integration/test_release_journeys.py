@@ -324,6 +324,7 @@ async def test_notifications_delivery_preferences_and_jobs(db, market, monkeypat
     from test_marketplace_regressions import guest_payload
 
     from app.core import database
+    from app.core.config import settings
     from app.integrations import resend_client
     from app.models.notification import EmailLog
     from app.models.order import Order
@@ -336,6 +337,7 @@ async def test_notifications_delivery_preferences_and_jobs(db, market, monkeypat
     monkeypatch.setattr(
         resend_client.asyncio, "to_thread", AsyncMock(return_value={"id": "email-receipt"})
     )
+    monkeypatch.setattr(settings, "RESEND_API_KEY", "re_test_only")
     context = AsyncMock()
     context.__aenter__.return_value = db
     monkeypatch.setattr(database, "AsyncSessionLocal", lambda: context)

@@ -2,28 +2,29 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-from decimal import Decimal
+from datetime import UTC, date, datetime
 from uuid import UUID
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import BusinessRuleError, NotFoundError, ExternalServiceError
-from app.integrations.payfast import PayFastClient
+from app.core.exceptions import BusinessRuleError, ExternalServiceError, NotFoundError
+from app.integrations.payfast import PayFastClient, PayFastProtocolError
 from app.models.order import OrderStatus, PaymentMethod, SellerOrderStatus
 from app.models.payment import Payment, PaymentCallback, PaymentStatus, Refund
 from app.repositories.payment_repo import PaymentRepository
 from app.schemas.payment import (
     GatewayStatusResponse,
+    PaginatedPayments,
+    PayFastReconcileResponse,
     PaymentInitResponse,
+    PaymentRowResponse,
     PaymentStatusResponse,
     RefundRequest,
     RefundResponse,
     RetryPaymentRequest,
-    PaymentRowResponse,
-    PaginatedPayments,
 )
 from app.services.order_access import authorized_order
 
@@ -34,7 +35,14 @@ def _build_payfast() -> PayFastClient:
     ):
         raise ExternalServiceError("Online payments are not enabled")
     return PayFastClient(
-        settings.PAYFAST_MERCHANT_ID, settings.PAYFAST_SECURED_KEY, settings.PAYFAST_SANDBOX
+        settings.PAYFAST_MERCHANT_ID,
+        settings.PAYFAST_SECURED_KEY,
+        settings.PAYFAST_MERCHANT_NAME,
+        settings.PAYFAST_SANDBOX,
+        token_url=settings.PAYFAST_TOKEN_URL,
+        checkout_url=settings.PAYFAST_CHECKOUT_URL,
+        api_base_url=settings.PAYFAST_API_BASE_URL,
+        timeout_seconds=settings.PAYFAST_REQUEST_TIMEOUT_SECONDS,
     )
 
 
@@ -44,7 +52,11 @@ class PaymentService:
         self.payment_repo = PaymentRepository(db)
 
     async def initiate(
-        self, order_id: UUID, user_id: UUID | None = None, guest_token: str | None = None
+        self,
+        order_id: UUID,
+        user_id: UUID | None = None,
+        guest_token: str | None = None,
+        customer_ip: str = "",
     ) -> PaymentInitResponse:
         order = await authorized_order(self.db, order_id, user_id, guest_token, lock=True)
         if order.status not in (OrderStatus.pending_payment, OrderStatus.pending_cod_verification):
@@ -66,31 +78,44 @@ class PaymentService:
             await self.db.commit()
             return PaymentInitResponse(payment_id=payment.id, method="cod")
         pf = _build_payfast()
-        cached = (payment.gateway_payload or {}).get("checkout")
-        if not cached:
-            from app.models.user import User
+        from app.models.user import User
 
-            user = await self.db.get(User, user_id) if user_id else None
-            cached = pf.build_checkout_payload(
-                order_id=str(order.id),
+        user = await self.db.get(User, user_id) if user_id else None
+        customer_email = user.email if user else order.guest_email or ""
+        customer_mobile = user.phone if user else order.guest_phone or ""
+        try:
+            token = await pf.get_checkout_token(basket_id=str(order.id), amount=order.total)
+            checkout = pf.build_checkout_payload(
+                token=token,
+                basket_id=str(order.id),
                 amount=order.total,
                 description=f"WearHowZ order {order.order_number}",
-                return_url=f"{settings.FRONTEND_URL}/order/success/{order.id}",
-                cancel_url=f"{settings.FRONTEND_URL}/checkout?cancelled=1",
-                ipn_url=f"{settings.API_BASE_URL}/api/v1/payments/callback/payfast",
-                customer_email=user.email if user else order.guest_email or "",
-                customer_name=f"{user.first_name} {user.last_name}"
-                if user
-                else order.guest_name or "",
+                success_url=f"{settings.FRONTEND_URL}/order/success/{order.id}",
+                failure_url=f"{settings.FRONTEND_URL}/checkout?payment=failed",
+                checkout_url=f"{settings.API_BASE_URL}/api/v1/payments/callback/payfast",
+                customer_email=customer_email,
+                customer_mobile=customer_mobile,
+                order_date=(order.created_at or datetime.now(UTC)).date(),
             )
-            payment.gateway_payload = {"checkout": cached}
-            payment.status = PaymentStatus.pending
+        except (httpx.HTTPError, PayFastProtocolError) as exc:
+            raise ExternalServiceError("PayFast checkout is temporarily unavailable") from exc
+        # Do not persist PayFast's one-time TOKEN or correlation SIGNATURE.
+        payment.gateway_payload = {
+            "checkout_request": {
+                "basket_id": str(order.id),
+                "amount": f"{order.total:.2f}",
+                "currency": "PKR",
+                "order_date": (order.created_at or datetime.now(UTC)).date().isoformat(),
+                "customer_ip": customer_ip,
+            }
+        }
+        payment.status = PaymentStatus.pending
         await self.db.commit()
         return PaymentInitResponse(
             payment_id=payment.id,
             method="payfast",
             checkout_url=pf.base_url,
-            payfast_payload=cached,
+            payfast_payload=checkout,
         )
 
     async def get_status(
@@ -116,6 +141,7 @@ class PaymentService:
         user_id: UUID | None,
         payload: RetryPaymentRequest,
         guest_token: str | None = None,
+        customer_ip: str = "",
     ) -> PaymentInitResponse:
         order = await authorized_order(self.db, order_id, user_id, guest_token, lock=True)
         if order.status != OrderStatus.pending_payment:
@@ -148,7 +174,7 @@ class PaymentService:
             payment.status = PaymentStatus.pending
             payment.failure_reason = None
         await self.db.flush()
-        response = await self.initiate(order.id, user_id, guest_token)
+        response = await self.initiate(order.id, user_id, guest_token, customer_ip)
         if order.payment_method == PaymentMethod.cod:
             from app.services.order_service import OrderService
 
@@ -160,7 +186,7 @@ class PaymentService:
         callback = PaymentCallback(gateway="payfast", raw_payload=data, is_verified=False)
         self.db.add(callback)
         try:
-            parsed = pf.parse_ipn(data)
+            parsed = pf.parse_callback(data)
             order_id = UUID(parsed["order_id"])
         except (ValueError, KeyError, TypeError):
             await self.db.commit()  # Persist rejected callback audit, without changing payment.
@@ -176,7 +202,7 @@ class PaymentService:
             raise BusinessRuleError("Payment callback does not match an online payment")
         callback.payment_id = payment.id
         if (
-            parsed["amount"] != payment.amount
+            (parsed["amount"] is not None and parsed["amount"] != payment.amount)
             or parsed.get("currency") != payment.currency
             or payment.amount != order.total
             or not parsed["txn_id"]
@@ -210,9 +236,124 @@ class PaymentService:
             )
         elif parsed["status"] == "failed":
             payment.status = PaymentStatus.failed
-            payment.failure_reason = "Gateway reported failure"
+            detail = parsed.get("error_message") or "Gateway reported failure"
+            payment.failure_reason = f"PayFast {parsed['error_code']}: {detail}"[:500]
         payment.gateway_payload = {**(payment.gateway_payload or {}), "callback": parsed["raw"]}
         await self.db.commit()
+
+    async def reconcile_payfast(self, order_id: UUID) -> PayFastReconcileResponse:
+        """Reconcile a pending PayFast payment using the provider status API."""
+        from app.repositories.order_repo import OrderRepository
+
+        order_repo = OrderRepository(self.db)
+        order = await order_repo.get_by_id(order_id, for_update=True)
+        payment = await self.db.scalar(
+            select(Payment).where(Payment.order_id == order_id).with_for_update()
+        )
+        if not order or not payment:
+            raise NotFoundError("Payment not found")
+        if payment.method != "payfast":
+            raise BusinessRuleError("Only PayFast payments can be reconciled")
+
+        request_data = (payment.gateway_payload or {}).get("checkout_request", {})
+        raw_order_date = request_data.get("order_date")
+        try:
+            order_date = (
+                date.fromisoformat(raw_order_date) if raw_order_date else order.created_at.date()
+            )
+        except (TypeError, ValueError) as exc:
+            raise BusinessRuleError("Stored PayFast order date is invalid") from exc
+        customer_ip = str(request_data.get("customer_ip") or "").strip()
+        if not payment.gateway_reference and not customer_ip:
+            raise BusinessRuleError("Customer IP is missing; manual reconciliation is required")
+
+        try:
+            provider = await _build_payfast().check_status(
+                basket_id=str(order.id),
+                order_date=order_date,
+                customer_ip=customer_ip,
+                transaction_id=payment.gateway_reference or "",
+            )
+        except (httpx.HTTPError, PayFastProtocolError) as exc:
+            raise ExternalServiceError("PayFast reconciliation is temporarily unavailable") from exc
+
+        normalized = {str(key).lower(): value for key, value in provider.items()}
+        provider_status = str(
+            normalized.get("status_code")
+            or normalized.get("payment_status")
+            or normalized.get("status")
+            or normalized.get("code")
+            or "unknown"
+        ).strip()
+        provider_basket = str(normalized.get("basket_id") or "").strip()
+        transaction_id = str(normalized.get("transaction_id") or "").strip()
+        identifiers_match = provider_basket == str(order.id) and bool(transaction_id)
+        if payment.gateway_reference and transaction_id != payment.gateway_reference:
+            identifiers_match = False
+        duplicate = (
+            await self.payment_repo.get_by_gateway_reference(transaction_id)
+            if transaction_id
+            else None
+        )
+        if duplicate is not None and duplicate.id != payment.id:
+            identifiers_match = False
+
+        audit = PaymentCallback(
+            payment_id=payment.id,
+            gateway="payfast_reconciliation",
+            raw_payload=provider,
+            is_verified=identifiers_match,
+        )
+        self.db.add(audit)
+
+        status_key = provider_status.upper()
+        success = status_key in {"00", "000", "SUCCESS", "COMPLETED", "PAID"}
+        failed = status_key in {"FAILED", "DECLINED", "CANCELLED", "CANCELED"}
+        detail = "Provider response recorded; no local state changed"
+        if not identifiers_match:
+            detail = "Provider identifiers did not match this payment"
+        elif success:
+            if payment.status in (PaymentStatus.completed, PaymentStatus.refunded):
+                if payment.gateway_reference != transaction_id:
+                    identifiers_match = False
+                    audit.is_verified = False
+                    detail = "Completed payment has a different transaction reference"
+                else:
+                    detail = "Payment was already reconciled"
+            elif order.status == OrderStatus.pending_payment:
+                payment.status = PaymentStatus.completed
+                payment.gateway_reference = transaction_id
+                payment.paid_at = datetime.now(UTC)
+                payment.failure_reason = None
+                await order_repo.update_status(
+                    order.id,
+                    OrderStatus.payment_confirmed,
+                    note="Verified using PayFast status API",
+                )
+                detail = "Payment reconciled successfully"
+            else:
+                detail = "Paid transaction requires manual order-state review"
+        elif failed and payment.status == PaymentStatus.pending:
+            payment.status = PaymentStatus.failed
+            payment.failure_reason = str(
+                normalized.get("status_msg") or "PayFast status API reported failure"
+            )[:500]
+            detail = "Payment marked failed from provider status"
+
+        payment.gateway_payload = {
+            **(payment.gateway_payload or {}),
+            "last_reconciliation": provider,
+        }
+        await self.db.commit()
+        return PayFastReconcileResponse(
+            order_id=order.id,
+            payment_id=payment.id,
+            provider_status=provider_status,
+            local_status=payment.status.value,
+            transaction_id=transaction_id or None,
+            matched=identifiers_match,
+            detail=detail,
+        )
 
     async def refund(
         self, payment_id: UUID, admin_id: UUID, payload: RefundRequest
@@ -272,11 +413,12 @@ class PaymentService:
         # ── Step 1: inventory restock and return status ───────────────────────
         returned = None
         if refund.return_id:
-            from app.models.return_ import ReturnStatus
+            from sqlalchemy import update
+
             from app.models.order import OrderItem
             from app.models.product import ProductInventory
+            from app.models.return_ import ReturnStatus
             from app.repositories.return_repo import ReturnRepository
-            from sqlalchemy import update
 
             returned = await ReturnRepository(self.db).get_by_id(refund.return_id)
             if returned and returned.status == ReturnStatus.received:
@@ -291,7 +433,7 @@ class PaymentService:
                 returned.resolved_at = datetime.now(UTC)
 
         # ── Step 2: mark refund as confirmed ─────────────────────────────────
-        refund.gateway_ref  = reference
+        refund.gateway_ref = reference
         refund.processed_at = datetime.now(UTC)
         refund.processed_by = admin_id
         await self.db.flush()
@@ -299,6 +441,7 @@ class PaymentService:
         # ── Step 3: reverse seller earnings (idempotent, best-effort) ─────────
         # All mutations are in the same transaction so either all commit or none do.
         from app.services.commission_service import CommissionService
+
         comm = CommissionService(self.db)
         if returned is not None:
             # Return-linked refund: reverse exactly this seller_order's ledger.

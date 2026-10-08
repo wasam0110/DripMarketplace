@@ -4,26 +4,38 @@ app/integrations/resend_client.py
 Email delivery via Resend. All templates are inline HTML here.
 In v2 move templates to a dedicated templates/ folder with Jinja2.
 """
+
 from __future__ import annotations
 import asyncio
 import resend
 
 from app.core.config import settings
+from app.core.exceptions import ExternalServiceError
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
-resend.api_key = settings.RESEND_API_KEY
+
+def _configure_resend() -> None:
+    if not settings.RESEND_API_KEY:
+        raise ExternalServiceError("Email delivery is not configured")
+    resend.api_key = settings.RESEND_API_KEY
 
 
 class ResendClient:
     """Async adapter returning the provider receipt used by EmailLog."""
 
     async def send(self, *, to: str, subject: str, html: str) -> str:
-        response = await asyncio.to_thread(resend.Emails.send, {
-            "from": f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
-            "to": [to], "subject": subject, "html": html,
-        })
+        _configure_resend()
+        response = await asyncio.to_thread(
+            resend.Emails.send,
+            {
+                "from": f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
+                "to": [to],
+                "subject": subject,
+                "html": html,
+            },
+        )
         return response["id"]
 
 
@@ -40,11 +52,12 @@ async def send_email(
     """
     recipients = [to] if isinstance(to, str) else to
     try:
+        _configure_resend()
         params: resend.Emails.SendParams = {
-            "from":    f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
-            "to":      recipients,
+            "from": f"{settings.FROM_NAME} <{settings.FROM_EMAIL}>",
+            "to": recipients,
             "subject": subject,
-            "html":    html,
+            "html": html,
         }
         if reply_to:
             params["reply_to"] = reply_to
@@ -60,6 +73,7 @@ async def send_email(
 
 
 # ── Email templates ────────────────────────────────────────────────────────────
+
 
 def _base_template(title: str, body: str) -> str:
     return f"""<!DOCTYPE html>

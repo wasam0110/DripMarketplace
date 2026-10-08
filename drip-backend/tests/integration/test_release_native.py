@@ -154,6 +154,8 @@ async def test_concurrent_refund_confirmation_reverses_once(db, market, test_eng
 async def test_concurrent_payment_callbacks_preserve_one_transition(
     db, market, test_engine, monkeypatch
 ):
+    from unittest.mock import AsyncMock
+
     import app.services.payment_service as module
     from app.integrations.payfast import PayFastClient
 
@@ -162,16 +164,18 @@ async def test_concurrent_payment_callbacks_preserve_one_transition(
     order.payment_method, order.status = PaymentMethod.payfast, OrderStatus.pending_payment
     await db.commit()
     gateway = PayFastClient("test-merchant", "test-secret")
+    monkeypatch.setattr(gateway, "get_checkout_token", AsyncMock(return_value="test-token"))
     monkeypatch.setattr(module, "_build_payfast", lambda: gateway)
     initiated = await PaymentService(db).initiate(order.id, guest_token=created.guest_token)
     data = {
-        "order_id": str(order.id),
-        "amount": "2600.00",
-        "currency": "PKR",
-        "payment_status": "PAID",
+        "basket_id": str(order.id),
+        "txnamt": "2600.00",
+        "currency_code": "PKR",
+        "err_code": "000",
+        "err_msg": "Approved",
         "transaction_id": "race-txn",
     }
-    data["signature"] = gateway._sign(data)
+    data["validation_hash"] = gateway.callback_hash(basket_id=str(order.id), error_code="000")
     assert await race(
         test_engine, lambda session: PaymentService(session).handle_payfast_callback(data)
     ) == [None, None]

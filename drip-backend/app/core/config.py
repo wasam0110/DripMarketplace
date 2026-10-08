@@ -6,11 +6,11 @@ Every value comes from environment variables — never from code.
 Validated at startup: missing required vars crash immediately with a clear message.
 """
 
-from functools import lru_cache
 import os
+from functools import lru_cache
 from typing import Literal
 
-from pydantic import field_validator, model_validator, PostgresDsn
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -42,19 +42,21 @@ class Settings(BaseSettings):
     REDIS_URL: str  # redis://user:pass@host:6379/0
 
     # ── Auth — JWT (RS256) ────────────────────────────────────────────────────
-    JWT_PRIVATE_KEY: str          # PEM-encoded RS256 private key
-    JWT_PUBLIC_KEY: str           # PEM-encoded RS256 public key
+    JWT_PRIVATE_KEY: str  # PEM-encoded RS256 private key
+    JWT_PUBLIC_KEY: str  # PEM-encoded RS256 public key
     JWT_ALGORITHM: str = "RS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
     # ── Supabase ──────────────────────────────────────────────────────────────
     SUPABASE_URL: str
-    SUPABASE_SERVICE_ROLE_KEY: str   # NEVER expose to frontend
+    SUPABASE_SERVICE_ROLE_KEY: str  # NEVER expose to frontend
     SUPABASE_STORAGE_BUCKET_PRODUCTS: str = "products"
     SUPABASE_STORAGE_BUCKET_AVATARS: str = "avatars"
     SUPABASE_STORAGE_BUCKET_BRANDS: str = "brands"
     SUPABASE_STORAGE_BUCKET_INVOICES: str = "invoices"
+    # Destructive maintenance stays opt-in even when storage credentials exist.
+    SUPABASE_ORPHAN_CLEANUP_ENABLED: bool = False
 
     # ── Payments — Stripe ─────────────────────────────────────────────────────
     STRIPE_SECRET_KEY: str = ""
@@ -104,7 +106,9 @@ class Settings(BaseSettings):
             raise ValueError("COMMISSION_RATE must be between 0 and 1 (e.g. 0.15 for 15%)")
         return v
 
-    @field_validator("ALLOWED_ORIGINS", mode="before")
+    @field_validator(
+        "ALLOWED_ORIGINS", "PAYFAST_IPN_IPS", "PAYFAST_TRUSTED_PROXY_IPS", mode="before"
+    )
     @classmethod
     def parse_origins(cls, v: str | list[str]) -> list[str]:
         if isinstance(v, str):
@@ -116,29 +120,56 @@ class Settings(BaseSettings):
         """In production, critical secrets must be set."""
         if self.ENVIRONMENT == "production":
             required = [
-                "JWT_PRIVATE_KEY", "JWT_PUBLIC_KEY",
-                "SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY",
+                "JWT_PRIVATE_KEY",
+                "JWT_PUBLIC_KEY",
+                "SUPABASE_URL",
+                "SUPABASE_SERVICE_ROLE_KEY",
                 "RESEND_API_KEY",
             ]
             missing = [k for k in required if not getattr(self, k, "")]
             if missing:
-                raise ValueError(
-                    f"Production environment is missing required secrets: {missing}"
-                )
+                raise ValueError(f"Production environment is missing required secrets: {missing}")
+        if self.PAYFAST_ENABLED:
+            payfast_required = [
+                "PAYFAST_MERCHANT_ID",
+                "PAYFAST_SECURED_KEY",
+                "PAYFAST_MERCHANT_NAME",
+            ]
+            missing = [key for key in payfast_required if not getattr(self, key, "").strip()]
+            if missing:
+                raise ValueError(f"Enabled PayFast is missing configuration: {missing}")
+            if self.ENVIRONMENT == "production":
+                if self.PAYFAST_SANDBOX:
+                    raise ValueError("PAYFAST_SANDBOX must be false in production")
+                for name in ("FRONTEND_URL", "API_BASE_URL"):
+                    if not getattr(self, name).startswith("https://"):
+                        raise ValueError(f"{name} must use HTTPS when PayFast is enabled")
+        if bool(self.GOOGLE_CLIENT_ID) != bool(self.GOOGLE_CLIENT_SECRET):
+            raise ValueError("Google OAuth requires both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET")
+        if self.ENVIRONMENT == "production" and self.FROM_EMAIL.endswith("@example.com"):
+            raise ValueError("FROM_EMAIL must use a verified production domain")
         return self
 
-
     # ── Payments — PayFast ───────────────────────────────────────────────────
-    PAYFAST_MERCHANT_ID: str  = ""
-    PAYFAST_SECURED_KEY: str  = ""
-    PAYFAST_SANDBOX:     bool = True
+    PAYFAST_MERCHANT_ID: str = ""
+    PAYFAST_SECURED_KEY: str = ""
+    PAYFAST_MERCHANT_NAME: str = "WearHowZ"
+    PAYFAST_SANDBOX: bool = True
+    # Leave endpoint overrides empty to use the documented Pakistan UAT/live hosted URLs.
+    PAYFAST_TOKEN_URL: str = ""
+    PAYFAST_CHECKOUT_URL: str = ""
+    # PayFast supplies an API base URL separately when status-query access is enabled.
+    PAYFAST_API_BASE_URL: str = ""
+    PAYFAST_REQUEST_TIMEOUT_SECONDS: int = 15
     # Enable only after the merchant-specific protocol and sandbox flow are verified.
-    PAYFAST_ENABLED:    bool      = False
+    PAYFAST_ENABLED: bool = False
     # Comma-separated list of PayFast IPN server IPs for allowlisting.
     # Empty list = accept from any IP (safe for sandbox / local dev).
     # Populate with PayFast Pakistan's published IPN IP ranges before go-live.
     # REQUIRES_LIVE_VERIFICATION: obtain IP list from PayFast Pakistan support.
-    PAYFAST_IPN_IPS:    list[str] = []
+    PAYFAST_IPN_IPS: list[str] = []
+    # Forwarding headers are ignored unless the direct peer is in this list.
+    PAYFAST_TRUSTED_PROXY_IPS: list[str] = []
     GUEST_ORDER_TOKEN_DAYS: int = 7
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
@@ -146,6 +177,7 @@ class Settings(BaseSettings):
     # ── App URLs ──────────────────────────────────────────────────────────────
     FRONTEND_URL: str = "http://localhost:3000"
     API_BASE_URL: str = "http://localhost:8000"
+
     # ── Derived properties ────────────────────────────────────────────────────
     @property
     def is_development(self) -> bool:

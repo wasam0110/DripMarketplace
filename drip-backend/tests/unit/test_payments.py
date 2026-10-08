@@ -1,12 +1,14 @@
 """Unit tests — Block 6: Payments. No DB required."""
+
 import pytest
 from pydantic import ValidationError
 
 from app.schemas.payment import (
     InitiatePaymentRequest,
-    RetryPaymentRequest,
     RefundRequest,
+    RetryPaymentRequest,
 )
+
 
 class TestPaymentSchemas:
     def test_initiate_valid(self):
@@ -33,216 +35,201 @@ class TestPaymentSchemas:
         with pytest.raises(ValidationError):
             RefundRequest(amount=500, reason="bad")
 
-    
-class TestPayFastAdapter:
-    """
-    Unit tests for PayFastClient.
 
-    These tests exercise the adapter in isolation — no real network calls,
-    no DB, no credentials required.  They prove the contract that:
-      - Signatures are deterministic and tamper-evident.
-      - build_checkout_payload includes all required fields with a valid signature.
-      - parse_ipn correctly maps all PayFast status strings, including REFUNDED.
-      - parse_ipn rejects bad signatures, unsupported statuses, and invalid amounts.
-      - check_status builds a signed GET request to the correct endpoint.
+class TestPayFastHostedCheckout:
+    def make_client(self, handler, *, sandbox=True, api_base_url=""):
+        import httpx
 
-    Live verification items (marked REQUIRES_LIVE_VERIFICATION in the adapter)
-    must be confirmed with a real PayFast Pakistan sandbox account before
-    PAYFAST_ENABLED is set to true.
-    """
-
-    def setup_method(self):
         from app.integrations.payfast import PayFastClient
-        self.pf = PayFastClient(
-            merchant_id="TEST_MERCHANT",
-            secured_key="test_secured_key_abc",
-            sandbox=True,
+
+        http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        return (
+            PayFastClient(
+                "MERCHANT-1",
+                "secret-key",
+                "WearHowZ",
+                sandbox,
+                api_base_url=api_base_url,
+                http_client=http,
+            ),
+            http,
         )
 
-    # ── Signature ─────────────────────────────────────────────────────────────
+    @pytest.mark.asyncio
+    async def test_token_request_matches_documented_form_and_returns_token(self):
+        from urllib.parse import parse_qs
 
-    def test_sign_is_deterministic(self):
-        params = {"amount": "2600.00", "order_id": "ORD-001", "currency": "PKR"}
-        assert self.pf._sign(params) == self.pf._sign(params)
+        import httpx
 
-    def test_sign_excludes_signature_field(self):
-        params_with = {"amount": "2600.00", "signature": "old_value"}
-        params_without = {"amount": "2600.00"}
-        assert self.pf._sign(params_with) == self.pf._sign(params_without)
+        requests = []
 
-    def test_sign_excludes_empty_values(self):
-        params_with_empty = {"amount": "2600.00", "customer_email": ""}
-        params_without = {"amount": "2600.00"}
-        assert self.pf._sign(params_with_empty) == self.pf._sign(params_without)
+        def handler(request):
+            requests.append(request)
+            return httpx.Response(
+                200, json={"MERCHANT_ID": "MERCHANT-1", "ACCESS_TOKEN": "one-time-token"}
+            )
 
-    def test_sign_is_order_independent(self):
-        p1 = {"a_field": "x", "b_field": "y"}
-        p2 = {"b_field": "y", "a_field": "x"}
-        assert self.pf._sign(p1) == self.pf._sign(p2)
-
-    def test_sign_different_key_different_result(self):
-        from app.integrations.payfast import PayFastClient
-        pf2 = PayFastClient("mid", "different_key")
-        params = {"amount": "100.00"}
-        assert self.pf._sign(params) != pf2._sign(params)
-
-    def test_sign_tampered_value_changes_result(self):
-        params = {"amount": "2600.00", "order_id": "ORD-001"}
-        sig1 = self.pf._sign(params)
-        tampered = {**params, "amount": "1.00"}
-        assert self.pf._sign(tampered) != sig1
-
-    # ── build_checkout_payload ────────────────────────────────────────────────
-
-    def test_checkout_payload_required_fields_present(self):
-        from decimal import Decimal
-        payload = self.pf.build_checkout_payload(
-            order_id="ORD-001",
-            amount=Decimal("2600.00"),
-            description="WearHowZ order WH-000001",
-            return_url="https://example.com/success",
-            cancel_url="https://example.com/cancel",
-            ipn_url="https://api.example.com/callback/payfast",
-        )
-        for field in ("merchant_id", "order_id", "currency", "amount",
-                      "description", "return_url", "cancel_url", "ipn_url", "signature"):
-            assert field in payload, f"Missing field: {field}"
-
-    def test_checkout_payload_amount_formatted_to_two_dp(self):
-        from decimal import Decimal
-        payload = self.pf.build_checkout_payload(
-            order_id="ORD-002", amount=Decimal("999"), description="Test",
-            return_url="https://r.test", cancel_url="https://c.test",
-            ipn_url="https://i.test",
-        )
-        assert payload["amount"] == "999.00"
-
-    def test_checkout_payload_signature_is_self_consistent(self):
-        from decimal import Decimal
-        payload = self.pf.build_checkout_payload(
-            order_id="ORD-003", amount=Decimal("1200.00"), description="d",
-            return_url="https://r", cancel_url="https://c", ipn_url="https://i",
-        )
-        without_sig = {k: v for k, v in payload.items() if k != "signature"}
-        assert payload["signature"] == self.pf._sign(without_sig)
-
-    def test_checkout_payload_optional_email_and_name_included(self):
-        from decimal import Decimal
-        payload = self.pf.build_checkout_payload(
-            order_id="ORD-004", amount=Decimal("500.00"), description="d",
-            return_url="r", cancel_url="c", ipn_url="i",
-            customer_email="buyer@test.com", customer_name="Ali Khan",
-        )
-        assert payload["customer_email"] == "buyer@test.com"
-        assert payload["customer_name"] == "Ali Khan"
-
-    def test_checkout_payload_description_truncated_at_255(self):
-        from decimal import Decimal
-        payload = self.pf.build_checkout_payload(
-            order_id="ORD-005", amount=Decimal("100.00"),
-            description="x" * 300,
-            return_url="r", cancel_url="c", ipn_url="i",
-        )
-        assert len(payload["description"]) == 255
-
-    def test_sandbox_flag_reflected_in_base_url(self):
-        assert "sandbox" in self.pf.base_url
-
-    def test_live_flag_uses_live_url(self):
-        from app.integrations.payfast import PayFastClient
-        pf_live = PayFastClient("mid", "key", sandbox=False)
-        assert "sandbox" not in pf_live.base_url
-
-    # ── verify_ipn ────────────────────────────────────────────────────────────
-
-    def test_verify_ipn_valid_signature(self):
-        raw = {
-            "order_id": "ORD-001", "payment_status": "PAID",
-            "amount": "2600.00", "currency": "PKR", "transaction_id": "TXN001",
+        client, http = self.make_client(handler)
+        try:
+            token = await client.get_checkout_token(basket_id="ORDER-1", amount=100)
+        finally:
+            await http.aclose()
+        assert token == "one-time-token"
+        assert requests[0].url.path.endswith("/GetAccessToken")
+        assert parse_qs(requests[0].content.decode()) == {
+            "MERCHANT_ID": ["MERCHANT-1"],
+            "SECURED_KEY": ["secret-key"],
+            "BASKET_ID": ["ORDER-1"],
+            "TXNAMT": ["100.00"],
+            "CURRENCY_CODE": ["PKR"],
         }
-        raw["signature"] = self.pf._sign(raw)
-        assert self.pf.verify_ipn(raw) is True
 
-    def test_verify_ipn_tampered_returns_false(self):
-        raw = {
-            "order_id": "ORD-001", "payment_status": "PAID",
-            "amount": "2600.00", "currency": "PKR", "transaction_id": "TXN001",
-            "signature": "completely_wrong_signature",
-        }
-        assert self.pf.verify_ipn(raw) is False
+    @pytest.mark.asyncio
+    async def test_token_response_rejects_merchant_mismatch_and_missing_token(self):
+        import httpx
 
-    def test_verify_ipn_missing_signature_returns_false(self):
-        raw = {"order_id": "ORD-001", "payment_status": "PAID", "amount": "2600.00"}
-        assert self.pf.verify_ipn(raw) is False
+        from app.integrations.payfast import PayFastProtocolError
 
-    # ── parse_ipn ─────────────────────────────────────────────────────────────
+        responses = iter(
+            [
+                {"MERCHANT_ID": "OTHER", "ACCESS_TOKEN": "token"},
+                {"MERCHANT_ID": "MERCHANT-1", "MESSAGE": "declined"},
+            ]
+        )
+        client, http = self.make_client(lambda request: httpx.Response(200, json=next(responses)))
+        try:
+            with pytest.raises(PayFastProtocolError, match="merchant mismatch"):
+                await client.get_checkout_token(basket_id="ORDER-1", amount=100)
+            with pytest.raises(PayFastProtocolError, match="declined"):
+                await client.get_checkout_token(basket_id="ORDER-1", amount=100)
+        finally:
+            await http.aclose()
 
-    def _signed_ipn(self, extra: dict) -> dict:
-        base = {
-            "order_id": "ORD-001", "payment_status": "PAID",
-            "amount": "2600.00", "currency": "PKR", "transaction_id": "TXN001",
-        }
-        base.update(extra)
-        base["signature"] = self.pf._sign({k: str(v) for k, v in base.items()})
-        return base
-
-    def test_parse_ipn_paid_maps_to_completed(self):
+    def test_checkout_payload_uses_documented_fields_without_secured_key(self):
+        from datetime import date
         from decimal import Decimal
-        result = self.pf.parse_ipn(self._signed_ipn({"payment_status": "PAID"}))
-        assert result["status"] == "completed"
-        assert result["amount"] == Decimal("2600.00")
-        assert result["txn_id"] == "TXN001"
-        assert result["order_id"] == "ORD-001"
 
-    def test_parse_ipn_failed_maps_to_failed(self):
-        result = self.pf.parse_ipn(self._signed_ipn({"payment_status": "FAILED"}))
-        assert result["status"] == "failed"
+        import httpx
 
-    def test_parse_ipn_pending_maps_to_pending(self):
-        result = self.pf.parse_ipn(self._signed_ipn({"payment_status": "PENDING"}))
-        assert result["status"] == "pending"
+        client, http = self.make_client(lambda request: httpx.Response(500))
+        payload = client.build_checkout_payload(
+            token="one-time-token",
+            basket_id="ORDER-1",
+            amount=Decimal("2600"),
+            description="WearHowZ order WH-1",
+            success_url="https://shop.test/success",
+            failure_url="https://shop.test/failure",
+            checkout_url="https://api.test/callback",
+            customer_email="Buyer@Example.com",
+            customer_mobile="03001234567",
+            order_date=date(2026, 10, 7),
+        )
+        assert payload == {
+            **payload,
+            "MERCHANT_ID": "MERCHANT-1",
+            "MERCHANT_NAME": "WearHowZ",
+            "TOKEN": "one-time-token",
+            "PROCCODE": "00",
+            "TXNAMT": "2600.00",
+            "CUSTOMER_MOBILE_NO": "03001234567",
+            "CUSTOMER_EMAIL_ADDRESS": "buyer@example.com",
+            "VERSION": "WHZ-1.0",
+            "TXNDESC": "WearHowZ order WH-1",
+            "SUCCESS_URL": "https://shop.test/success",
+            "FAILURE_URL": "https://shop.test/failure",
+            "BASKET_ID": "ORDER-1",
+            "ORDER_DATE": "2026-10-07",
+            "CHECKOUT_URL": "https://api.test/callback",
+            "CURRENCY_CODE": "PKR",
+        }
+        assert payload["SIGNATURE"]
+        assert "SECURED_KEY" not in payload
+        assert client.checkout_url.endswith("/PostTransaction")
+        assert "ipguat.apps.net.pk" in client.checkout_url
+        import asyncio
 
-    def test_parse_ipn_refunded_maps_to_refunded(self):
-        """
-        Bug fix: REFUNDED is a valid PayFast IPN status (chargebacks).
-        The previous implementation rejected it with ValueError.
-        """
-        result = self.pf.parse_ipn(self._signed_ipn({"payment_status": "REFUNDED"}))
-        assert result["status"] == "refunded"
+        asyncio.run(http.aclose())
 
-    def test_parse_ipn_invalid_signature_raises(self):
-        payload = self._signed_ipn({})
-        payload["signature"] = "bad_sig"
-        with pytest.raises(ValueError, match="signature"):
-            self.pf.parse_ipn(payload)
+    def test_callback_verification_success_failure_and_tampering(self):
+        import httpx
 
-    def test_parse_ipn_unsupported_status_raises(self):
-        payload = self._signed_ipn({"payment_status": "CANCELLED"})
-        with pytest.raises(ValueError, match="CANCELLED"):
-            self.pf.parse_ipn(payload)
+        from app.integrations.payfast import PayFastProtocolError
 
-    def test_parse_ipn_zero_amount_raises(self):
-        payload = self._signed_ipn({"amount": "0.00"})
-        with pytest.raises(ValueError, match="amount"):
-            self.pf.parse_ipn(payload)
+        client, http = self.make_client(lambda request: httpx.Response(500))
+        success = {
+            "basket_id": "ORDER-1",
+            "err_code": "000",
+            "err_msg": "Approved",
+            "transaction_id": "TXN-1",
+        }
+        success["validation_hash"] = client.callback_hash(basket_id="ORDER-1", error_code="000")
+        parsed = client.parse_callback(success)
+        assert parsed["status"] == "completed"
+        assert parsed["amount"] is None
+        failed = {**success, "err_code": "101", "err_msg": "Declined"}
+        failed["validation_hash"] = client.callback_hash(basket_id="ORDER-1", error_code="101")
+        assert client.parse_callback(failed)["status"] == "failed"
+        with pytest.raises(PayFastProtocolError, match="validation hash"):
+            client.parse_callback({**success, "validation_hash": "forged"})
+        import asyncio
 
-    def test_parse_ipn_negative_amount_raises(self):
-        payload = self._signed_ipn({"amount": "-100.00"})
-        with pytest.raises(ValueError, match="amount"):
-            self.pf.parse_ipn(payload)
+        asyncio.run(http.aclose())
 
-    def test_parse_ipn_non_numeric_amount_raises(self):
-        payload = self._signed_ipn({"amount": "abc"})
-        with pytest.raises(ValueError):
-            self.pf.parse_ipn(payload)
+    @pytest.mark.asyncio
+    async def test_status_reconciliation_uses_bearer_token_and_basket_path(self):
+        from datetime import date
+        from urllib.parse import parse_qs
 
-    def test_parse_ipn_unconfigured_client_raises(self):
-        from app.integrations.payfast import PayFastClient
-        pf_empty = PayFastClient("", "", sandbox=True)
-        with pytest.raises(ValueError, match="not configured"):
-            pf_empty.parse_ipn({})
+        import httpx
 
-    def test_parse_ipn_raw_is_preserved(self):
-        payload = self._signed_ipn({})
-        result = self.pf.parse_ipn(payload)
-        assert result["raw"] == payload
+        requests = []
+
+        def handler(request):
+            requests.append(request)
+            if request.url.path.endswith("/token"):
+                assert parse_qs(request.content.decode())["grant_type"] == ["client_credentials"]
+                return httpx.Response(200, json={"access_token": "api-token"})
+            assert request.headers["Authorization"] == "Bearer api-token"
+            return httpx.Response(200, json={"basket_id": "ORDER-1", "code": "00"})
+
+        client, http = self.make_client(handler, api_base_url="https://api.test")
+        try:
+            result = await client.check_status(
+                basket_id="ORDER-1",
+                order_date=date(2026, 10, 7),
+                customer_ip="203.0.113.1",
+            )
+        finally:
+            await http.aclose()
+        assert result["code"] == "00"
+        assert requests[1].url.path == "/transaction/basket_id/ORDER-1"
+        assert dict(requests[1].url.params) == {
+            "order_date": "2026-10-07",
+            "customer_ip": "203.0.113.1",
+        }
+
+    def test_live_urls_and_invalid_amount(self):
+        from decimal import Decimal
+
+        import httpx
+
+        from app.integrations.payfast import PayFastProtocolError
+
+        client, http = self.make_client(lambda request: httpx.Response(500), sandbox=False)
+        assert "ipg1.apps.net.pk" in client.token_url
+        with pytest.raises(PayFastProtocolError, match="positive"):
+            client.build_checkout_payload(
+                token="token",
+                basket_id="ORDER-1",
+                amount=Decimal("0"),
+                description="x",
+                success_url="https://shop.test/success",
+                failure_url="https://shop.test/failure",
+                checkout_url="https://api.test/callback",
+                customer_email="buyer@example.com",
+                customer_mobile="03001234567",
+                order_date=__import__("datetime").date(2026, 10, 7),
+            )
+        import asyncio
+
+        asyncio.run(http.aclose())
