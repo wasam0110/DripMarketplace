@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
+from decimal import Decimal
 from uuid import UUID
 
 import httpx
@@ -16,12 +17,18 @@ from app.models.order import OrderStatus, PaymentMethod, SellerOrderStatus
 from app.models.payment import Payment, PaymentCallback, PaymentStatus, Refund
 from app.repositories.payment_repo import PaymentRepository
 from app.schemas.payment import (
+    AdminRefundDetailResponse,
+    AdminRefundRowResponse,
     GatewayStatusResponse,
     PaginatedPayments,
+    PaginatedRefunds,
     PayFastReconcileResponse,
     PaymentInitResponse,
+    PaymentRefundHistoryResponse,
     PaymentRowResponse,
     PaymentStatusResponse,
+    RefundHistoryEvent,
+    RefundPaymentBalanceResponse,
     RefundRequest,
     RefundResponse,
     RetryPaymentRequest,
@@ -385,7 +392,7 @@ class PaymentService:
             payment_id=payment.id,
             amount=payload.amount,
             reason=payload.reason,
-            processed_by=admin_id,
+            requested_by=admin_id,
             idempotency_key=payload.idempotency_key,
         )
         self.db.add(refund)
@@ -485,6 +492,109 @@ class PaymentService:
             created_at=refund.created_at,
             status="completed" if refund.processed_at else "pending",
             processed_at=refund.processed_at,
+        )
+
+    async def list_admin_refunds(
+        self, status: str | None = None, payment_id: UUID | None = None, page: int = 1
+    ) -> PaginatedRefunds:
+        rows, total = await self.payment_repo.list_refunds_admin(
+            status=status, payment_id=payment_id, page=page
+        )
+        return PaginatedRefunds(
+            data=[self._refund_admin_row(refund) for refund in rows],
+            total=total,
+            page=page,
+        )
+
+    async def get_admin_refund(self, refund_id: UUID) -> AdminRefundDetailResponse:
+        refund = await self.payment_repo.get_refund_admin(refund_id)
+        if not refund:
+            raise NotFoundError("Refund not found")
+        history = [
+            RefundHistoryEvent(
+                event="requested",
+                occurred_at=refund.created_at,
+                actor_id=refund.requested_by,
+            )
+        ]
+        if refund.processed_at:
+            history.append(
+                RefundHistoryEvent(
+                    event="completed",
+                    occurred_at=refund.processed_at,
+                    actor_id=refund.processed_by,
+                    transfer_reference=refund.gateway_ref,
+                )
+            )
+        return AdminRefundDetailResponse(
+            **self._refund_admin_row(refund).model_dump(),
+            payment=self._refund_payment_balance(refund.payment),
+            history=history,
+        )
+
+    async def get_payment_refund_history(
+        self, payment_id: UUID
+    ) -> PaymentRefundHistoryResponse:
+        payment = await self.payment_repo.get_payment_refunds(payment_id)
+        if not payment:
+            raise NotFoundError("Payment not found")
+        refunds = sorted(
+            payment.refunds,
+            key=lambda refund: (refund.created_at, refund.id),
+            reverse=True,
+        )
+        return PaymentRefundHistoryResponse(
+            **self._refund_payment_balance(payment).model_dump(),
+            refunds=[self._refund_admin_row(refund, payment) for refund in refunds],
+        )
+
+    @staticmethod
+    def _refund_admin_row(
+        refund: Refund, payment: Payment | None = None
+    ) -> AdminRefundRowResponse:
+        payment = payment or refund.payment
+        return AdminRefundRowResponse(
+            refund_id=refund.id,
+            payment_id=refund.payment_id,
+            order_id=payment.order_id,
+            order_number=payment.order.order_number,
+            return_id=refund.return_id,
+            status="completed" if refund.processed_at else "pending",
+            amount=refund.amount,
+            reason=refund.reason or "",
+            transfer_reference=refund.gateway_ref,
+            requested_by=refund.requested_by,
+            confirmed_by=refund.processed_by if refund.processed_at else None,
+            requested_at=refund.created_at,
+            processed_at=refund.processed_at,
+        )
+
+    @staticmethod
+    def _refund_payment_balance(payment: Payment) -> RefundPaymentBalanceResponse:
+        pending = sum(
+            (refund.amount for refund in payment.refunds if not refund.processed_at),
+            Decimal("0"),
+        )
+        completed = sum(
+            (refund.amount for refund in payment.refunds if refund.processed_at),
+            Decimal("0"),
+        )
+        reserved = pending + completed
+        remaining = max(payment.amount - reserved, Decimal("0"))
+        return RefundPaymentBalanceResponse(
+            payment_id=payment.id,
+            order_id=payment.order_id,
+            order_number=payment.order.order_number,
+            payment_status=payment.status.value,
+            payment_method=payment.method,
+            payment_amount=payment.amount,
+            pending_refund_amount=pending,
+            completed_refund_amount=completed,
+            reserved_refund_amount=reserved,
+            remaining_refundable_amount=remaining,
+            can_request_refund=(
+                payment.status == PaymentStatus.completed and remaining > Decimal("0")
+            ),
         )
 
     async def record_cod_collection(self, payment_id: UUID, admin_id: UUID, reference: str):

@@ -1,16 +1,21 @@
 from __future__ import annotations
 
-from uuid import UUID
-from typing import Optional, Sequence
 from datetime import datetime
+from typing import Optional, Sequence
+from uuid import UUID
 
-from sqlalchemy import select, update, func, desc
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.order import SellerOrder
 from app.models.return_ import (
-    Return, ReturnItem, ReturnStatus,
-    Dispute, DisputeMessage, DisputeStatus,
+    Dispute,
+    DisputeMessage,
+    DisputeStatus,
+    Return,
+    ReturnItem,
+    ReturnStatus,
 )
 
 
@@ -32,7 +37,11 @@ class ReturnRepository:
         return item
 
     async def get_by_id(
-        self, return_id: UUID, user_id: Optional[UUID] = None
+        self,
+        return_id: UUID,
+        user_id: Optional[UUID] = None,
+        *,
+        for_update: bool = False,
     ) -> Optional[Return]:
         q = select(Return).options(
             selectinload(Return.items),
@@ -40,7 +49,9 @@ class ReturnRepository:
         ).where(Return.id == return_id)
         if user_id:
             q = q.where(Return.user_id == user_id)
-        result = await self.db.execute(q)
+        if for_update:
+            q = q.with_for_update()
+        result = await self.db.execute(q.execution_options(populate_existing=True))
         return result.scalar_one_or_none()
 
     async def list_by_user(
@@ -68,6 +79,48 @@ class ReturnRepository:
         q = q.order_by(desc(Return.requested_at)).offset((page - 1) * per_page).limit(per_page)
         result = await self.db.execute(q)
         return result.scalars().all(), total
+
+    async def get_by_seller(
+        self, return_id: UUID, seller_id: UUID, *, for_update: bool = False
+    ) -> Optional[Return]:
+        query = (
+            select(Return)
+            .join(SellerOrder, SellerOrder.id == Return.seller_order_id)
+            .options(
+                selectinload(Return.items),
+                selectinload(Return.dispute).selectinload(Dispute.messages),
+            )
+            .where(Return.id == return_id, SellerOrder.seller_id == seller_id)
+            .execution_options(populate_existing=True)
+        )
+        if for_update:
+            query = query.with_for_update(of=Return)
+        result = await self.db.execute(query)
+        return result.scalar_one_or_none()
+
+    async def list_seller(
+        self,
+        seller_id: UUID,
+        status: Optional[str] = None,
+        page: int = 1,
+        per_page: int = 25,
+    ) -> tuple[Sequence[Return], int]:
+        q = (
+            select(Return)
+            .join(SellerOrder, SellerOrder.id == Return.seller_order_id)
+            .options(selectinload(Return.items))
+            .where(SellerOrder.seller_id == seller_id)
+        )
+        if status:
+            q = q.where(Return.status == ReturnStatus(status))
+
+        total = (await self.db.execute(select(func.count()).select_from(q.subquery()))).scalar_one()
+        rows = await self.db.execute(
+            q.order_by(desc(Return.requested_at))
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        return rows.scalars().all(), total
 
     async def update_status(
         self,
@@ -97,20 +150,30 @@ class DisputeRepository:
         await self.db.refresh(d)
         return d
 
-    async def get_by_id(self, dispute_id: UUID) -> Optional[Dispute]:
-        result = await self.db.execute(
+    async def get_by_id(
+        self, dispute_id: UUID, *, for_update: bool = False
+    ) -> Optional[Dispute]:
+        query = (
             select(Dispute)
             .options(selectinload(Dispute.messages))
             .where(Dispute.id == dispute_id)
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_by_return_id(self, return_id: UUID) -> Optional[Dispute]:
-        result = await self.db.execute(
+    async def get_by_return_id(
+        self, return_id: UUID, *, for_update: bool = False
+    ) -> Optional[Dispute]:
+        query = (
             select(Dispute)
             .options(selectinload(Dispute.messages))
             .where(Dispute.return_id == return_id)
         )
+        if for_update:
+            query = query.with_for_update()
+        result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
     async def add_message(self, **kwargs) -> DisputeMessage:

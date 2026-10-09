@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 from types import SimpleNamespace
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -14,13 +14,19 @@ from app.core.exceptions import (
     NotFoundError,
     PermissionDeniedError,
 )
+from app.models.admin import SystemSetting
 from app.models.coupon import Coupon, DiscountType
 from app.models.order import Order, OrderStatus, SellerOrder
-from app.models.payment import Payment, PaymentStatus
+from app.models.payment import Payment, PaymentStatus, Refund
 from app.models.product import Product, ProductImage, ProductInventory, ProductVariant, SizeType
 from app.models.seller import Seller, SellerStatus, SellerWallet
 from app.models.user import User, UserRole
-from app.schemas.order import CreateGuestOrderRequest, CreateOrderRequest, UpdateSellerOrderRequest
+from app.schemas.order import (
+    CreateGuestOrderRequest,
+    CreateOrderRequest,
+    GuestCheckoutQuoteRequest,
+    UpdateSellerOrderRequest,
+)
 from app.schemas.payment import RefundRequest
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
@@ -138,6 +144,119 @@ async def test_guest_checkout_payment_idempotence_and_access(db, market):
     assert market.inventory.reserved == 2
 
 
+async def test_guest_quote_is_authoritative_public_and_read_only(db, market, client):
+    db.add_all(
+        [
+            SystemSetting(key="standard_shipping_fee", value="300"),
+            SystemSetting(key="free_shipping_threshold", value="3000"),
+        ]
+    )
+    await db.commit()
+
+    response = await client.post(
+        "/api/v1/orders/guest/quote",
+        json={"items": [{"variant_id": str(market.variant.id), "quantity": 2}]},
+    )
+
+    assert response.status_code == 200
+    quote = response.json()
+    assert quote["item_count"] == 2
+    assert Decimal(quote["subtotal"]) == Decimal("2400.00")
+    assert Decimal(quote["discount_amount"]) == Decimal("0")
+    assert Decimal(quote["shipping_fee"]) == Decimal("300")
+    assert Decimal(quote["total"]) == Decimal("2700.00")
+    assert Decimal(quote["free_shipping_threshold"]) == Decimal("3000")
+    assert Decimal(quote["amount_until_free_shipping"]) == Decimal("600.00")
+    assert quote["currency"] == "PKR"
+    assert quote["coupon_requires_sign_in"] is True
+    assert quote["will_revalidate_on_order"] is True
+    assert len(quote["items"]) == 1
+    item = quote["items"][0]
+    assert item["variant_id"] == str(market.variant.id)
+    assert item["product_id"] == str(market.product.id)
+    assert item["product_name"] == "Linen Shirt"
+    assert item["brand_name"] == "Test Brand"
+    assert item["brand_color"] == "#DFFF00"
+    assert item["primary_image"] == "https://example.test/image.webp"
+    assert item["size"] == "M"
+    assert item["colour"] == "Ivory"
+    assert Decimal(item["unit_price"]) == Decimal("1200.00")
+    assert item["quantity"] == 2
+    assert Decimal(item["subtotal"]) == Decimal("2400.00")
+    assert item["available_stock"] == 8
+    assert item["seller_id"] == str(market.seller.id)
+    methods = {item["method"]: item for item in quote["payment_methods"]}
+    assert methods["cod"] == {
+        "method": "cod",
+        "available": True,
+        "unavailable_reason": None,
+    }
+    assert methods["payfast"]["available"] is False
+    assert methods["payfast"]["unavailable_reason"]
+    assert await db.scalar(select(func.count(Order.id))) == 0
+    await db.refresh(market.inventory)
+    assert market.inventory.reserved == 0
+
+
+async def test_guest_quote_merges_duplicates_and_matches_created_order(db, market):
+    items = [
+        {"variant_id": market.variant.id, "quantity": 1},
+        {"variant_id": market.variant.id, "quantity": 2},
+    ]
+    service = OrderService(db)
+    quote = await service.quote_guest_checkout(GuestCheckoutQuoteRequest(items=items))
+    assert len(quote.items) == 1
+    assert quote.items[0].quantity == 3
+
+    created = await service.create_guest_order(
+        CreateGuestOrderRequest(
+            shipping_address=ADDRESS,
+            payment_method="cod",
+            guest_email="guest@example.com",
+            guest_name="Guest Customer",
+            guest_phone="03001234567",
+            items=items,
+        )
+    )
+    assert created.total == quote.total
+
+
+async def test_guest_quote_reports_payment_availability(db, market, monkeypatch):
+    monkeypatch.setattr("app.services.order_service.settings.MAX_COD_ORDER_AMOUNT", 1000)
+    monkeypatch.setattr("app.services.order_service.settings.PAYFAST_ENABLED", True)
+
+    quote = await OrderService(db).quote_guest_checkout(
+        GuestCheckoutQuoteRequest(
+            items=[{"variant_id": market.variant.id, "quantity": 2}]
+        )
+    )
+    methods = {item.method: item for item in quote.payment_methods}
+    assert methods["cod"].available is False
+    assert "PKR 1,000" in methods["cod"].unavailable_reason
+    assert methods["payfast"].available is True
+    assert methods["payfast"].unavailable_reason is None
+
+
+async def test_guest_quote_rejects_coupon_and_unavailable_stock(db, market):
+    service = OrderService(db)
+    with pytest.raises(BusinessRuleError, match="Sign in to use a coupon"):
+        await service.quote_guest_checkout(
+            GuestCheckoutQuoteRequest(
+                items=[{"variant_id": market.variant.id, "quantity": 1}],
+                coupon_code="SAVE",
+            )
+        )
+
+    market.inventory.reserved = market.inventory.stock
+    await db.commit()
+    with pytest.raises(BusinessRuleError, match="Insufficient stock"):
+        await service.quote_guest_checkout(
+            GuestCheckoutQuoteRequest(
+                items=[{"variant_id": market.variant.id, "quantity": 1}]
+            )
+        )
+
+
 async def test_coupon_changes_persisted_order_and_seller_totals(db, market, isolated_redis):
     coupon = Coupon(
         code="SAVE",
@@ -236,6 +355,139 @@ async def test_refund_request_is_pending_capped_and_idempotent(db, market):
     confirmed = await service.confirm_refund(refund.refund_id, market.admin.id, "BANK-TRANSFER-001")
     assert confirmed.status == "completed"
     assert payment.status == PaymentStatus.completed  # partial refund
+
+
+async def test_admin_refund_queue_detail_history_and_balances(client, db, market):
+    second_admin = User(
+        email="refund-confirmer@example.com",
+        password_hash="test-only",
+        role=UserRole.admin,
+        has_verified_email=True,
+    )
+    db.add(second_admin)
+    await db.flush()
+
+    created = await OrderService(db).create_guest_order(guest_payload(market))
+    initiated = await PaymentService(db).initiate(
+        created.order_id, guest_token=created.guest_token
+    )
+    payment = await db.get(Payment, initiated.payment_id)
+    payment.status = PaymentStatus.completed
+    payment.paid_at = datetime.now(UTC)
+    await db.commit()
+
+    service = PaymentService(db)
+    requested = await service.refund(
+        payment.id,
+        market.admin.id,
+        RefundRequest(
+            amount="600.00",
+            reason="Partial refund requested by customer",
+            idempotency_key="admin-read-refund-001",
+        ),
+    )
+    stored = await db.get(Refund, requested.refund_id)
+    assert stored.requested_by == market.admin.id
+    assert stored.processed_by is None
+
+    base = "/api/v1/payments"
+    admin_headers = actor_headers(market.admin)
+    confirmer_headers = actor_headers(second_admin)
+    denied = await client.get(base + "/refunds", headers=actor_headers(market.buyer))
+    assert denied.status_code == 403
+
+    pending = await client.get(base + "/refunds?status=pending", headers=admin_headers)
+    assert pending.status_code == 200, pending.text
+    assert pending.json()["total"] == 1
+    row = pending.json()["data"][0]
+    assert row["refund_id"] == str(requested.refund_id)
+    assert row["order_number"] == created.order_number
+    assert row["requested_by"] == str(market.admin.id)
+    assert row["confirmed_by"] is None
+    assert row["transfer_reference"] is None
+
+    detail = await client.get(
+        base + f"/refunds/{requested.refund_id}", headers=admin_headers
+    )
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert [event["event"] for event in body["history"]] == ["requested"]
+    assert body["history"][0]["actor_id"] == str(market.admin.id)
+    assert Decimal(body["payment"]["pending_refund_amount"]) == Decimal("600.00")
+    assert Decimal(body["payment"]["completed_refund_amount"]) == Decimal("0")
+    assert Decimal(body["payment"]["reserved_refund_amount"]) == Decimal("600.00")
+    assert Decimal(body["payment"]["remaining_refundable_amount"]) == Decimal("2000.00")
+    assert body["payment"]["can_request_refund"] is True
+
+    history = await client.get(
+        base + f"/{payment.id}/refunds", headers=admin_headers
+    )
+    assert history.status_code == 200, history.text
+    assert history.json()["refunds"][0]["refund_id"] == str(requested.refund_id)
+
+    confirmed = await client.post(
+        base + f"/refunds/{requested.refund_id}/confirm",
+        headers=confirmer_headers,
+        json={"reference": "REFUND-TRANSFER-READ-001"},
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    completed_detail = await client.get(
+        base + f"/refunds/{requested.refund_id}", headers=admin_headers
+    )
+    body = completed_detail.json()
+    assert body["status"] == "completed"
+    assert body["requested_by"] == str(market.admin.id)
+    assert body["confirmed_by"] == str(second_admin.id)
+    assert body["transfer_reference"] == "REFUND-TRANSFER-READ-001"
+    assert [event["event"] for event in body["history"]] == ["requested", "completed"]
+    assert body["history"][1]["actor_id"] == str(second_admin.id)
+    assert body["history"][1]["transfer_reference"] == "REFUND-TRANSFER-READ-001"
+    assert Decimal(body["payment"]["pending_refund_amount"]) == Decimal("0")
+    assert Decimal(body["payment"]["completed_refund_amount"]) == Decimal("600.00")
+
+    second = await service.refund(
+        payment.id,
+        second_admin.id,
+        RefundRequest(
+            amount="300.00",
+            reason="Additional partial refund requested",
+            idempotency_key="admin-read-refund-002",
+        ),
+    )
+    summary = await client.get(base + f"/{payment.id}/refunds", headers=admin_headers)
+    summary_body = summary.json()
+    assert {entry["refund_id"] for entry in summary_body["refunds"]} == {
+        str(second.refund_id),
+        str(requested.refund_id),
+    }
+    assert Decimal(summary_body["pending_refund_amount"]) == Decimal("300.00")
+    assert Decimal(summary_body["completed_refund_amount"]) == Decimal("600.00")
+    assert Decimal(summary_body["reserved_refund_amount"]) == Decimal("900.00")
+    assert Decimal(summary_body["remaining_refundable_amount"]) == Decimal("1700.00")
+
+    completed = await client.get(
+        base + f"/refunds?status=completed&payment_id={payment.id}",
+        headers=admin_headers,
+    )
+    assert completed.status_code == 200
+    assert completed.json()["total"] == 1
+    assert completed.json()["data"][0]["refund_id"] == str(requested.refund_id)
+
+
+async def test_admin_refund_reads_validate_filters_and_missing_records(client, market):
+    headers = actor_headers(market.admin)
+    invalid = await client.get(
+        "/api/v1/payments/refunds?status=unknown", headers=headers
+    )
+    assert invalid.status_code == 422
+    missing_refund = await client.get(
+        f"/api/v1/payments/refunds/{uuid4()}", headers=headers
+    )
+    assert missing_refund.status_code == 404
+    missing_payment = await client.get(
+        f"/api/v1/payments/{uuid4()}/refunds", headers=headers
+    )
+    assert missing_payment.status_code == 404
 
 
 async def test_seller_cannot_edit_another_brand(db, market):
@@ -1011,6 +1263,130 @@ async def _do_return_and_process(db, market, order, so):
         ret.id, market.admin.id, AdminReturnActionRequest(admin_note="Approved")
     )
     return UUID(result["refund_id"])
+
+
+async def _request_single_item_return(db, market, order, so):
+    from app.models.order import OrderItem
+    from app.schemas.return_ import CreateReturnRequest
+    from app.services.return_service import ReturnService
+
+    order_item = await db.scalar(select(OrderItem).where(OrderItem.order_id == order.id))
+    returned = await ReturnService(db).request_return(
+        market.buyer.id,
+        CreateReturnRequest(
+            seller_order_id=so.id,
+            reason="Item arrived damaged and not as described in the listing",
+            notes="Customer supplied photographs",
+            items=[
+                {
+                    "order_item_id": str(order_item.id),
+                    "quantity": 1,
+                    "reason": "Fabric is torn",
+                }
+            ],
+        ),
+    )
+    return returned, order_item
+
+
+async def test_admin_return_detail_is_enriched_and_admin_only(
+    client, db, market, isolated_redis
+):
+    order, so, payment, _ = await _fulfil_and_collect_cod(db, market, isolated_redis)
+    returned, order_item = await _request_single_item_return(db, market, order, so)
+    url = f"/api/v1/admin/returns/{returned.id}"
+
+    assert (await client.get(url)).status_code == 401
+    assert (await client.get(url, headers=actor_headers(market.buyer))).status_code == 403
+    assert (await client.get(url, headers=actor_headers(market.seller_user))).status_code == 403
+    assert (
+        await client.get(
+            f"/api/v1/admin/returns/{uuid4()}", headers=actor_headers(market.admin)
+        )
+    ).status_code == 404
+
+    response = await client.get(url, headers=actor_headers(market.admin))
+    assert response.status_code == 200, response.text
+    detail = response.json()
+    assert detail["id"] == str(returned.id)
+    assert detail["status"] == "requested"
+    assert detail["notes"] == "Customer supplied photographs"
+    assert detail["available_actions"] == ["approve", "reject"]
+    assert Decimal(detail["estimated_refund_amount"]) == Decimal("1200.00")
+    assert detail["refund"] is None
+    assert detail["dispute"] is None
+    assert detail["customer"]["user_id"] == str(market.buyer.id)
+    assert detail["customer"]["email"] == market.buyer.email
+    assert detail["seller"] == {
+        "seller_id": str(market.seller.id),
+        "brand_name": "Test Brand",
+    }
+    assert detail["order"]["order_id"] == str(order.id)
+    assert detail["order"]["order_number"] == order.order_number
+    assert detail["order"]["payment_id"] == str(payment.id)
+    assert detail["order"]["payment_status"] == "completed"
+    item = detail["items"][0]
+    assert item["order_item_id"] == str(order_item.id)
+    assert item["product_name"] == "Linen Shirt"
+    assert item["variant_label"] == "M / Ivory"
+    assert item["purchased_quantity"] == 2
+    assert item["requested_quantity"] == 1
+    assert Decimal(item["unit_price"]) == Decimal("1200.00")
+    assert Decimal(item["line_subtotal"]) == Decimal("1200.00")
+
+    # The existing customer contract remains owner-filtered and intentionally smaller.
+    customer_detail = await client.get(
+        f"/api/v1/returns/{returned.id}", headers=actor_headers(market.buyer)
+    )
+    assert customer_detail.status_code == 200
+    assert "customer" not in customer_detail.json()
+    assert "order" not in customer_detail.json()
+
+
+async def test_admin_return_detail_tracks_actions_and_linked_refund(
+    client, db, market, isolated_redis
+):
+    from app.schemas.return_ import AdminReturnActionRequest
+    from app.services.return_service import ReturnService
+
+    order, so, _, _ = await _fulfil_and_collect_cod(db, market, isolated_redis)
+    returned, _ = await _request_single_item_return(db, market, order, so)
+    service = ReturnService(db)
+    url = f"/api/v1/admin/returns/{returned.id}"
+    headers = actor_headers(market.admin)
+
+    await service.approve_return(returned.id, market.admin.id, AdminReturnActionRequest())
+    detail = (await client.get(url, headers=headers)).json()
+    assert detail["status"] == "approved"
+    assert detail["available_actions"] == ["mark_received"]
+
+    await service.mark_received(returned.id, market.admin.id, AdminReturnActionRequest())
+    detail = (await client.get(url, headers=headers)).json()
+    assert detail["status"] == "received"
+    assert detail["available_actions"] == ["request_refund"]
+
+    result = await service.process_refund(
+        returned.id,
+        market.admin.id,
+        AdminReturnActionRequest(admin_note="Approved return"),
+    )
+    detail = (await client.get(url, headers=headers)).json()
+    assert detail["status"] == "received"
+    assert detail["available_actions"] == []
+    assert detail["refund"]["refund_id"] == result["refund_id"]
+    assert detail["refund"]["status"] == "pending"
+    assert detail["refund"]["transfer_reference"] is None
+    assert Decimal(detail["refund"]["amount"]) == Decimal("1200.00")
+
+    await PaymentService(db).confirm_refund(
+        UUID(result["refund_id"]), market.admin.id, "RETURN-TRANSFER-001"
+    )
+    detail = (await client.get(url, headers=headers)).json()
+    assert detail["status"] == "refunded"
+    assert detail["available_actions"] == []
+    assert detail["refund"]["status"] == "completed"
+    assert detail["refund"]["transfer_reference"] == "RETURN-TRANSFER-001"
+    assert detail["refund"]["processed_at"] is not None
 
 
 async def test_return_refund_reverses_seller_pending_balance(db, market, isolated_redis):

@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import enum
-from uuid import UUID, uuid4
 from datetime import datetime
-from typing import TYPE_CHECKING
+from uuid import UUID, uuid4
 
-from sqlalchemy import String, Text, Integer, DateTime, Enum as SAEnum, ForeignKey
+from sqlalchemy import DateTime, ForeignKey, Integer, Text
+from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base
@@ -33,7 +33,7 @@ class Return(Base):
     id:             Mapped[UUID]          = mapped_column(primary_key=True, default=uuid4)
     order_id:       Mapped[UUID]          = mapped_column(ForeignKey("orders.id"))
     seller_order_id:Mapped[UUID]          = mapped_column(ForeignKey("seller_orders.id"))
-    user_id:        Mapped[UUID]          = mapped_column(ForeignKey("users.id"))
+    user_id:        Mapped[UUID | None]   = mapped_column(ForeignKey("users.id"))
     status:         Mapped[ReturnStatus]  = mapped_column(
                         SAEnum(ReturnStatus, name="return_status", create_type=False),
                         default=ReturnStatus.requested,

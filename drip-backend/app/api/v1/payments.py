@@ -13,11 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentAdmin, OptionalUser, get_db
 from app.schemas.payment import (
+    AdminRefundDetailResponse,
     GatewayStatusResponse,
     InitiatePaymentRequest,
     PaginatedPayments,
+    PaginatedRefunds,
     PayFastReconcileResponse,
     PaymentInitResponse,
+    PaymentRefundHistoryResponse,
     PaymentStatusResponse,
     RefundRequest,
     RefundResponse,
@@ -163,6 +166,37 @@ async def list_payments(
     page: int = Query(default=1, ge=1),
 ) -> PaginatedPayments:
     return await PaymentService(db).list_admin(status=status, method=method, page=page)
+
+
+@router.get("/refunds", response_model=PaginatedRefunds)
+async def list_refunds(
+    db: DB,
+    current_admin: CurrentAdmin,
+    status: str | None = Query(default=None, pattern="^(pending|completed)$"),
+    payment_id: UUID | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+) -> PaginatedRefunds:
+    return await PaymentService(db).list_admin_refunds(
+        status=status, payment_id=payment_id, page=page
+    )
+
+
+@router.get("/refunds/{refund_id}", response_model=AdminRefundDetailResponse)
+async def get_refund(
+    refund_id: UUID,
+    db: DB,
+    current_admin: CurrentAdmin,
+) -> AdminRefundDetailResponse:
+    return await PaymentService(db).get_admin_refund(refund_id)
+
+
+@router.get("/{payment_id}/refunds", response_model=PaymentRefundHistoryResponse)
+async def get_payment_refunds(
+    payment_id: UUID,
+    db: DB,
+    current_admin: CurrentAdmin,
+) -> PaymentRefundHistoryResponse:
+    return await PaymentService(db).get_payment_refund_history(payment_id)
 
 
 @router.post("/{payment_id}/refund", response_model=RefundResponse)

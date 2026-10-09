@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from decimal import Decimal
-from uuid import UUID
+import re
 from datetime import datetime
-from typing import Optional
+from decimal import Decimal
+from typing import Literal, Optional
+from uuid import UUID
 
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
-import re
 
 from app.models.order import PaymentMethod
-
 
 # ── Address ───────────────────────────────────────────────────────────────────
 
@@ -116,6 +115,34 @@ class CreateGuestOrderRequest(CreateOrderRequest):
         if not re.match(r"^(\+92|0)?3[0-9]{9}$", v):
             raise ValueError("Must be a valid Pakistani mobile number")
         return v
+
+
+class GuestCheckoutQuoteRequest(BaseModel):
+    """Guest items to price before collecting checkout details."""
+
+    items: list[CartItemInput] = Field(min_length=1, max_length=100)
+    coupon_code: str | None = Field(default=None, max_length=30)
+
+
+class PaymentMethodAvailability(BaseModel):
+    method: PaymentMethod
+    available: bool
+    unavailable_reason: str | None = None
+
+
+class GuestCheckoutQuoteResponse(BaseModel):
+    items: list[CartItemResponse]
+    item_count: int
+    subtotal: Decimal
+    discount_amount: Decimal
+    shipping_fee: Decimal
+    total: Decimal
+    free_shipping_threshold: Decimal
+    amount_until_free_shipping: Decimal
+    currency: Literal["PKR"] = "PKR"
+    coupon_requires_sign_in: bool = True
+    payment_methods: list[PaymentMethodAvailability]
+    will_revalidate_on_order: bool = True
 
 
 class CreateOrderResponse(BaseModel):

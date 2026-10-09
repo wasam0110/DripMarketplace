@@ -26,7 +26,9 @@ The utility reads DATABASE_URL from your environment/local `.env`, prompts for a
 
 ## Validation and API notes
 
-Historical Task 1 verification used PGlite PostgreSQL/WASM with 412 passing tests and 71.16% coverage. The refreshed backend suite supersedes that evidence with 570 passing tests, one skipped security module and 85.62% coverage, using native PostgreSQL and dedicated Redis worker tests. See `docs/TASK_6_REPORT.md`; `UPDATE_NOTES.md` describes the historical terminal bundle, not this review package.
+Historical Task 1 verification used PGlite PostgreSQL/WASM with 412 passing tests and 71.16% coverage. Task 6 superseded that evidence with 570 passing tests, one skipped security module and 85.62% coverage, using native PostgreSQL and dedicated Redis worker tests. See `docs/TASK_6_REPORT.md`; `UPDATE_NOTES.md` describes the historical terminal bundle, not this review package.
+
+The user-approved Task 7 backend follow-ups fix dispute-message ownership, add authoritative guest quotes, add durable admin refund reads, and complete B4 with enriched admin return detail, seller-owned return decisions, admin dispute detail/replies, and signed-capability guest cancellation/returns. Revision 014 preserves separate refund requester/confirmer identities; revision 015 permits guest returns without inventing user ownership. The fresh 10 October suite passed **602 tests, 1 skipped, 85.59% coverage**. See [the Task 7 review](docs/TASK_7_DESIGN_REVIEW.md) for verification and remaining design work. Older review ZIPs do not include these follow-ups; the frontend remains untouched.
 
 For native tests, set TEST_DATABASE_URL to a dedicated PostgreSQL database ending in `_test`, separate from DATABASE_URL, then run `python -m pytest`. Tests create disposable schemas; never point them at a production database.
 

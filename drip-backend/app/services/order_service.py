@@ -2,42 +2,46 @@ from __future__ import annotations
 
 import secrets
 import string
-from decimal import Decimal
-from uuid import UUID
+from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.exceptions import BusinessRuleError, NotFoundError, PermissionDeniedError
-from app.models.order import Order, OrderStatus, PaymentMethod, SellerOrderStatus, SellerOrder
-from app.models.product import ProductVariant, Product
-from app.models.seller import Seller, SellerStatus
-from app.models.coupon import CouponUsage
 from app.core.config import settings
-from app.services.order_access import create_guest_token, authorized_order
-from app.repositories.order_repo import OrderRepository, SellerOrderRepository
+from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.models.coupon import CouponUsage
+from app.models.order import Order, OrderStatus, PaymentMethod, SellerOrder, SellerOrderStatus
+from app.models.product import Product, ProductVariant
+from app.models.seller import Seller, SellerStatus
 from app.repositories.inventory_repo import InventoryRepository
-from app.services.cart_service import CartService, SHIPPING_FREE, SHIPPING_FEE
-from app.services.coupon_service import CouponService
+from app.repositories.order_repo import OrderRepository, SellerOrderRepository
 from app.schemas.order import (
-    CreateOrderRequest,
+    CancelOrderRequest,
+    CartItemInput,
+    CartItemResponse,
     CreateGuestOrderRequest,
+    CreateOrderRequest,
     CreateOrderResponse,
+    GuestCheckoutQuoteRequest,
+    GuestCheckoutQuoteResponse,
     OrderDetailResponse,
     OrderItemResponse,
-    SellerOrderResponse,
-    ShippingAddressResponse,
-    PaginatedOrders,
     OrderRowResponse,
     PageInfo,
-    CancelOrderRequest,
+    PaginatedOrders,
+    PaymentMethodAvailability,
+    SellerOrderResponse,
+    ShippingAddressResponse,
     UpdateSellerOrderRequest,
 )
-
-MAX_COD_AMOUNT = Decimal("25000")
+from app.services.cart_service import CartService
+from app.services.coupon_service import CouponService
+from app.services.order_access import authorized_order, create_guest_token
 
 
 def _generate_order_number() -> str:
@@ -56,6 +60,29 @@ CANCELLABLE_STATUSES = {
     OrderStatus.pending_cod_verification,
     OrderStatus.processing,
 }
+
+
+@dataclass(frozen=True)
+class _CheckoutLine:
+    variant: ProductVariant
+    quantity: int
+    unit_price: Decimal
+    subtotal: Decimal
+    primary_image: str | None
+
+
+@dataclass(frozen=True)
+class _CheckoutCalculation:
+    lines: list[_CheckoutLine]
+    seller_subtotals: dict[UUID, Decimal]
+    subtotal: Decimal
+    shipping_fee: Decimal
+    free_shipping_threshold: Decimal
+    cod_timeout_minutes: int
+
+    @property
+    def total(self) -> Decimal:
+        return self.subtotal + self.shipping_fee
 
 
 class OrderService:
@@ -89,9 +116,7 @@ class OrderService:
     # ── Place Order (guest) ────────────────────────────────────────────────────
 
     async def create_guest_order(self, payload: CreateGuestOrderRequest) -> CreateOrderResponse:
-        variant_qtys = {}
-        for item in payload.items:
-            variant_qtys[item.variant_id] = variant_qtys.get(item.variant_id, 0) + item.quantity
+        variant_qtys = self._merge_items(payload.items)
 
         return await self._build_order(
             payload=payload,
@@ -101,6 +126,63 @@ class OrderService:
             guest_email=payload.guest_email,
             guest_name=payload.guest_name,
             guest_phone=payload.guest_phone,
+        )
+
+    async def quote_guest_checkout(
+        self, payload: GuestCheckoutQuoteRequest
+    ) -> GuestCheckoutQuoteResponse:
+        """Return current guest pricing and payment capabilities without reserving stock."""
+        if payload.coupon_code:
+            raise BusinessRuleError("Sign in to use a coupon")
+
+        calculation = await self._calculate_checkout(self._merge_items(payload.items))
+        total = calculation.total
+        cod_available = total <= Decimal(settings.MAX_COD_ORDER_AMOUNT)
+        payment_methods = [
+            PaymentMethodAvailability(
+                method=PaymentMethod.cod,
+                available=cod_available,
+                unavailable_reason=None
+                if cod_available
+                else f"COD is not available for orders above PKR {settings.MAX_COD_ORDER_AMOUNT:,}",
+            ),
+            PaymentMethodAvailability(
+                method=PaymentMethod.payfast,
+                available=settings.PAYFAST_ENABLED,
+                unavailable_reason=None
+                if settings.PAYFAST_ENABLED
+                else "Online payments are currently unavailable",
+            ),
+        ]
+        return GuestCheckoutQuoteResponse(
+            items=[
+                CartItemResponse(
+                    variant_id=line.variant.id,
+                    product_id=line.variant.product.id,
+                    product_name=line.variant.product.name,
+                    brand_name=line.variant.product.seller.brand_name,
+                    brand_color=line.variant.product.seller.brand_color,
+                    primary_image=line.primary_image,
+                    size=line.variant.size_value,
+                    colour=line.variant.colour,
+                    unit_price=line.unit_price,
+                    quantity=line.quantity,
+                    subtotal=line.subtotal,
+                    available_stock=line.variant.inventory.available_stock,
+                    seller_id=line.variant.product.seller_id,
+                )
+                for line in calculation.lines
+            ],
+            item_count=sum(line.quantity for line in calculation.lines),
+            subtotal=calculation.subtotal,
+            discount_amount=Decimal("0"),
+            shipping_fee=calculation.shipping_fee,
+            total=total,
+            free_shipping_threshold=calculation.free_shipping_threshold,
+            amount_until_free_shipping=max(
+                calculation.free_shipping_threshold - calculation.subtotal, Decimal("0")
+            ),
+            payment_methods=payment_methods,
         )
 
     # ── Core order builder ─────────────────────────────────────────────────────
@@ -115,42 +197,9 @@ class OrderService:
         guest_name: Optional[str] = None,
         guest_phone: Optional[str] = None,
     ) -> CreateOrderResponse:
-        # 1. Fetch + validate all variants
-        variants = await self._fetch_and_validate_variants(variant_qtys)
-
-        # 2. Build line items with pricing snapshots
-        line_items = []
-        seller_subtotals: dict[UUID, Decimal] = {}
-        subtotal = Decimal("0")
-
-        for variant, qty in variants:
-            product = variant.product
-            price = (
-                variant.price_override
-                if variant.price_override is not None
-                else (product.sale_price if product.sale_price is not None else product.price)
-            )
-            line_subtotal = price * qty
-            subtotal += line_subtotal
-
-            label = f"{variant.size_value} / {variant.colour}"
-            primary = next((i.url for i in product.images if i.is_primary), None)
-
-            line_items.append(
-                {
-                    "seller_id": product.seller_id,
-                    "product_id": product.id,
-                    "variant_id": variant.id,
-                    "product_name": product.name,
-                    "variant_label": label,
-                    "unit_price": price,
-                    "quantity": qty,
-                    "subtotal": line_subtotal,
-                }
-            )
-            seller_subtotals[product.seller_id] = (
-                seller_subtotals.get(product.seller_id, Decimal("0")) + line_subtotal
-            )
+        # 1-2. Validate stock and snapshot current prices/runtime shipping.
+        calculation = await self._calculate_checkout(variant_qtys)
+        subtotal = calculation.subtotal
 
         # 3. Coupon
         discount = Decimal("0")
@@ -166,13 +215,7 @@ class OrderService:
             coupon_id = coupon.id
 
         # 4. Shipping
-        from app.services.platform_settings import get_platform_settings
-        policy = await get_platform_settings(self.db)
-        shipping_fee = (
-            Decimal("0")
-            if subtotal >= policy.free_shipping_threshold
-            else Decimal(policy.standard_shipping_fee)
-        )
+        shipping_fee = calculation.shipping_fee
 
         # 5. COD limit
         pm = PaymentMethod(payload.payment_method)
@@ -229,26 +272,39 @@ class OrderService:
         )
 
         # 10. Order items
-        for li in line_items:
-            await self.order_repo.create_item(order_id=order.id, **li)
+        for line in calculation.lines:
+            variant = line.variant
+            product = variant.product
+            await self.order_repo.create_item(
+                order_id=order.id,
+                seller_id=product.seller_id,
+                product_id=product.id,
+                variant_id=variant.id,
+                product_name=product.name,
+                variant_label=f"{variant.size_value} / {variant.colour}",
+                unit_price=line.unit_price,
+                quantity=line.quantity,
+                subtotal=line.subtotal,
+            )
 
         # Allocate the platform coupon proportionally; the final share absorbs rounding.
         remaining_discount = discount
-        for index, (seller_id, sub) in enumerate(seller_subtotals.items()):
+        for index, (seller_id, sub) in enumerate(calculation.seller_subtotals.items()):
             share = (
                 remaining_discount
-                if index == len(seller_subtotals) - 1
+                if index == len(calculation.seller_subtotals) - 1
                 else (discount * sub / subtotal).quantize(Decimal("0.01"))
             )
             remaining_discount -= share
             await self.so_repo.create(order_id=order.id, seller_id=seller_id, subtotal=sub - share)
 
         # 12. Reserve inventory (atomic per variant)
-        for variant, qty in variants:
-            success = await self.inv_repo.reserve(variant.id, qty)
+        for line in calculation.lines:
+            success = await self.inv_repo.reserve(line.variant.id, line.quantity)
             if not success:
                 raise BusinessRuleError(
-                    f"Stock changed during checkout for {variant.sku}. Please refresh your cart."
+                    f"Stock changed during checkout for {line.variant.sku}. "
+                    "Please refresh your cart."
                 )
 
         if coupon_id:
@@ -265,7 +321,9 @@ class OrderService:
 
                 get_logger(__name__).warning("checkout.cart_clear_failed", order_id=str(order.id))
         if pm == PaymentMethod.cod:
-            await self._enqueue_cod_timeout(str(order.id), policy.cod_timeout_minutes)
+            await self._enqueue_cod_timeout(
+                str(order.id), calculation.cod_timeout_minutes
+            )
 
         # 16. Build response
         whatsapp_url = None
@@ -332,12 +390,13 @@ class OrderService:
     async def cancel_order(
         self,
         order_id: UUID,
-        user_id: UUID,
+        user_id: UUID | None,
         payload: CancelOrderRequest,
+        guest_token: str | None = None,
     ) -> dict:
-        order = await self.order_repo.get_by_id(order_id, user_id=user_id, for_update=True)
-        if not order:
-            raise NotFoundError("Order not found")
+        order = await authorized_order(
+            self.db, order_id, user_id, guest_token, lock=True
+        )
         if order.status not in CANCELLABLE_STATUSES:
             raise BusinessRuleError(f"Order cannot be cancelled at status '{order.status.value}'")
 
@@ -477,7 +536,66 @@ class OrderService:
 
     # ── Helpers ────────────────────────────────────────────────────────────────
 
-    async def _fetch_and_validate_variants(self, variant_qtys: dict[UUID, int]) -> list[tuple]:
+    @staticmethod
+    def _merge_items(items: list[CartItemInput]) -> dict[UUID, int]:
+        quantities: dict[UUID, int] = {}
+        for item in items:
+            quantities[item.variant_id] = quantities.get(item.variant_id, 0) + item.quantity
+        return quantities
+
+    async def _calculate_checkout(
+        self, variant_qtys: dict[UUID, int]
+    ) -> _CheckoutCalculation:
+        variants = await self._fetch_and_validate_variants(variant_qtys)
+        lines: list[_CheckoutLine] = []
+        seller_subtotals: dict[UUID, Decimal] = {}
+        subtotal = Decimal("0")
+
+        for variant, quantity in variants:
+            product = variant.product
+            unit_price = (
+                variant.price_override
+                if variant.price_override is not None
+                else (product.sale_price if product.sale_price is not None else product.price)
+            )
+            line_subtotal = unit_price * quantity
+            subtotal += line_subtotal
+            lines.append(
+                _CheckoutLine(
+                    variant=variant,
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    subtotal=line_subtotal,
+                    primary_image=next(
+                        (image.url for image in product.images if image.is_primary), None
+                    ),
+                )
+            )
+            seller_subtotals[product.seller_id] = (
+                seller_subtotals.get(product.seller_id, Decimal("0")) + line_subtotal
+            )
+
+        from app.services.platform_settings import get_platform_settings
+
+        policy = await get_platform_settings(self.db)
+        free_shipping_threshold = Decimal(policy.free_shipping_threshold)
+        shipping_fee = (
+            Decimal("0")
+            if subtotal >= free_shipping_threshold
+            else Decimal(policy.standard_shipping_fee)
+        )
+        return _CheckoutCalculation(
+            lines=lines,
+            seller_subtotals=seller_subtotals,
+            subtotal=subtotal,
+            shipping_fee=shipping_fee,
+            free_shipping_threshold=free_shipping_threshold,
+            cod_timeout_minutes=policy.cod_timeout_minutes,
+        )
+
+    async def _fetch_and_validate_variants(
+        self, variant_qtys: dict[UUID, int]
+    ) -> list[tuple[ProductVariant, int]]:
         if (
             not variant_qtys
             or len(variant_qtys) > 100
@@ -491,6 +609,7 @@ class OrderService:
             .join(Product)
             .join(Seller)
             .options(
+                selectinload(ProductVariant.product).selectinload(Product.seller),
                 selectinload(ProductVariant.product).selectinload(
                     __import__("app.models.product", fromlist=["Product"]).Product.images
                 ),
@@ -505,22 +624,22 @@ class OrderService:
                 Seller.status == SellerStatus.active,
             )
         )
-        variants = result.scalars().all()
+        variants = {variant.id: variant for variant in result.scalars().all()}
 
         if len(variants) != len(variant_qtys):
             raise BusinessRuleError("One or more items are no longer available")
 
         validated = []
-        for v in variants:
-            qty = variant_qtys[v.id]
-            inv = v.inventory
+        for variant_id, qty in variant_qtys.items():
+            variant = variants[variant_id]
+            inv = variant.inventory
             if not inv or inv.available_stock < qty:
                 raise BusinessRuleError(
-                    f"Insufficient stock for {v.product.name} — "
-                    f"{v.size_value}/{v.colour}. "
+                    f"Insufficient stock for {variant.product.name} — "
+                    f"{variant.size_value}/{variant.colour}. "
                     f"Available: {inv.available_stock if inv else 0}"
                 )
-            validated.append((v, qty))
+            validated.append((variant, qty))
         return validated
 
     async def _enqueue_cod_timeout(self, order_id: str, minutes: int = 30) -> None:

@@ -1,17 +1,24 @@
 from __future__ import annotations
 
-from uuid import UUID
 from typing import Annotated, Optional
+from uuid import UUID
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, CurrentUser, CurrentAdmin
+from app.api.deps import CurrentAdmin, CurrentSeller, CurrentUser, get_db
 from app.schemas.return_ import (
-    CreateReturnRequest, ReturnDetailResponse, PaginatedReturns,
-    OpenDisputeRequest, AddDisputeMessageRequest,
-    DisputeDetailResponse, DisputeMessageResponse,
-    AdminReturnActionRequest, ResolveDisputeRequest,
+    AddDisputeMessageRequest,
+    AdminReturnActionRequest,
+    AdminReturnDetailResponse,
+    CreateReturnRequest,
+    DisputeDetailResponse,
+    DisputeMessageResponse,
+    OpenDisputeRequest,
+    PaginatedReturns,
+    ResolveDisputeRequest,
+    ReturnDetailResponse,
+    SellerReturnDetailResponse,
 )
 from app.services.return_service import ReturnService
 
@@ -20,6 +27,24 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 
 
 # ── Customer ───────────────────────────────────────────────────────────────────
+
+@router.post("/returns/guest", response_model=ReturnDetailResponse, status_code=201)
+async def request_guest_return(
+    payload: CreateReturnRequest,
+    db: DB,
+    guest_token: str | None = Header(default=None, alias="X-Guest-Token"),
+) -> ReturnDetailResponse:
+    return await ReturnService(db).request_guest_return(guest_token, payload)
+
+
+@router.get("/returns/guest/{return_id}", response_model=ReturnDetailResponse)
+async def get_guest_return(
+    return_id: UUID,
+    db: DB,
+    guest_token: str | None = Header(default=None, alias="X-Guest-Token"),
+) -> ReturnDetailResponse:
+    return await ReturnService(db).get_guest_return(return_id, guest_token)
+
 
 @router.post("/returns", response_model=ReturnDetailResponse, status_code=201)
 async def request_return(
@@ -79,6 +104,68 @@ async def add_dispute_message(
 
 # ── Admin ──────────────────────────────────────────────────────────────────────
 
+@router.get("/seller/returns", response_model=PaginatedReturns)
+async def seller_list_returns(
+    db: DB,
+    current_seller: CurrentSeller,
+    status: Optional[str] = Query(
+        default=None,
+        pattern="^(requested|approved|rejected|received|refunded)$",
+    ),
+    page: int = Query(default=1, ge=1),
+) -> PaginatedReturns:
+    return await ReturnService(db).seller_list_returns(
+        UUID(current_seller["seller_id"]), status, page
+    )
+
+
+@router.get("/seller/returns/{return_id}", response_model=SellerReturnDetailResponse)
+async def seller_get_return(
+    return_id: UUID,
+    db: DB,
+    current_seller: CurrentSeller,
+) -> SellerReturnDetailResponse:
+    return await ReturnService(db).get_seller_return(
+        return_id, UUID(current_seller["seller_id"])
+    )
+
+
+@router.post("/seller/returns/{return_id}/approve")
+async def seller_approve_return(
+    return_id: UUID,
+    payload: AdminReturnActionRequest,
+    db: DB,
+    current_seller: CurrentSeller,
+) -> dict:
+    return await ReturnService(db).seller_approve_return(
+        return_id, UUID(current_seller["seller_id"]), payload
+    )
+
+
+@router.post("/seller/returns/{return_id}/reject")
+async def seller_reject_return(
+    return_id: UUID,
+    payload: AdminReturnActionRequest,
+    db: DB,
+    current_seller: CurrentSeller,
+) -> dict:
+    return await ReturnService(db).seller_reject_return(
+        return_id, UUID(current_seller["seller_id"]), payload
+    )
+
+
+@router.post("/seller/returns/{return_id}/received")
+async def seller_mark_received(
+    return_id: UUID,
+    payload: AdminReturnActionRequest,
+    db: DB,
+    current_seller: CurrentSeller,
+) -> dict:
+    return await ReturnService(db).seller_mark_received(
+        return_id, UUID(current_seller["seller_id"]), payload
+    )
+
+
 @router.get("/admin/returns", response_model=PaginatedReturns)
 async def admin_list_returns(
     db:            DB,
@@ -90,6 +177,15 @@ async def admin_list_returns(
     page: int = Query(default=1, ge=1),
 ) -> PaginatedReturns:
     return await ReturnService(db).admin_list_returns(status, page)
+
+
+@router.get("/admin/returns/{return_id}", response_model=AdminReturnDetailResponse)
+async def admin_get_return(
+    return_id:     UUID,
+    db:            DB,
+    current_admin: CurrentAdmin,
+) -> AdminReturnDetailResponse:
+    return await ReturnService(db).get_admin_return(return_id)
 
 
 @router.post("/admin/returns/{return_id}/approve")
@@ -143,6 +239,31 @@ async def admin_list_disputes(
     page: int = Query(default=1, ge=1),
 ) -> dict:
     return await ReturnService(db).admin_list_disputes(status, page)
+
+
+@router.get("/admin/disputes/{dispute_id}", response_model=DisputeDetailResponse)
+async def admin_get_dispute(
+    dispute_id: UUID,
+    db: DB,
+    current_admin: CurrentAdmin,
+) -> DisputeDetailResponse:
+    return await ReturnService(db).get_admin_dispute(dispute_id)
+
+
+@router.post(
+    "/admin/disputes/{dispute_id}/messages",
+    response_model=DisputeMessageResponse,
+    status_code=201,
+)
+async def admin_add_dispute_message(
+    dispute_id: UUID,
+    payload: AddDisputeMessageRequest,
+    db: DB,
+    current_admin: CurrentAdmin,
+) -> DisputeMessageResponse:
+    return await ReturnService(db).add_admin_message(
+        dispute_id, UUID(current_admin["sub"]), payload
+    )
 
 
 @router.post("/admin/disputes/{dispute_id}/resolve", response_model=DisputeDetailResponse)

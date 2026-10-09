@@ -1,25 +1,27 @@
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
-from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Query, Header
+from fastapi import APIRouter, Depends, Header, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, CurrentUser, CurrentSeller, OptionalUser
+from app.api.deps import CurrentSeller, CurrentUser, OptionalUser, get_db
 from app.schemas.order import (
-    CreateOrderRequest,
+    CancelOrderRequest,
+    CouponValidationResponse,
     CreateGuestOrderRequest,
+    CreateOrderRequest,
     CreateOrderResponse,
+    GuestCheckoutQuoteRequest,
+    GuestCheckoutQuoteResponse,
     OrderDetailResponse,
     PaginatedOrders,
-    CancelOrderRequest,
-    ValidateCouponRequest,
-    CouponValidationResponse,
     UpdateSellerOrderRequest,
+    ValidateCouponRequest,
 )
-from app.services.order_service import OrderService
 from app.services.coupon_service import CouponService
+from app.services.order_service import OrderService
 
 router = APIRouter(tags=["orders"])
 
@@ -53,6 +55,14 @@ async def place_guest_order(
     db: DB,
 ) -> CreateOrderResponse:
     return await OrderService(db).create_guest_order(payload)
+
+
+@router.post("/orders/guest/quote", response_model=GuestCheckoutQuoteResponse)
+async def quote_guest_checkout(
+    payload: GuestCheckoutQuoteRequest,
+    db: DB,
+) -> GuestCheckoutQuoteResponse:
+    return await OrderService(db).quote_guest_checkout(payload)
 
 
 @router.get("/orders", response_model=PaginatedOrders)
@@ -97,11 +107,13 @@ async def cancel_order(
     order_id: UUID,
     payload: CancelOrderRequest,
     db: DB,
-    current_user: CurrentUser,
+    current_user: OptionalUser,
+    guest_token: str | None = Header(default=None, alias="X-Guest-Token"),
 ) -> dict:
     return await OrderService(db).cancel_order(
         order_id=order_id,
-        user_id=UUID(current_user["sub"]),
+        user_id=UUID(current_user["sub"]) if current_user else None,
+        guest_token=guest_token,
         payload=payload,
     )
 

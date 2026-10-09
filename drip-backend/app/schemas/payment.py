@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, Field
@@ -67,6 +68,58 @@ class RefundResponse(BaseModel):
     created_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+class AdminRefundRowResponse(BaseModel):
+    refund_id: UUID
+    payment_id: UUID
+    order_id: UUID
+    order_number: str
+    return_id: UUID | None
+    status: Literal["pending", "completed"]
+    amount: Decimal
+    reason: str
+    transfer_reference: str | None
+    requested_by: UUID | None
+    confirmed_by: UUID | None
+    requested_at: datetime
+    processed_at: datetime | None
+
+
+class PaginatedRefunds(BaseModel):
+    data: list[AdminRefundRowResponse]
+    total: int
+    page: int
+
+
+class RefundHistoryEvent(BaseModel):
+    event: Literal["requested", "completed"]
+    occurred_at: datetime
+    actor_id: UUID | None
+    transfer_reference: str | None = None
+
+
+class RefundPaymentBalanceResponse(BaseModel):
+    payment_id: UUID
+    order_id: UUID
+    order_number: str
+    payment_status: str
+    payment_method: str
+    payment_amount: Decimal
+    pending_refund_amount: Decimal
+    completed_refund_amount: Decimal
+    reserved_refund_amount: Decimal
+    remaining_refundable_amount: Decimal
+    can_request_refund: bool
+
+
+class AdminRefundDetailResponse(AdminRefundRowResponse):
+    payment: RefundPaymentBalanceResponse
+    history: list[RefundHistoryEvent]
+
+
+class PaymentRefundHistoryResponse(RefundPaymentBalanceResponse):
+    refunds: list[AdminRefundRowResponse]
 
 
 class GatewayStatusResponse(BaseModel):

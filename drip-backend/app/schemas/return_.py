@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from uuid import UUID
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -45,6 +46,83 @@ class ReturnRowResponse(BaseModel):
 class ReturnDetailResponse(ReturnRowResponse):
     notes: Optional[str]
     items: list[ReturnItemResponse]
+
+
+class AdminReturnCustomerResponse(BaseModel):
+    user_id: Optional[UUID]
+    is_guest: bool
+    email: str
+    first_name: Optional[str]
+    last_name: Optional[str]
+    phone: Optional[str]
+
+
+class AdminReturnSellerResponse(BaseModel):
+    seller_id: UUID
+    brand_name: str
+
+
+class AdminReturnOrderResponse(BaseModel):
+    order_id: UUID
+    order_number: str
+    status: str
+    payment_method: str
+    subtotal: Decimal
+    discount_amount: Decimal
+    shipping_fee: Decimal
+    total: Decimal
+    payment_id: Optional[UUID]
+    payment_status: Optional[str]
+
+
+class AdminReturnItemResponse(BaseModel):
+    id: UUID
+    order_item_id: UUID
+    product_id: UUID
+    variant_id: UUID
+    product_name: str
+    variant_label: str
+    unit_price: Decimal
+    purchased_quantity: int
+    requested_quantity: int
+    line_subtotal: Decimal
+    reason: Optional[str]
+
+
+class AdminReturnRefundResponse(BaseModel):
+    refund_id: UUID
+    status: str
+    amount: Decimal
+    transfer_reference: Optional[str]
+    requested_at: datetime
+    processed_at: Optional[datetime]
+
+
+class AdminReturnDisputeResponse(BaseModel):
+    dispute_id: UUID
+    status: str
+
+
+class AdminReturnDetailResponse(ReturnRowResponse):
+    notes: Optional[str]
+    customer: AdminReturnCustomerResponse
+    seller: AdminReturnSellerResponse
+    order: AdminReturnOrderResponse
+    items: list[AdminReturnItemResponse]
+    estimated_refund_amount: Decimal
+    available_actions: list[str]
+    refund: Optional[AdminReturnRefundResponse]
+    dispute: Optional[AdminReturnDisputeResponse]
+
+
+class SellerReturnDetailResponse(ReturnRowResponse):
+    notes: Optional[str]
+    order_number: str
+    items: list[AdminReturnItemResponse]
+    estimated_refund_amount: Decimal
+    available_actions: list[str]
+    refund_status: Optional[str]
+    dispute_status: Optional[str]
 
 
 class PaginatedReturns(BaseModel):

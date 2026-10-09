@@ -11,17 +11,27 @@ from test_marketplace_regressions import guest_payload
 from test_marketplace_regressions import market as marketplace_fixture
 
 from app.core.exceptions import BusinessRuleError
-from app.models.order import Order, OrderStatus, PaymentMethod, SellerOrder, SellerOrderStatus
+from app.models.order import (
+    Order,
+    OrderItem,
+    OrderStatus,
+    PaymentMethod,
+    SellerOrder,
+    SellerOrderStatus,
+)
 from app.models.payment import Payment, PaymentStatus, Refund
+from app.models.return_ import Return, ReturnStatus
 from app.models.seller import SellerBankAccount, SellerWallet
 from app.models.wallet import CommissionLedger, Payout, WalletTransaction, WalletTxType
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.notification_repo import NotificationRepository
 from app.schemas.payment import RefundRequest
+from app.schemas.return_ import AdminReturnActionRequest, CreateReturnRequest
 from app.schemas.wallet import WithdrawalRequest
 from app.services.commission_service import CommissionService
 from app.services.order_service import OrderService
 from app.services.payment_service import PaymentService
+from app.services.return_service import ReturnService
 from app.services.wallet_service import WalletService
 
 pytestmark = pytest.mark.integration
@@ -149,6 +159,47 @@ async def test_concurrent_refund_confirmation_reverses_once(db, market, test_eng
     assert (
         await db.scalar(select(func.count(Refund.id)).where(Refund.processed_at.isnot(None))) == 1
     )
+
+
+async def test_competing_admin_and_seller_return_decisions_allow_one_winner(
+    db, market, test_engine
+):
+    created = await OrderService(db).create_guest_order(guest_payload(market))
+    order = await db.get(Order, created.order_id)
+    order.user_id = market.buyer.id
+    order.status = OrderStatus.delivered
+    seller_order = await db.scalar(
+        select(SellerOrder).where(SellerOrder.order_id == order.id)
+    )
+    seller_order.status = SellerOrderStatus.delivered
+    item = await db.scalar(select(OrderItem).where(OrderItem.order_id == order.id))
+    await db.commit()
+    returned = await ReturnService(db).request_return(
+        market.buyer.id,
+        CreateReturnRequest(
+            seller_order_id=seller_order.id,
+            reason="The delivered product is damaged and cannot be used",
+            items=[{"order_item_id": item.id, "quantity": 1}],
+        ),
+    )
+    action = AdminReturnActionRequest(admin_note="Concurrent decision")
+
+    # Give each independent session a deterministic opposing action.
+    calls = 0
+
+    async def opposing_decisions(session):
+        nonlocal calls
+        calls += 1
+        service = ReturnService(session)
+        if calls == 1:
+            return await service.approve_return(returned.id, market.admin.id, action)
+        return await service.seller_reject_return(returned.id, market.seller.id, action)
+
+    results = await race(test_engine, opposing_decisions)
+    assert sum(not isinstance(value, Exception) for value in results) == 1, results
+    assert sum(isinstance(value, BusinessRuleError) for value in results) == 1, results
+    stored = await db.get(Return, returned.id)
+    assert stored.status in (ReturnStatus.approved, ReturnStatus.rejected)
 
 
 async def test_concurrent_payment_callbacks_preserve_one_transition(

@@ -1,16 +1,15 @@
 from __future__ import annotations
 
-from decimal import Decimal
-from uuid import UUID
-from typing import Optional, Sequence
 from datetime import datetime
+from decimal import Decimal
+from typing import Optional, Sequence
+from uuid import UUID
 
-from sqlalchemy import select, update, desc, func
+from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.payment import Payment, PaymentStatus, PaymentCallback, Refund
-from app.models.order import Order
+from app.models.payment import Payment, PaymentCallback, PaymentStatus, Refund
 
 
 class PaymentRepository:
@@ -97,6 +96,53 @@ class PaymentRepository:
             .where(Refund.payment_id == payment_id)
         )
         return result.scalar_one()
+
+    async def list_refunds_admin(
+        self,
+        status: Optional[str] = None,
+        payment_id: Optional[UUID] = None,
+        page: int = 1,
+        per_page: int = 25,
+    ) -> tuple[Sequence[Refund], int]:
+        query = select(Refund).options(
+            selectinload(Refund.payment).selectinload(Payment.order)
+        )
+        if status == "pending":
+            query = query.where(Refund.processed_at.is_(None))
+        elif status == "completed":
+            query = query.where(Refund.processed_at.is_not(None))
+        if payment_id:
+            query = query.where(Refund.payment_id == payment_id)
+
+        total = (
+            await self.db.execute(select(func.count()).select_from(query.subquery()))
+        ).scalar_one()
+        query = (
+            query.order_by(desc(Refund.created_at), desc(Refund.id))
+            .offset((page - 1) * per_page)
+            .limit(per_page)
+        )
+        result = await self.db.execute(query)
+        return result.scalars().all(), total
+
+    async def get_refund_admin(self, refund_id: UUID) -> Optional[Refund]:
+        return await self.db.scalar(
+            select(Refund)
+            .options(
+                selectinload(Refund.payment).selectinload(Payment.order),
+                selectinload(Refund.payment).selectinload(Payment.refunds),
+            )
+            .where(Refund.id == refund_id)
+            .execution_options(populate_existing=True)
+        )
+
+    async def get_payment_refunds(self, payment_id: UUID) -> Optional[Payment]:
+        return await self.db.scalar(
+            select(Payment)
+            .options(selectinload(Payment.order), selectinload(Payment.refunds))
+            .where(Payment.id == payment_id)
+            .execution_options(populate_existing=True)
+        )
 
     async def list_admin(
         self,

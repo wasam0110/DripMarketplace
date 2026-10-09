@@ -1,15 +1,25 @@
 from __future__ import annotations
 
 import enum
-from decimal import Decimal
-from uuid import UUID, uuid4
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from decimal import Decimal
+from typing import TYPE_CHECKING
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    String, Text, Numeric, Boolean, CHAR,
-    DateTime, Enum as SAEnum, ForeignKey,
-    CheckConstraint, UniqueConstraint,
+    CHAR,
+    Boolean,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    UniqueConstraint,
+)
+from sqlalchemy import (
+    Enum as SAEnum,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -64,7 +74,9 @@ class PaymentCallback(Base):
     gateway:     Mapped[str]         = mapped_column(String(50))
     raw_payload: Mapped[dict]        = mapped_column(JSONB)
     is_verified: Mapped[bool]        = mapped_column(Boolean, default=False, server_default="false")
-    received_at: Mapped[datetime]    = mapped_column(DateTime(timezone=True), server_default="now()")
+    received_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default="now()"
+    )
 
     payment: Mapped["Payment | None"] = relationship(back_populates="callbacks")
 
@@ -74,6 +86,8 @@ class Refund(Base):
     __table_args__ = (
         CheckConstraint("amount > 0", name="ck_refunds_amount_positive"),
         UniqueConstraint("payment_id", "idempotency_key", name="uq_refund_request_key"),
+        Index("ix_refunds_payment_id", "payment_id"),
+        Index("ix_refunds_processed_at", "processed_at"),
     )
 
     id:           Mapped[UUID]       = mapped_column(primary_key=True, default=uuid4)
@@ -84,11 +98,15 @@ class Refund(Base):
     amount:       Mapped[Decimal]    = mapped_column(Numeric(12, 2))
     reason:       Mapped[str | None] = mapped_column(Text)
     gateway_ref:  Mapped[str | None] = mapped_column(String(255))
+    requested_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
     processed_by: Mapped[UUID | None] = mapped_column(ForeignKey("users.id"))
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
-    created_at:   Mapped[datetime]   = mapped_column(DateTime(timezone=True), server_default="now()")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default="now()"
+    )
 
     payment: Mapped["Payment"] = relationship(back_populates="refunds")
-from typing import TYPE_CHECKING
+
+
 if TYPE_CHECKING:
     from app.models.order import Order

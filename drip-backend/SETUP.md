@@ -32,10 +32,15 @@ Back up an existing database and inspect the migration state before applying any
 .venv/Scripts/python.exe -m uvicorn main:app --reload
 ```
 
-Head revision is `013`. It adds notification read timestamps and archive flags;
-existing read notifications are backfilled. Test rollback only on a disposable copy:
-downgrading 013 removes these columns and their data. Never delete/stamp Alembic's
-version table to bypass migrations. See the legacy-settlement restriction below.
+Head revision is `015`. Revision 014 adds the refund requester audit field and queue
+indexes. Revision 015 makes return ownership nullable for capability-authorized guest
+returns; downgrading it requires reconciling any guest-return rows first.
+Existing refund rows copy their latest recorded admin actor into `requested_by`; for an
+already-completed historical refund, that is the best recoverable value and may be the
+confirmer rather than the original requester. Revision 013 adds notification read/archive
+fields. Test rollback only on a disposable copy: downgrading removes the affected fields
+and data. Never delete/stamp Alembic's version table to bypass migrations. See the
+legacy-settlement restriction below.
 
 The Linux worker entrypoint is `python -m arq app.tasks.worker.WorkerSettings`.
 Orphan-image deletion is disabled by default and must remain disabled until its storage
