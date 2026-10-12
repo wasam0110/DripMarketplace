@@ -29,8 +29,12 @@ def upgrade() -> None:
     ]:
         exists = bind.execute(
             sa.text(
-                "SELECT 1 FROM pg_type "
-                "WHERE typname = :name"
+                "SELECT 1 "
+                "FROM pg_type AS type "
+                "JOIN pg_namespace AS namespace "
+                "ON namespace.oid = type.typnamespace "
+                "WHERE type.typname = :name "
+                "AND namespace.nspname = current_schema()"
             ),
             {"name": name},
         ).scalar()

@@ -2,6 +2,8 @@
 
 This checkout contains the backend marketplace repairs, Task 3/4 provider hardening and Task 6 release-check work. The full suite passes the unchanged 85% coverage gate, but release approval remains blocked. PayFast stays disabled by default. See [SETUP.md](SETUP.md), [PayFast setup](docs/PAYFAST_SETUP.md), [connected-services setup](docs/CONNECTED_SERVICES_SETUP.md), [KNOWN_LIMITS.md](KNOWN_LIMITS.md), and the [Task 6 report](docs/TASK_6_REPORT.md).
 
+The 12 October post-review financial batch 1 also unifies payout completion, makes return-linked refund requests atomic, and corrects refund wallet audit balances. It is documented in [the batch-1 report](docs/BACKEND_B1_REPORT.md). Refund allocation/release reconciliation and the other [review queue](docs/BACKEND_REPAIR_QUEUE.md) batches remain open; this is not a backend-complete or production-ready claim.
+
 ## Applying the supplied terminal update
 
 The separate WearHowZ update bundle applies these changes to the original uploaded backend. It checks each affected file, preserves local environment files and Git metadata, and backs up affected files outside the repository before applying updates. Follow the bundle's APPLY_UPDATE.md instructions. If it reports a local-file conflict, resolve that file before retrying; there is no forced-overwrite mode.

@@ -4370,6 +4370,34 @@
         "title": "PayoutActionRequest",
         "type": "object"
       },
+      "PayoutCompletionRequest": {
+        "description": "Compatibility shape for the legacy completion URL.",
+        "properties": {
+          "admin_note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Note"
+          },
+          "payment_reference": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Payment Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_reference"
+        ],
+        "title": "PayoutCompletionRequest",
+        "type": "object"
+      },
       "PayoutResponse": {
         "properties": {
           "admin_note": {
@@ -10713,7 +10741,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PayoutActionRequest"
+                "$ref": "#/components/schemas/PayoutCompletionRequest"
               }
             }
           },

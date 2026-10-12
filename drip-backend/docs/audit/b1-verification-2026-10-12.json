@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-12",
+  "timezone": "Asia/Karachi",
+  "scope": "Backend repair batch 1 (F01-F03) and final migration-isolation correction; not release approval",
+  "full_suite": {
+    "passed": 611,
+    "skipped": 1,
+    "failed": 0,
+    "errors": 0,
+    "warnings": 596,
+    "exit_code": 0,
+    "duration_seconds": 896.232,
+    "junit_cases": 612
+  },
+  "coverage": {
+    "statements": 8583,
+    "covered": 7356,
+    "missed": 1227,
+    "percent": 85.70429919608529,
+    "required_percent": 85,
+    "gate_passed": true
+  },
+  "focused_b1": {
+    "new_cases_passed": 8,
+    "affected_regressions_passed": 10,
+    "native_payout_race_passed": 1,
+    "migration_isolation_regression_passed": 1
+  },
+  "unit_suite": {
+    "passed": 347,
+    "warnings": 27
+  },
+  "native_services": {
+    "postgres": "15-alpine",
+    "redis": "7-alpine",
+    "project": "wearhowz-b1-20261012",
+    "disposable": true,
+    "development_services_used": false,
+    "audit_containers_and_network_removed": true,
+    "development_redis_still_healthy": true
+  },
+  "migrations": {
+    "fresh_upgrade": "015",
+    "round_trip": "015 -> 012 -> 015",
+    "unrelated_schema_enum_conflict_tested": true,
+    "new_revision_added": false,
+    "production_data_rehearsal": false
+  },
+  "contract": {
+    "openapi_exported": true,
+    "documented_operations": 188
+  },
+  "frontend_inspected_or_modified": false,
+  "commit_or_push_performed": false,
+  "remaining_findings": "F04-F17"
+}

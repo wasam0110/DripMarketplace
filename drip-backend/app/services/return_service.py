@@ -459,13 +459,25 @@ class ReturnService:
             raise BusinessRuleError("Return order is missing")
         order_items = await self._load_order_items(return_)
         total = self._calculate_refund_amount(return_, order, order_items)
-        response = await PaymentService(self.db).refund(payment.id, admin_id,
-            RefundRequest(amount=total, reason=payload.admin_note or "Received product return",
-                          idempotency_key=f"return:{return_id}"))
-        refund = await self.db.get(Refund, response.refund_id)
-        refund.return_id = return_.id
+        response = await PaymentService(self.db).refund(
+            payment.id,
+            admin_id,
+            RefundRequest(
+                amount=total,
+                reason=payload.admin_note or "Received product return",
+                idempotency_key=f"return:{return_id}",
+            ),
+            return_id=return_.id,
+            commit=False,
+        )
+        # The refund and its return association become visible together. This
+        # commit also releases the return/payment row locks acquired above.
         await self.db.commit()
-        return {"message": "Refund requested; awaiting recorded transfer", "refund_id": str(refund.id), "status": response.status}
+        return {
+            "message": "Refund requested; awaiting recorded transfer",
+            "refund_id": str(response.refund_id),
+            "status": response.status,
+        }
 
     # ── Admin: dispute management ──────────────────────────────────────────────
 

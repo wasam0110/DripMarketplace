@@ -3,9 +3,10 @@
 import asyncio
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker
 from test_marketplace_regressions import guest_payload
 from test_marketplace_regressions import market as marketplace_fixture
@@ -22,7 +23,13 @@ from app.models.order import (
 from app.models.payment import Payment, PaymentStatus, Refund
 from app.models.return_ import Return, ReturnStatus
 from app.models.seller import SellerBankAccount, SellerWallet
-from app.models.wallet import CommissionLedger, Payout, WalletTransaction, WalletTxType
+from app.models.wallet import (
+    CommissionLedger,
+    Payout,
+    PayoutStatus,
+    WalletTransaction,
+    WalletTxType,
+)
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.notification_repo import NotificationRepository
 from app.schemas.payment import RefundRequest
@@ -91,6 +98,69 @@ async def test_competing_withdrawals_cannot_spend_same_balance(db, market, test_
     await db.refresh(wallet)
     assert wallet.available_balance == Decimal("250")
     assert await db.scalar(select(func.count(Payout.id))) == 1
+
+
+async def test_concurrent_payout_completion_and_rejection_have_one_winner(
+    db, market, test_engine
+):
+    wallet = await db.scalar(
+        select(SellerWallet).where(SellerWallet.seller_id == market.seller.id)
+    )
+    wallet.available_balance = Decimal("1000")
+    bank = SellerBankAccount(
+        seller_id=market.seller.id,
+        bank_name="Test Bank",
+        account_title="Test Seller",
+        account_number="PAYOUT-RACE",
+    )
+    db.add(bank)
+    await db.commit()
+    service = WalletService(db)
+    requested = await service.request_withdrawal(
+        market.seller.id,
+        WithdrawalRequest(amount=Decimal("500"), bank_account_id=bank.id),
+    )
+    await service.admin_approve_payout(requested.id, market.admin.id)
+
+    ready = asyncio.Event()
+
+    async def run(action):
+        async with async_sessionmaker(test_engine, expire_on_commit=False)() as session:
+            await ready.wait()
+            return await action(session)
+
+    tasks = [
+        asyncio.create_task(
+            run(
+                lambda session: WalletService(session).admin_complete_payout(
+                    requested.id, market.admin.id, "PAYOUT-RACE-RECEIPT"
+                )
+            )
+        ),
+        asyncio.create_task(
+            run(
+                lambda session: WalletService(session).admin_reject_payout(
+                    requested.id, market.admin.id, "Race rejection"
+                )
+            )
+        ),
+    ]
+    ready.set()
+    results = await asyncio.wait_for(
+        asyncio.gather(*tasks, return_exceptions=True), timeout=30
+    )
+
+    assert sum(isinstance(value, BusinessRuleError) for value in results) == 1, results
+    assert sum(not isinstance(value, Exception) for value in results) == 1, results
+    stored = await db.get(Payout, requested.id, populate_existing=True)
+    await db.refresh(wallet)
+    if stored.status == PayoutStatus.completed:
+        assert stored.transfer_reference == "PAYOUT-RACE-RECEIPT"
+        assert wallet.available_balance == Decimal("500")
+    else:
+        assert stored.status == PayoutStatus.rejected
+        assert stored.transfer_reference is None
+        assert wallet.available_balance == Decimal("1000")
 
 
 async def paid_order(db, market):
@@ -295,19 +365,33 @@ async def test_fresh_migrations_round_trip_and_all_model_columns(test_engine):
     from app.models.base import Base
 
     config = Config("alembic.ini")
-    # test_engine has a unique disposable schema; never touch public tables.
+    decoy_schema = "enum_decoy_" + uuid4().hex
     async with test_engine.begin() as connection:
-        await connection.run_sync(Base.metadata.drop_all)
+        await connection.execute(text(f'CREATE SCHEMA "{decoy_schema}"'))
+        await connection.execute(
+            text(f'CREATE TYPE "{decoy_schema}".return_status AS ENUM (\'requested\')')
+        )
+        await connection.execute(
+            text(f'CREATE TYPE "{decoy_schema}".dispute_status AS ENUM (\'open\')')
+        )
 
-        def migrations(sync_connection):
-            config.attributes["connection"] = sync_connection
-            command.upgrade(config, "head")
-            command.downgrade(config, "012_marketplace_gaps")
-            command.upgrade(config, "head")
+    # test_engine has a unique disposable schema; never touch public tables.
+    try:
+        async with test_engine.begin() as connection:
+            await connection.run_sync(Base.metadata.drop_all)
 
-        await connection.run_sync(migrations)
-        for table in Base.metadata.sorted_tables:
-            await connection.execute(select(table).limit(0))
+            def migrations(sync_connection):
+                config.attributes["connection"] = sync_connection
+                command.upgrade(config, "head")
+                command.downgrade(config, "012_marketplace_gaps")
+                command.upgrade(config, "head")
+
+            await connection.run_sync(migrations)
+            for table in Base.metadata.sorted_tables:
+                await connection.execute(select(table).limit(0))
+    finally:
+        async with test_engine.begin() as connection:
+            await connection.execute(text(f'DROP SCHEMA "{decoy_schema}" CASCADE'))
 
 
 async def test_native_worker_startup_health_and_shutdown(monkeypatch):

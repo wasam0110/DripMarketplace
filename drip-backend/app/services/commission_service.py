@@ -339,14 +339,20 @@ class CommissionService:
         if not wallet:
             return
 
+        # SQLAlchemy may synchronize the loaded wallet when the UPDATE below is
+        # executed. Capture the pre-update values so balance_after is independent
+        # of that synchronization behavior.
+        pending_before = Decimal(wallet.pending_balance)
+        available_before = Decimal(wallet.available_balance)
+
         if not released:
             # Funds still in hold: take from pending first, spill to available.
-            from_pending   = min(debit, wallet.pending_balance)
-            from_available = min(debit - from_pending, wallet.available_balance)
+            from_pending   = min(debit, pending_before)
+            from_available = min(debit - from_pending, available_before)
         else:
             # Funds released: only available_balance is in scope.
             from_pending   = Decimal("0")
-            from_available = min(debit, wallet.available_balance)
+            from_available = min(debit, available_before)
 
         values: dict = {}
         if from_pending > Decimal("0"):
@@ -361,10 +367,11 @@ class CommissionService:
             )
         await self.db.flush()
 
-        # Compute balance_after from known deltas — avoids a stale ORM cache read.
+        # Record the combined post-transaction wallet balance from the captured
+        # values, regardless of ORM identity-map synchronization.
         balance_after = (
-            (wallet.pending_balance   - from_pending)
-            + (wallet.available_balance - from_available)
+            (pending_before - from_pending)
+            + (available_before - from_available)
         )
 
         await self.tx_repo.create(

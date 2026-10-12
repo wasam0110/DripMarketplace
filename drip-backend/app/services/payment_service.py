@@ -363,7 +363,13 @@ class PaymentService:
         )
 
     async def refund(
-        self, payment_id: UUID, admin_id: UUID, payload: RefundRequest
+        self,
+        payment_id: UUID,
+        admin_id: UUID,
+        payload: RefundRequest,
+        *,
+        return_id: UUID | None = None,
+        commit: bool = True,
     ) -> RefundResponse:
         payment = await self.db.scalar(
             select(Payment).where(Payment.id == payment_id).with_for_update()
@@ -382,6 +388,20 @@ class PaymentService:
                     raise BusinessRuleError(
                         "Idempotency key was already used with different refund details"
                     )
+                if return_id is not None:
+                    if existing.return_id not in (None, return_id):
+                        raise BusinessRuleError(
+                            "Idempotency key is already linked to another return"
+                        )
+                    # Repair a request created by the former two-commit flow. The
+                    # caller still owns the transaction and decides whether to commit.
+                    if existing.return_id is None:
+                        existing.return_id = return_id
+                        if commit:
+                            await self.db.commit()
+                            await self.db.refresh(existing)
+                        else:
+                            await self.db.flush()
                 return self._refund_response(existing)
         if payment.status != PaymentStatus.completed:
             raise BusinessRuleError("Only completed payments can be refunded")
@@ -390,6 +410,7 @@ class PaymentService:
             raise BusinessRuleError("Refund exceeds the remaining refundable amount")
         refund = Refund(
             payment_id=payment.id,
+            return_id=return_id,
             amount=payload.amount,
             reason=payload.reason,
             requested_by=admin_id,
@@ -397,7 +418,10 @@ class PaymentService:
         )
         self.db.add(refund)
         # Requesting a manual refund never claims money has been transferred.
-        await self.db.commit()
+        if commit:
+            await self.db.commit()
+        else:
+            await self.db.flush()
         await self.db.refresh(refund)
         return self._refund_response(refund)
 

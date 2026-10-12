@@ -1,6 +1,6 @@
 # Backend release limitations
 
-Updated 10 October 2026. Passing coverage is not production approval.
+Updated 12 October 2026. Passing coverage is not production approval.
 
 ## Release blockers
 
@@ -23,6 +23,12 @@ Updated 10 October 2026. Passing coverage is not production approval.
   checklists pass. No real charge, email or upload was performed in this review.
 
 ## Verification boundaries and technical debt
+
+- Post-review financial batch 1 fixes the legacy payout state-machine bypass,
+  atomic return-refund linkage and incorrect refund wallet `balance_after`. It does
+  not complete seller-specific refund allocation, finite hold/release reconciliation,
+  refund-adjusted commission analytics, shipping/rounding policy or historical books.
+  See `docs/BACKEND_B1_REPORT.md` and `docs/BACKEND_REPAIR_QUEUE.md`.
 
 - The Task 7 dispute-message ownership finding is fixed in this working tree.
   Only the return owner can use the customer reply route; non-owner sellers and

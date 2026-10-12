@@ -21,10 +21,10 @@ def main() -> None:
             "APP_NAME": "WearHowZ API",
             "DATABASE_URL": "postgresql+asyncpg://test:test@127.0.0.1:55432/wearhowz_test",
             "REDIS_URL": "redis://127.0.0.1:56379/15",
-            "JWT_PRIVATE_KEY": "",
-            "JWT_PUBLIC_KEY": "",
+            "JWT_PRIVATE_KEY": "test-only-placeholder",
+            "JWT_PUBLIC_KEY": "test-only-placeholder",
             "SUPABASE_URL": "https://storage.example.invalid",
-            "SUPABASE_SERVICE_ROLE_KEY": "",
+            "SUPABASE_SERVICE_ROLE_KEY": "test-only-placeholder",
             "RESEND_API_KEY": "",
             "PAYFAST_ENABLED": "false",
         }

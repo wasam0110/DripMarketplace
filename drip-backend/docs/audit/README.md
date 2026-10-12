@@ -1,0 +1,21 @@
+# Backend definition index
+
+Validated 12 October 2026: the original review index covers all 163 pre-repair Python files and 1,953 class/function definitions. Backend batch 1 subsequently changed eight indexed files and added one test file; [the batch-1 supplement](b1-changes.md) supersedes those entries. The current tree contains 164 Python files, 29,969 lines and 1,964 definitions. Hashes are of decoded, newline-normalized UTF-8 source, not raw on-disk bytes.
+
+This generated index lists source ranges, annotated field names, backend imports and selected syntactic calls. It is not a resolved call graph, an independently authored explanation of every statement, or proof that a function works. Use the [walkthrough](../BACKEND_WALKTHROUGH.md) for system flow and the [findings](../BACKEND_DEEP_REVIEW.md) for correctness issues.
+
+- [Entry points, dependencies and core](entry-core.md)
+- [HTTP routes](routes.md)
+- [Services A–M](services-a.md)
+- [Services N–Z](services-b.md)
+- [Repositories](repositories.md)
+- [Models](models.md)
+- [Schemas](schemas.md)
+- [Workers and integrations](workers-integrations.md)
+- [Migrations and scripts](migrations-scripts.md)
+- [Unit tests](tests-unit.md)
+- [Integration, security, load and shared test fixtures](tests-other.md)
+
+Frontend files, local secrets, virtual environments, caches and third-party dependency source are outside this backend source index. Source docstrings are quoted as navigation context and may describe intent rather than current behaviour.
+
+Runtime evidence for this review: [verification summary](verification-2026-10-12.json) and [native financial reproductions](native-probes-2026-10-12.json). Passing the existing suite does not clear the recorded findings.

@@ -4,14 +4,12 @@ from uuid import UUID
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, CurrentAdmin
 from app.schemas.wallet import PaginatedPayouts, PayoutResponse
 from app.services.wallet_service import WalletService
-from app.models.wallet import PayoutStatus
-
 router = APIRouter(prefix="/admin", tags=["admin"])
 DB = Annotated[AsyncSession, Depends(get_db)]
 
@@ -19,6 +17,13 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 class PayoutActionRequest(BaseModel):
     admin_note:        Optional[str] = None
     payment_reference: Optional[str] = None
+
+
+class PayoutCompletionRequest(BaseModel):
+    """Compatibility shape for the legacy completion URL."""
+
+    admin_note: Optional[str] = Field(default=None, max_length=500)
+    payment_reference: str = Field(min_length=3, max_length=255)
 
 
 @router.get("/payouts", response_model=PaginatedPayouts)
@@ -36,10 +41,11 @@ async def list_all_payouts(
     return PaginatedPayouts(
         data=[
             PayoutResponse(
-                id=p.id, amount=int(p.amount), payment_method=p.payment_method,
+                id=p.id, amount=p.amount, payment_method=p.payment_method,
                 payment_detail=p.payment_detail, status=p.status.value,
                 admin_note=p.admin_note, requested_at=p.requested_at,
                 completed_at=p.completed_at,
+                transfer_reference=p.transfer_reference,
             )
             for p in rows
         ],
@@ -64,26 +70,15 @@ async def approve_payout(
 @router.post("/payouts/{payout_id}/complete", response_model=PayoutResponse)
 async def complete_payout(
     payout_id:     UUID,
-    payload:       PayoutActionRequest,
+    payload:       PayoutCompletionRequest,
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> PayoutResponse:
-    svc    = WalletService(db)
-    payout = await svc.payout_repo.get_by_id(payout_id)
-    if not payout:
-        from app.core.exceptions import NotFoundError
-        raise NotFoundError("Payout not found")
-    await svc.payout_repo.update_status(
-        payout_id, PayoutStatus.completed,
-        approved_by=UUID(current_admin["sub"]),
-        admin_note=payload.admin_note,
-    )
-    await db.commit()
-    return PayoutResponse(
-        id=payout.id, amount=int(payout.amount),
-        payment_method=payout.payment_method, payment_detail=payout.payment_detail,
-        status=PayoutStatus.completed.value, admin_note=payload.admin_note,
-        requested_at=payout.requested_at, completed_at=payout.completed_at,
+    return await WalletService(db).admin_complete_payout(
+        payout_id=payout_id,
+        admin_id=UUID(current_admin["sub"]),
+        reference=payload.payment_reference,
+        note=payload.admin_note,
     )
 
 

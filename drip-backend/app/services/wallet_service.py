@@ -287,7 +287,13 @@ class WalletService:
             requested_at=payout.requested_at, completed_at=None,
         )
 
-    async def admin_complete_payout(self, payout_id: UUID, admin_id: UUID, reference: str) -> PayoutResponse:
+    async def admin_complete_payout(
+        self,
+        payout_id: UUID,
+        admin_id: UUID,
+        reference: str,
+        note: Optional[str] = None,
+    ) -> PayoutResponse:
         from datetime import UTC, datetime
         payout = await self.payout_repo.get_by_id(payout_id, for_update=True)
         if not payout:
@@ -302,5 +308,7 @@ class WalletService:
         payout.transfer_reference = reference
         payout.approved_by = admin_id
         payout.completed_at = datetime.now(UTC)
+        if note is not None:
+            payout.admin_note = note
         await self.db.commit()
         return PayoutResponse.model_validate(payout)

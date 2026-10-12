@@ -1,0 +1,28 @@
+{
+  "date": "2026-10-12",
+  "timezone": "Asia/Karachi",
+  "scope": "Backend-only source/test review and isolated runtime diagnostics; not release approval",
+  "source": {"baseline_tracked_files": 189, "python_files": 163, "python_lines": 29590, "definitions": 1953, "indexed_python_files": 163, "source_hash_mismatches": 0},
+  "full_suite": {"passed": 602, "skipped": 1, "failed": 0, "errors": 0, "warnings": 501, "exit_code": 0, "duration_seconds": 730.50, "junit_cases": 603},
+  "coverage": {"statements": 8575, "covered": 7339, "missed": 1236, "percent": 85.58600583090379, "required_percent": 85, "gate_passed": true},
+  "unit_suite": {"passed": 347, "warnings": 27, "duration_seconds": 5.98},
+  "native_services": {"postgres": "15-alpine", "redis": "7-alpine", "project": "wearhowz-review-20261012", "disposable": true, "development_services_used": false, "audit_containers_and_network_removed": true, "development_redis_still_healthy": true},
+  "native_tests": {"release_native_passed": 10, "worker_redis_passed": 2, "included_in_full_suite": true},
+  "migrations": {"fresh_upgrade": "015", "round_trip": "015 -> 012 -> 015", "model_tables_readable": 39, "production_data_rehearsal": false, "complete_constraint_parity_checked": false},
+  "contract": {"saved_openapi_matches_application": true, "documented_operations": 185, "hidden_operations_included": false},
+  "tooling": {"fatal_error_ruff_passed": true, "full_ruff_findings": 1018, "mypy_installed": false, "pip_check_passed": true, "fresh_dependency_advisory_scan": false},
+  "native_diagnostic_findings": ["F01", "F02", "F03", "F04", "F05"],
+  "probe_evidence": "native-probes-2026-10-12.json",
+  "other_reproductions": ["malformed cursor JSON shape", "invalid cursor price", "forwarded-header rate-limit identity manipulation", "SQLite ORM refund audit-balance discrepancy"],
+  "limitations": [
+    "Existing tests miss reproduced financial invariants; passing coverage is not backend completion.",
+    "One legacy security module is unconditionally skipped; some smoke assertions accept incorrect responses.",
+    "No live PayFast, Google, Supabase or Resend journey was executed.",
+    "Provider documentation access returned HTTP 403; merchant protocol was not certified.",
+    "No load test, deployment or historical settlement reconciliation was performed.",
+    "Static review and generated indexes are not a literal explanation of every source line or a guarantee of no remaining bugs."
+  ],
+  "application_source_modified": false,
+  "frontend_inspected_or_modified": false,
+  "historical_verification_overwritten": false
+}

@@ -1,0 +1,48 @@
+{
+  "review_date": "2026-10-12",
+  "scope": "Backend-only synthetic diagnostic reproductions; no application fixes",
+  "database": "Local disposable PostgreSQL 15 container, separate audit_<uuid> schema per probe",
+  "session_settings": {"expire_on_commit": false, "autoflush": false},
+  "limitations": [
+    "These are targeted service/ORM probes, not a complete HTTP end-to-end run or provider certification.",
+    "Native probes used model-created tables; migrated constraints are separately exercised by the existing migration test.",
+    "The payout probe invoked the legacy route function with a synthetic admin identity, not through HTTP authentication.",
+    "The multi-brand fixture directly created its second seller order; settlement and allocation used real service code.",
+    "An initial diagnostic harness failed by reading an expired ORM ID after rollback; the corrected probe captured scalar IDs before rollback. This was not recorded as an application defect.",
+    "Probe scripts were diagnostic invocations, not newly committed regression tests. Each finding still requires a regression test in its repair batch."
+  ],
+  "observations": [
+    {
+      "finding": "F01",
+      "scenario": "Withdraw 500 from 1000 available, reject, then complete through the legacy route with a supplied reference",
+      "observed": {"payout_status": "completed", "available_balance": "1000.00", "transfer_reference": null},
+      "invariant_violated": "A rejected payout cannot become completed without a valid approved transition and receipt"
+    },
+    {
+      "finding": "F02",
+      "scenario": "Inject failure immediately after PaymentService.refund commits and before the return caller links it; roll back caller",
+      "observed": {"pending_refund_persisted": true, "return_link_missing": true},
+      "invariant_violated": "Return-linked refund creation must be atomic"
+    },
+    {
+      "finding": "F03",
+      "scenario": "Reverse 1020 from a pending balance of 2040",
+      "observed": {"actual_pending": "1020.00", "recorded_balance_after": "0.00"},
+      "invariant_violated": "Wallet audit balance must match the actual post-transaction balance"
+    },
+    {
+      "finding": "F04",
+      "scenario": "Complete a partial refund, age the settlement ledger ten days and run the release worker",
+      "observed": {"pending": "1020.00", "available": "0.00", "released": false},
+      "invariant_violated": "A completed partial refund must not permanently freeze the legitimate remaining entitlement"
+    },
+    {
+      "finding": "F05",
+      "scenario": "Two 2400 seller orders; confirm brand A's 1200 return, then settle brand B",
+      "observed": {"brand_b_returned_amount": "0.00", "brand_b_recorded_gross": "1800.00", "brand_b_recorded_seller_amount": "1530.00"},
+      "expected": {"brand_b_gross": "2400.00", "brand_b_seller_amount": "2040.00"},
+      "invariant_violated": "A seller-specific return must not reduce an unrelated seller's settlement"
+    }
+  ],
+  "cleanup": "Each probe disposed its engines and removed only its validated disposable schema in finally blocks. No development/production database or external provider was used."
+}
