@@ -1,8 +1,8 @@
 # Backend repair queue before frontend implementation
 
-12 October 2026. Backend only. This queue comes from the completed static source/test review, not from the older completion claims. Batch 1 has now been implemented; later batches remain pending. See [detailed findings](BACKEND_DEEP_REVIEW.md), [batch-1 report](BACKEND_B1_REPORT.md) and [system walkthrough](BACKEND_WALKTHROUGH.md).
+Updated 13 October 2026. Backend only. This queue comes from the completed static source/test review, not from the older completion claims. Repair batches 1 through 3 are implemented; later batches remain pending. See [detailed findings](BACKEND_DEEP_REVIEW.md), [batch-1 report](BACKEND_B1_REPORT.md), [batch-2 report](BACKEND_B2_REPORT.md), [batch-3 report](BACKEND_B3_REPORT.md) and [system walkthrough](BACKEND_WALKTHROUGH.md).
 
-Review baseline: 602 tests passed, 1 skipped, 85.59% coverage with native PostgreSQL/Redis enabled. After batch 1, the final suite is 611 passed, 1 skipped with 85.70% coverage; the unchanged 85% gate passes. F01-F03 are resolved, while F04-F17 remain open. See the [review verification](audit/verification-2026-10-12.json) and [batch-1 verification](audit/b1-verification-2026-10-12.json).
+Review baseline: 602 tests passed, 1 skipped, 85.59% coverage with native PostgreSQL/Redis enabled. After batch 3, the final suite is 617 passed, 1 skipped with 85.77% coverage; the unchanged 85% gate passes. F01-F07 are resolved, while F08-F17 remain open. See the [review verification](audit/verification-2026-10-12.json), [batch-1 verification](audit/b1-verification-2026-10-12.json), [batch-2 verification](audit/b2-verification-2026-10-13.json) and [batch-3 verification](audit/b3-verification-2026-10-13.json).
 
 ## 1. Completed — financial transaction integrity
 
@@ -12,21 +12,21 @@ Review baseline: 602 tests passed, 1 skipped, 85.59% coverage with native Postgr
 
 Acceptance evidence: eight new focused cases cover the compatibility route, invalid states, receipt replay/conflict, atomic failure/retry and four wallet-balance shapes. A native PostgreSQL race proves completion and rejection have one valid winner. Existing payout/refund and concurrent-confirmation regressions remain passing. Final verification also corrected and proves revision 009's isolation from same-named enums in unrelated schemas. See [batch-1 report](BACKEND_B1_REPORT.md).
 
-## 2. Refund allocation and settlement reconciliation — next
+## 2. Completed — refund allocation and settlement reconciliation
 
-- **F04: Implement finite hold/release behaviour.** Release legitimate remaining earnings after a partial refund; do not freeze another brand's earnings. Check real dispute/return holds, not just existence of any refund row.
-- **F05: Preserve seller-specific allocation before/after settlement.** A return for brand A must not reduce a later settlement for brand B. Use the same persisted allocation regardless of delivery/collection timing.
-- **F06: Complete net accounting.** Account for seller reversal, platform commission reversal, shipping allocation, rounding residuals and funds already paid out. Expose actual recovery separately from platform-funded shortfall and ensure reports reconcile.
+- **F04 completed:** the release scanner moves only the mature ledger's net entitlement, checks real return/dispute states and does not let one seller's refund freeze another seller's ledger.
+- **F05 completed:** revision 016 persists refund accounting plus seller-order allocations. Return-linked refunds target only their seller; pre-settlement allocations become explicit offsets.
+- **F06 completed:** original and net ledger values, commission/seller reversals, shipping, actual recovery, settlement offsets and platform shortfall are stored and exposed. Financial reporting uses net values while retaining original audit values.
 
-Acceptance: partial/full/refund-before-settlement, staggered multi-brand delivery, open/resolved disputes, matured balances, mixed pending/available funds and already-paid-out cases, with conservation-of-money and exactly-once stock assertions. Both the mature partial-refund hold and an unrelated brand's reduced settlement were reproduced on native PostgreSQL.
+Acceptance evidence: native PostgreSQL regressions cover partial/full/refund-before-settlement, multi-brand seller isolation, proportional cent allocation, shipping, open/resolved-seller disputes, matured remainder release, mixed pending/available recovery, already-paid-out shortfall, idempotency and exactly-once stock credit. Database constraints enforce the stored conservation equations. See [batch-2 report](BACKEND_B2_REPORT.md).
 
-Policy decisions before implementation: who bears shipping/refund shortfalls, and whether any seller debt is recoverable. Do not silently change the current platform-absorbs-shortfall policy. Historical revision-012 releases remain quarantined until separately reconciled.
+Policy retained: sellers bear only their net merchandise entitlement; the platform bears refunded shipping, reversed platform commission and seller-funds shortfall. No recoverable seller debt is created. Historical unallocated refunds remain quarantined until separately reconciled.
 
-## 3. Complete return/dispute outcomes
+## 3. Completed — return/dispute outcomes
 
-- **F07: Reconnect a customer-won dispute to a usable return workflow.** Define and implement reopening/approval, revalidate remaining quantities and permit receipt/refund through the existing manual confirmation flow.
+- **F07 completed:** a customer-won dispute atomically approves its rejected return only after revalidating quantities while holding the seller-order aggregate lock. Seller-won disputes leave the return rejected.
 
-Acceptance: reject → dispute → favourable resolution → receipt → refund request → transfer confirmation, including competing quantity claims. Resolving a dispute must not invent a transfer receipt.
+Acceptance evidence: the complete reject → dispute → customer-win → receipt → refund request → transfer confirmation journey passes. Resolution alone creates no refund, restock or transfer receipt. A native two-session race between customer-win activation and a new claim for the same purchased quantity permits exactly one active owner. See [batch-3 report](BACKEND_B3_REPORT.md).
 
 ## 4. Notification delivery and preferences
 

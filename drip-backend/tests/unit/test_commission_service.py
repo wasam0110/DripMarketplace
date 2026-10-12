@@ -53,7 +53,21 @@ def _make_service(
     svc.wallet_repo = AsyncMock()
 
     svc.comm_repo.exists_for_seller_order = AsyncMock(return_value=commission_exists)
-    svc.comm_repo.create = AsyncMock(return_value=MagicMock(id=uuid4()))
+    async def create_ledger(**kwargs):
+        from app.models.wallet import CommissionLedger
+
+        return CommissionLedger(
+            id=uuid4(),
+            refunded_gross_amount=Decimal("0"),
+            reversed_commission_amount=Decimal("0"),
+            reversed_seller_amount=Decimal("0"),
+            recovered_seller_amount=Decimal("0"),
+            settlement_offset_amount=Decimal("0"),
+            platform_shortfall_amount=Decimal("0"),
+            **kwargs,
+        )
+
+    svc.comm_repo.create = AsyncMock(side_effect=create_ledger)
 
     svc.wallet_repo.credit_pending = AsyncMock()
     svc.tx_repo.create = AsyncMock()

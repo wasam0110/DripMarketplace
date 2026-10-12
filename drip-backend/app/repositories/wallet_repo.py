@@ -49,15 +49,33 @@ class CommissionRepository:
 
         # Summary
         summary_q = select(
-            func.coalesce(func.sum(CommissionLedger.gross_amount),      0),
+            func.coalesce(func.sum(CommissionLedger.net_gross_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.net_commission_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.net_seller_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.gross_amount), 0),
             func.coalesce(func.sum(CommissionLedger.commission_amount), 0),
-            func.coalesce(func.sum(CommissionLedger.seller_amount),     0),
+            func.coalesce(func.sum(CommissionLedger.seller_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.refunded_gross_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.reversed_commission_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.reversed_seller_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.recovered_seller_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.settlement_offset_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.platform_shortfall_amount), 0),
         ).where(CommissionLedger.seller_id == seller_id)
         sums = (await self.db.execute(summary_q)).one()
         summary = {
             "total_gross":      sums[0],
             "total_commission": sums[1],
             "total_net":        sums[2],
+            "original_gross": sums[3],
+            "original_commission": sums[4],
+            "original_net": sums[5],
+            "total_refunded_gross": sums[6],
+            "total_reversed_commission": sums[7],
+            "total_reversed_seller": sums[8],
+            "total_recovered_seller": sums[9],
+            "total_settlement_offset": sums[10],
+            "total_platform_shortfall": sums[11],
         }
 
         return rows, total, summary

@@ -2,7 +2,7 @@
 
 This checkout contains the backend marketplace repairs, Task 3/4 provider hardening and Task 6 release-check work. The full suite passes the unchanged 85% coverage gate, but release approval remains blocked. PayFast stays disabled by default. See [SETUP.md](SETUP.md), [PayFast setup](docs/PAYFAST_SETUP.md), [connected-services setup](docs/CONNECTED_SERVICES_SETUP.md), [KNOWN_LIMITS.md](KNOWN_LIMITS.md), and the [Task 6 report](docs/TASK_6_REPORT.md).
 
-The 12 October post-review financial batch 1 also unifies payout completion, makes return-linked refund requests atomic, and corrects refund wallet audit balances. It is documented in [the batch-1 report](docs/BACKEND_B1_REPORT.md). Refund allocation/release reconciliation and the other [review queue](docs/BACKEND_REPAIR_QUEUE.md) batches remain open; this is not a backend-complete or production-ready claim.
+The post-review repair batches now cover payout completion integrity, atomic return-linked refund requests, accurate wallet audit balances, seller-specific refund allocation, finite settlement holds/releases, complete net refund accounting and customer-won dispute continuation. See the [batch-1 report](docs/BACKEND_B1_REPORT.md), [batch-2 report](docs/BACKEND_B2_REPORT.md), [batch-3 report](docs/BACKEND_B3_REPORT.md) and [remaining review queue](docs/BACKEND_REPAIR_QUEUE.md). F08-F17 and pre-production gates remain open; this is not a backend-complete or production-ready claim.
 
 ## Applying the supplied terminal update
 
@@ -32,8 +32,12 @@ Historical Task 1 verification used PGlite PostgreSQL/WASM with 412 passing test
 
 The user-approved Task 7 backend follow-ups fix dispute-message ownership, add authoritative guest quotes, add durable admin refund reads, and complete B4 with enriched admin return detail, seller-owned return decisions, admin dispute detail/replies, and signed-capability guest cancellation/returns. Revision 014 preserves separate refund requester/confirmer identities; revision 015 permits guest returns without inventing user ownership. The fresh 10 October suite passed **602 tests, 1 skipped, 85.59% coverage**. See [the Task 7 review](docs/TASK_7_DESIGN_REVIEW.md) for verification and remaining design work. Older review ZIPs do not include these follow-ups; the frontend remains untouched.
 
+Financial repair batch 2 adds revision 016 and completes findings F04-F06. Its native PostgreSQL/Redis checkpoint passed **614 tests, 1 skipped, with 85.70% coverage**. See [the batch-2 report](docs/BACKEND_B2_REPORT.md).
+
+Repair batch 3 completes F07 without an API or schema migration: a customer-win revalidates quantities and atomically approves the rejected return, while receipt and refund transfer remain explicit later steps. Its final native suite passed **617 tests, 1 skipped, with 85.77% coverage**. See [the batch-3 report](docs/BACKEND_B3_REPORT.md); F08-F17 remain open.
+
 For native tests, set TEST_DATABASE_URL to a dedicated PostgreSQL database ending in `_test`, separate from DATABASE_URL, then run `python -m pytest`. Tests create disposable schemas; never point them at a production database.
 
-Wallet, payout, order and dashboard money fields may be decimal strings in JSON and are in PKR units, not cents/paisa integers. Guest-order read/payment requests require X-Guest-Token. Completed manual payout/refund/registration/COD receipts record transfers made outside the app; these endpoints do not initiate a bank transfer. Synthetic refund accounting is tested; historical ledger reconciliation and live provider verification remain unfinished.
+Wallet, payout, order and dashboard money fields may be decimal strings in JSON and are in PKR units, not cents/paisa integers. Guest-order read/payment requests require X-Guest-Token. Completed manual payout/refund/registration/COD receipts record transfers made outside the app; these endpoints do not initiate a bank transfer. Revision-016 refund accounting and native settlement/release behavior are tested; historical unallocated ledger reconciliation and live provider verification remain unfinished.
 
 The terminal updater does not run database migrations, install dependencies, change your local `.env`, or push to Git. Committing and pushing source is separate from deploying it. If your branch auto-deploys on push, use a development branch while the remaining tasks are open.

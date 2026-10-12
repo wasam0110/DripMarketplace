@@ -69,6 +69,16 @@ class CommissionEntryResponse(BaseModel):
     commission_rate:   float
     commission_amount: Decimal
     seller_amount:     Decimal
+    original_gross_amount: Decimal
+    original_commission_amount: Decimal
+    original_seller_amount: Decimal
+    refunded_gross_amount: Decimal
+    reversed_commission_amount: Decimal
+    reversed_seller_amount: Decimal
+    recovered_seller_amount: Decimal
+    settlement_offset_amount: Decimal
+    platform_shortfall_amount: Decimal
+    released_at: datetime | None
     settled_at:        datetime
 
     model_config = {"from_attributes": True}
@@ -78,6 +88,15 @@ class CommissionSummary(BaseModel):
     total_gross:      Decimal
     total_commission: Decimal
     total_net:        Decimal
+    original_gross: Decimal
+    original_commission: Decimal
+    original_net: Decimal
+    total_refunded_gross: Decimal
+    total_reversed_commission: Decimal
+    total_reversed_seller: Decimal
+    total_recovered_seller: Decimal
+    total_settlement_offset: Decimal
+    total_platform_shortfall: Decimal
 
 
 class CommissionBreakdownResponse(BaseModel):

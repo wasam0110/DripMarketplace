@@ -21,7 +21,7 @@ from app.models.order import (
     SellerOrderStatus,
 )
 from app.models.payment import Payment, PaymentStatus, Refund
-from app.models.return_ import Return, ReturnStatus
+from app.models.return_ import Dispute, DisputeStatus, Return, ReturnItem, ReturnStatus
 from app.models.seller import SellerBankAccount, SellerWallet
 from app.models.wallet import (
     CommissionLedger,
@@ -33,7 +33,12 @@ from app.models.wallet import (
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.notification_repo import NotificationRepository
 from app.schemas.payment import RefundRequest
-from app.schemas.return_ import AdminReturnActionRequest, CreateReturnRequest
+from app.schemas.return_ import (
+    AdminReturnActionRequest,
+    CreateReturnRequest,
+    OpenDisputeRequest,
+    ResolveDisputeRequest,
+)
 from app.schemas.wallet import WithdrawalRequest
 from app.services.commission_service import CommissionService
 from app.services.order_service import OrderService
@@ -270,6 +275,97 @@ async def test_competing_admin_and_seller_return_decisions_allow_one_winner(
     assert sum(isinstance(value, BusinessRuleError) for value in results) == 1, results
     stored = await db.get(Return, returned.id)
     assert stored.status in (ReturnStatus.approved, ReturnStatus.rejected)
+
+
+async def test_customer_win_and_competing_return_claim_allow_one_quantity_owner(
+    db, market, test_engine
+):
+    created = await OrderService(db).create_guest_order(guest_payload(market))
+    order = await db.get(Order, created.order_id)
+    order.user_id = market.buyer.id
+    order.status = OrderStatus.delivered
+    seller_order = await db.scalar(
+        select(SellerOrder).where(SellerOrder.order_id == order.id)
+    )
+    seller_order.status = SellerOrderStatus.delivered
+    item = await db.scalar(select(OrderItem).where(OrderItem.order_id == order.id))
+    await db.commit()
+
+    service = ReturnService(db)
+    rejected = await service.request_return(
+        market.buyer.id,
+        CreateReturnRequest(
+            seller_order_id=seller_order.id,
+            reason="Both delivered units were damaged and unusable",
+            items=[{"order_item_id": item.id, "quantity": 2}],
+        ),
+    )
+    await service.reject_return(
+        rejected.id,
+        market.admin.id,
+        AdminReturnActionRequest(admin_note="Initial claim rejected"),
+    )
+    dispute = await service.open_dispute(
+        rejected.id,
+        market.buyer.id,
+        OpenDisputeRequest(message="Please review the evidence for both damaged units"),
+    )
+
+    calls = 0
+
+    async def competing_claims(session):
+        nonlocal calls
+        calls += 1
+        candidate = ReturnService(session)
+        if calls == 1:
+            return await candidate.resolve_dispute(
+                dispute.id,
+                market.admin.id,
+                ResolveDisputeRequest(
+                    in_favor_of="customer",
+                    resolution_note="Evidence supports the original customer claim",
+                ),
+            )
+        return await candidate.request_return(
+            market.buyer.id,
+            CreateReturnRequest(
+                seller_order_id=seller_order.id,
+                reason="A competing claim for the same two purchased units",
+                items=[{"order_item_id": item.id, "quantity": 2}],
+            ),
+        )
+
+    results = await race(test_engine, competing_claims)
+    assert sum(not isinstance(value, Exception) for value in results) == 1, results
+    assert sum(isinstance(value, BusinessRuleError) for value in results) == 1, results
+
+    stored_dispute = await db.scalar(
+        select(Dispute)
+        .where(Dispute.id == dispute.id)
+        .execution_options(populate_existing=True)
+    )
+    stored_return = await db.scalar(
+        select(Return)
+        .where(Return.id == rejected.id)
+        .execution_options(populate_existing=True)
+    )
+    active_quantity = await db.scalar(
+        select(func.coalesce(func.sum(ReturnItem.quantity), 0))
+        .join(Return, Return.id == ReturnItem.return_id)
+        .where(
+            ReturnItem.order_item_id == item.id,
+            Return.status != ReturnStatus.rejected,
+        )
+    )
+    assert active_quantity == 2
+    if stored_dispute.status == DisputeStatus.resolved_customer:
+        assert stored_return.status == ReturnStatus.approved
+        assert await db.scalar(select(func.count(Return.id))) == 1
+    else:
+        assert stored_dispute.status == DisputeStatus.open
+        assert stored_return.status == ReturnStatus.rejected
+        assert await db.scalar(select(func.count(Return.id))) == 2
+    assert await db.scalar(select(func.count(Refund.id))) == 0
 
 
 async def test_concurrent_payment_callbacks_preserve_one_transition(

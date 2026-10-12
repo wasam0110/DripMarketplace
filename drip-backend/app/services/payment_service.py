@@ -28,6 +28,8 @@ from app.schemas.payment import (
     PaymentRowResponse,
     PaymentStatusResponse,
     RefundHistoryEvent,
+    RefundAccountingResponse,
+    RefundAllocationResponse,
     RefundPaymentBalanceResponse,
     RefundRequest,
     RefundResponse,
@@ -577,6 +579,35 @@ class PaymentService:
         refund: Refund, payment: Payment | None = None
     ) -> AdminRefundRowResponse:
         payment = payment or refund.payment
+        accounting = refund.accounting
+        accounting_response = None
+        if accounting is not None:
+            accounting_response = RefundAccountingResponse(
+                merchandise_amount=accounting.merchandise_amount,
+                shipping_amount=accounting.shipping_amount,
+                commission_reversal_amount=accounting.commission_reversal_amount,
+                seller_reversal_amount=accounting.seller_reversal_amount,
+                recovered_amount=accounting.recovered_amount,
+                settlement_offset_amount=accounting.settlement_offset_amount,
+                platform_shortfall_amount=accounting.platform_shortfall_amount,
+                platform_funded_amount=accounting.platform_funded_amount,
+                reconciled=accounting.reconciled_at is not None,
+                allocations=[
+                    RefundAllocationResponse(
+                        seller_order_id=row.seller_order_id,
+                        seller_id=row.seller_id,
+                        merchandise_amount=row.merchandise_amount,
+                        commission_rate=row.commission_rate,
+                        commission_reversal_amount=row.commission_reversal_amount,
+                        seller_reversal_amount=row.seller_reversal_amount,
+                        recovered_amount=row.recovered_amount,
+                        settlement_offset_amount=row.settlement_offset_amount,
+                        platform_shortfall_amount=row.platform_shortfall_amount,
+                        reconciled=row.applied_at is not None,
+                    )
+                    for row in sorted(accounting.allocations, key=lambda value: value.id)
+                ],
+            )
         return AdminRefundRowResponse(
             refund_id=refund.id,
             payment_id=refund.payment_id,
@@ -591,6 +622,7 @@ class PaymentService:
             confirmed_by=refund.processed_by if refund.processed_at else None,
             requested_at=refund.created_at,
             processed_at=refund.processed_at,
+            accounting=accounting_response,
         )
 
     @staticmethod

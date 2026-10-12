@@ -70,6 +70,32 @@ class RefundResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RefundAllocationResponse(BaseModel):
+    seller_order_id: UUID
+    seller_id: UUID
+    merchandise_amount: Decimal
+    commission_rate: Decimal | None
+    commission_reversal_amount: Decimal
+    seller_reversal_amount: Decimal
+    recovered_amount: Decimal
+    settlement_offset_amount: Decimal
+    platform_shortfall_amount: Decimal
+    reconciled: bool
+
+
+class RefundAccountingResponse(BaseModel):
+    merchandise_amount: Decimal
+    shipping_amount: Decimal
+    commission_reversal_amount: Decimal
+    seller_reversal_amount: Decimal
+    recovered_amount: Decimal
+    settlement_offset_amount: Decimal
+    platform_shortfall_amount: Decimal
+    platform_funded_amount: Decimal
+    reconciled: bool
+    allocations: list[RefundAllocationResponse]
+
+
 class AdminRefundRowResponse(BaseModel):
     refund_id: UUID
     payment_id: UUID
@@ -84,6 +110,7 @@ class AdminRefundRowResponse(BaseModel):
     confirmed_by: UUID | None
     requested_at: datetime
     processed_at: datetime | None
+    accounting: RefundAccountingResponse | None = None
 
 
 class PaginatedRefunds(BaseModel):

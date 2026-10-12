@@ -190,10 +190,20 @@ class WalletService:
                 CommissionEntryResponse(
                     id                = e.id,
                     seller_order_id   = e.seller_order_id,
-                    gross_amount      = e.gross_amount,
+                    gross_amount      = e.net_gross_amount,
                     commission_rate   = float(e.commission_rate),
-                    commission_amount = e.commission_amount,
-                    seller_amount     = e.seller_amount,
+                    commission_amount = e.net_commission_amount,
+                    seller_amount     = e.net_seller_amount,
+                    original_gross_amount=e.gross_amount,
+                    original_commission_amount=e.commission_amount,
+                    original_seller_amount=e.seller_amount,
+                    refunded_gross_amount=e.refunded_gross_amount,
+                    reversed_commission_amount=e.reversed_commission_amount,
+                    reversed_seller_amount=e.reversed_seller_amount,
+                    recovered_seller_amount=e.recovered_seller_amount,
+                    settlement_offset_amount=e.settlement_offset_amount,
+                    platform_shortfall_amount=e.platform_shortfall_amount,
+                    released_at=e.released_at,
                     settled_at        = e.settled_at,
                 )
                 for e in rows

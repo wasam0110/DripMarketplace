@@ -1,6 +1,6 @@
 # Backend release limitations
 
-Updated 12 October 2026. Passing coverage is not production approval.
+Updated 13 October 2026. Passing coverage is not production approval.
 
 ## Release blockers
 
@@ -24,11 +24,16 @@ Updated 12 October 2026. Passing coverage is not production approval.
 
 ## Verification boundaries and technical debt
 
-- Post-review financial batch 1 fixes the legacy payout state-machine bypass,
-  atomic return-refund linkage and incorrect refund wallet `balance_after`. It does
-  not complete seller-specific refund allocation, finite hold/release reconciliation,
-  refund-adjusted commission analytics, shipping/rounding policy or historical books.
-  See `docs/BACKEND_B1_REPORT.md` and `docs/BACKEND_REPAIR_QUEUE.md`.
+- Post-review repair batches 1 through 3 fix payout-transition integrity, atomic
+  return-refund linkage, wallet audit balances, seller-specific refund allocation,
+  finite ledger holds/releases, refund-adjusted reporting and customer-won dispute
+  continuation. A favourable dispute decision approves the return only after locked
+  quantity revalidation; it does not claim receipt or transfer money. The retained policy
+  makes the platform absorb refunded shipping, reversed platform commission and any
+  seller-funds shortfall; it does not create recoverable seller debt. Historical
+  refunds without revision-016 allocation remain quarantined. See
+  `docs/BACKEND_B1_REPORT.md`, `docs/BACKEND_B2_REPORT.md`,
+  `docs/BACKEND_B3_REPORT.md` and the repair queue.
 
 - The Task 7 dispute-message ownership finding is fixed in this working tree.
   Only the return owner can use the customer reply route; non-owner sellers and
@@ -74,11 +79,11 @@ Updated 12 October 2026. Passing coverage is not production approval.
   does not establish a clean lint gate. Strict typing is configured but mypy is not
   part of the checked-in development requirements; a clean type-check result has
   not been established.
-- The migration test uses a fresh isolated schema and a 015 → 012 → 015 round trip,
+- The migration test uses a fresh isolated schema and a 016 → 012 → 016 round trip,
   not a populated production backup. Rollback drops notification archive/read data and
-  the refund requester audit field. Revision 015 cannot downgrade while guest-return
-  rows with null user ownership remain; reconcile them explicitly rather than deleting
-  them silently.
+  refund accounting/allocation tables and the refund requester audit field. Revision
+  015 cannot downgrade while guest-return rows with null user ownership remain;
+  reconcile them explicitly rather than deleting them silently.
 - API/worker image build success alone does not prove deployment, health, secrets,
   network policy, scheduled delivery, backup/restore or operational monitoring.
 

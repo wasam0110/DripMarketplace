@@ -153,9 +153,9 @@ class SellerService:
         now = datetime.now(UTC)
         start = now.replace(hour=0, minute=0, second=0, microsecond=0) if period == "today" else now - timedelta(days={"week": 7, "month": 30, "quarter": 90, "year": 365}.get(period, 30))
         gross, commission, net = (await self.db.execute(select(
-            func.coalesce(func.sum(CommissionLedger.gross_amount), 0),
-            func.coalesce(func.sum(CommissionLedger.commission_amount), 0),
-            func.coalesce(func.sum(CommissionLedger.seller_amount), 0))
+            func.coalesce(func.sum(CommissionLedger.net_gross_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.net_commission_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.net_seller_amount), 0))
             .where(CommissionLedger.seller_id == seller.id, CommissionLedger.settled_at >= start))).one()
         rows = (await self.db.execute(select(SellerOrder.status, func.count()).where(SellerOrder.seller_id == seller.id, SellerOrder.created_at >= start).group_by(SellerOrder.status))).all()
         counts = {status.value: count for status, count in rows}

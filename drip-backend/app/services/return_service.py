@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, Sequence
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -16,7 +16,7 @@ from app.core.exceptions import (
 )
 from app.models.order import Order, OrderItem, OrderStatus, SellerOrder
 from app.models.payment import Payment, PaymentStatus, Refund
-from app.models.return_ import Dispute, DisputeStatus, Return, ReturnStatus
+from app.models.return_ import Dispute, DisputeStatus, Return, ReturnItem, ReturnStatus
 from app.models.user import User
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.return_repo import DisputeRepository, ReturnRepository
@@ -37,6 +37,7 @@ from app.schemas.return_ import (
     PaginatedReturns,
     ResolveDisputeRequest,
     ReturnDetailResponse,
+    ReturnItemRequest,
     ReturnItemResponse,
     ReturnRowResponse,
     SellerReturnDetailResponse,
@@ -111,26 +112,7 @@ class ReturnService:
 
         if len({i.order_item_id for i in payload.items}) != len(payload.items):
             raise BusinessRuleError("Each order item may appear only once")
-        # Validate order items belong to this seller_order
-        for req_item in payload.items:
-            item_result = await self.db.execute(
-                select(OrderItem).where(
-                    OrderItem.id == req_item.order_item_id,
-                    OrderItem.order_id == order.id,
-                    OrderItem.seller_id == seller_order.seller_id,
-                )
-            )
-            order_item = item_result.scalar_one_or_none()
-            if not order_item:
-                raise BusinessRuleError(f"Order item {req_item.order_item_id} not found in this seller order")
-            from sqlalchemy import func
-
-            from app.models.return_ import ReturnItem
-            already_requested = await self.db.scalar(select(func.coalesce(func.sum(ReturnItem.quantity), 0)).join(Return).where(ReturnItem.order_item_id == order_item.id, Return.status != ReturnStatus.rejected))
-            if req_item.quantity + already_requested > order_item.quantity:
-                raise BusinessRuleError(
-                    f"Cannot return more than purchased quantity for {order_item.product_name}"
-                )
+        await self._validate_return_quantities(order, seller_order, payload.items)
 
         return_ = await self.return_repo.create(
             order_id        = order.id,
@@ -538,6 +520,39 @@ class ReturnService:
             if payload.in_favor_of == "customer"
             else DisputeStatus.resolved_seller
         )
+        if status == DisputeStatus.resolved_customer:
+            return_ = await self.return_repo.get_by_id(
+                dispute.return_id,
+                for_update=True,
+            )
+            if not return_ or return_.status != ReturnStatus.rejected:
+                raise BusinessRuleError(
+                    "A customer-favour resolution requires a rejected return"
+                )
+            seller_order = await self.db.scalar(
+                select(SellerOrder)
+                .where(SellerOrder.id == return_.seller_order_id)
+                .with_for_update()
+            )
+            if not seller_order:
+                raise BusinessRuleError("Return seller order is missing")
+            order = await self.db.get(Order, return_.order_id)
+            if not order:
+                raise BusinessRuleError("Return order is missing")
+
+            # Rejected returns do not reserve returnable quantities. Lock the
+            # seller order (the same aggregate lock used by request_return),
+            # then revalidate before making this return active again.
+            await self._validate_return_quantities(
+                order,
+                seller_order,
+                return_.items,
+                exclude_return_id=return_.id,
+            )
+            await self.return_repo.update_status(
+                return_.id,
+                ReturnStatus.approved,
+            )
         await self.dispute_repo.resolve(
             dispute_id      = dispute_id,
             status          = status,
@@ -549,6 +564,44 @@ class ReturnService:
         return self._to_dispute(dispute)  # type: ignore[arg-type]
 
     # ── Helpers ────────────────────────────────────────────────────────────────
+
+    async def _validate_return_quantities(
+        self,
+        order: Order,
+        seller_order: SellerOrder,
+        items: Sequence[ReturnItemRequest | ReturnItem],
+        *,
+        exclude_return_id: UUID | None = None,
+    ) -> None:
+        """Validate claims while the caller holds the seller-order row lock."""
+        for requested in sorted(items, key=lambda item: str(item.order_item_id)):
+            order_item = await self.db.scalar(
+                select(OrderItem).where(
+                    OrderItem.id == requested.order_item_id,
+                    OrderItem.order_id == order.id,
+                    OrderItem.seller_id == seller_order.seller_id,
+                )
+            )
+            if not order_item:
+                raise BusinessRuleError(
+                    f"Order item {requested.order_item_id} not found in this seller order"
+                )
+
+            claimed_query = (
+                select(func.coalesce(func.sum(ReturnItem.quantity), 0))
+                .join(Return, Return.id == ReturnItem.return_id)
+                .where(
+                    ReturnItem.order_item_id == order_item.id,
+                    Return.status != ReturnStatus.rejected,
+                )
+            )
+            if exclude_return_id is not None:
+                claimed_query = claimed_query.where(Return.id != exclude_return_id)
+            already_claimed = await self.db.scalar(claimed_query)
+            if requested.quantity + already_claimed > order_item.quantity:
+                raise BusinessRuleError(
+                    f"Cannot return more than purchased quantity for {order_item.product_name}"
+                )
 
     async def _get_return_admin(self, return_id: UUID, *, lock: bool = False) -> Return:
         return_ = await self.return_repo.get_by_id(return_id, for_update=lock)

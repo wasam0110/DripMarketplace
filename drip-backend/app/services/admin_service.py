@@ -66,7 +66,7 @@ class AdminService:
         pending_payouts = pending_payouts_r.scalar_one() or 0
 
         total_gmv = await sum_col(Order.total, Order.status.in_(["delivered", "completed"]), Order.created_at >= since)
-        platform_revenue = await sum_col(CommissionLedger.commission_amount, CommissionLedger.settled_at >= since)
+        platform_revenue = await sum_col(CommissionLedger.net_commission_amount, CommissionLedger.settled_at >= since)
         from app.services.revenue import seller_fee_revenue
         slot_revenue = await seller_fee_revenue(self.db, since)
         new_customers = await count(User, User.role == UserRole.customer, User.created_at >= since)
@@ -267,7 +267,7 @@ class AdminService:
 
         matching_ids = query.with_only_columns(Order.id).order_by(None)
         commission_total_r = await self.db.execute(
-            select(func.coalesce(func.sum(CommissionLedger.commission_amount), 0))
+            select(func.coalesce(func.sum(CommissionLedger.net_commission_amount), 0))
             .join(SellerOrder, CommissionLedger.seller_order_id == SellerOrder.id)
             .where(SellerOrder.order_id.in_(matching_ids))
         )
@@ -293,7 +293,7 @@ class AdminService:
                 seller_count   = len(o.seller_orders),
                 subtotal       = o.subtotal,
                 total          = o.total,
-                commission     = await self.db.scalar(select(func.coalesce(func.sum(CommissionLedger.commission_amount), 0)).join(SellerOrder, CommissionLedger.seller_order_id == SellerOrder.id).where(SellerOrder.order_id == o.id)),
+                commission     = await self.db.scalar(select(func.coalesce(func.sum(CommissionLedger.net_commission_amount), 0)).join(SellerOrder, CommissionLedger.seller_order_id == SellerOrder.id).where(SellerOrder.order_id == o.id)),
                 payment_method = o.payment_method.value,
                 created_at     = o.created_at,
             ))
@@ -461,7 +461,7 @@ class AdminService:
 
     async def _seller_commission(self, seller_id: UUID) -> Decimal:
         result = await self.db.execute(
-            select(func.coalesce(func.sum(CommissionLedger.commission_amount), 0))
+            select(func.coalesce(func.sum(CommissionLedger.net_commission_amount), 0))
             .where(CommissionLedger.seller_id == seller_id)
         )
         return result.scalar_one()

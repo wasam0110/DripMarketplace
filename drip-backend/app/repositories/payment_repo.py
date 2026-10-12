@@ -7,9 +7,10 @@ from uuid import UUID
 
 from sqlalchemy import desc, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.models.payment import Payment, PaymentCallback, PaymentStatus, Refund
+from app.models.wallet import RefundAccounting
 
 
 class PaymentRepository:
@@ -105,7 +106,8 @@ class PaymentRepository:
         per_page: int = 25,
     ) -> tuple[Sequence[Refund], int]:
         query = select(Refund).options(
-            selectinload(Refund.payment).selectinload(Payment.order)
+            selectinload(Refund.payment).selectinload(Payment.order),
+            joinedload(Refund.accounting).selectinload(RefundAccounting.allocations),
         )
         if status == "pending":
             query = query.where(Refund.processed_at.is_(None))
@@ -130,7 +132,11 @@ class PaymentRepository:
             select(Refund)
             .options(
                 selectinload(Refund.payment).selectinload(Payment.order),
-                selectinload(Refund.payment).selectinload(Payment.refunds),
+                selectinload(Refund.payment)
+                .selectinload(Payment.refunds)
+                .joinedload(Refund.accounting)
+                .selectinload(RefundAccounting.allocations),
+                joinedload(Refund.accounting).selectinload(RefundAccounting.allocations),
             )
             .where(Refund.id == refund_id)
             .execution_options(populate_existing=True)
@@ -139,7 +145,12 @@ class PaymentRepository:
     async def get_payment_refunds(self, payment_id: UUID) -> Optional[Payment]:
         return await self.db.scalar(
             select(Payment)
-            .options(selectinload(Payment.order), selectinload(Payment.refunds))
+            .options(
+                selectinload(Payment.order),
+                selectinload(Payment.refunds)
+                .selectinload(Refund.accounting)
+                .selectinload(RefundAccounting.allocations),
+            )
             .where(Payment.id == payment_id)
             .execution_options(populate_existing=True)
         )

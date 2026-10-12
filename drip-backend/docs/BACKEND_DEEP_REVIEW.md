@@ -6,11 +6,11 @@ Review dates: 11–12 October 2026. Scope: `drip-backend` only. This is a review
 
 The backend has substantial working functionality and useful regression tests, but it is **not complete except for production configuration**. Financial workflow, notification, account-lifecycle and validation gaps remain in application code. The highest-priority issues are listed below with source locations, consequences and proposed verification.
 
-The review itself changed no application logic, development/production data, provider configuration or frontend source. Backend repair batch 1 was subsequently implemented on 12 October and is recorded below; it changes only the five named backend modules and regression tests. Runtime checks used disposable local test services and synthetic data. New review documents are separate from historical release reports.
+The review itself changed no application logic, development/production data, provider configuration or frontend source. Backend repair batches 1 through 3 were subsequently implemented on 12–13 October and are recorded below and in their source supplements. Runtime checks used disposable local test services and synthetic data. New review documents are separate from historical release reports.
 
 ## What was actually reviewed and verified
 
-The pre-repair tracked backend baseline contains 189 files, including 163 Python files and 29,590 Python source lines. Application layers, routes, services, repositories, schemas, models, integrations, tasks, migrations and operational entry points were read. The remaining unit, HTTP smoke, persisted-state, B4/dispute, native, worker and load-test source was reviewed on 12 October. All 163 baseline Python files and 1,953 class/function definitions were indexed without source drift. Batch 1 adds one Python test file and changes seven existing Python files, including the offline contract utility; its [source supplement](audit/b1-changes.md) supersedes the affected baseline entries. Generated symbol indexes are navigation aids, not evidence of correctness.
+The pre-repair tracked backend baseline contains 189 files, including 163 Python files and 29,590 Python source lines. Application layers, routes, services, repositories, schemas, models, integrations, tasks, migrations and operational entry points were read. The remaining unit, HTTP smoke, persisted-state, B4/dispute, native, worker and load-test source was reviewed on 12 October. All 163 baseline Python files and 1,953 class/function definitions were indexed without source drift. Batch-specific [batch-1](audit/b1-changes.md) and [batch-2](audit/b2-changes.md) supplements supersede affected baseline entries. Generated symbol indexes are navigation aids, not evidence of correctness.
 
 The static source/test risk review is complete. This is **not** a literal teaching transcript explaining every source line, an assurance that no defects remain, or production approval. The walkthrough explains the application and its connections; the index locates individual definitions. Native runtime results and external limitations must be considered separately.
 
@@ -102,6 +102,8 @@ Recommended repair: use a refreshed/returned balance or a captured pre-update va
 
 ### F04 — Partial refunds indefinitely block settlement release; open disputes are not actually checked
 
+**Resolved in backend batch 2 (13 October 2026).** The scheduled worker delegates to a ledger-level release scanner. It releases only `net_seller_amount`, checks real return/dispute states, and does not let one seller's refund freeze another seller's ledger. Requested/approved/received returns and open/under-review/customer-won disputes remain held; a rejected return with a seller-win terminal dispute can release. Historical confirmed refunds without revision-016 accounting remain quarantined.
+
 Source: `app/tasks/wallet_tasks.py:33`, especially the refund lookup and `continue` at lines 54–56.
 
 The release worker skips a ledger whenever *any* refund exists on its parent order. This includes completed partial refunds and refunds belonging to another seller. It never subtracts accounted-for reversals from the releasable ledger amount, and there is no implemented reconciliation transition that clears this condition for new refunds.
@@ -111,6 +113,8 @@ Separately, the comment says disputed orders are held, but the query checks `Ref
 Recommended repair: model seller/ledger-level remaining entitlement and explicit hold reasons. Keep historical revision-012 balances quarantined until separately reconciled. Test partial/full refund, another seller's refund, open dispute, resolved dispute and eventual release of the correct remainder.
 
 ### F05 — Pre-settlement refund allocation can debit an unrelated brand
+
+**Resolved in backend batch 2 (13 October 2026).** Revision 016 persists deterministic allocations by refund and seller order. Return-linked refunds allocate only to the linked seller order; direct refunds split against remaining merchandise capacity with a final residual owner. The same pending allocation is consumed as a settlement offset if collection occurs later, so another brand's settlement is unchanged.
 
 Source: `app/services/commission_service.py:66`.
 
@@ -122,6 +126,8 @@ Recommended repair: persist allocation per refund and seller order, and consume 
 
 ### F06 — Refund accounting does not produce a complete net ledger
 
+**Resolved in backend batch 2 (13 October 2026).** The ledger retains original amounts and records refunded gross, reversed commission/seller entitlement, actual recovered funds, pre-settlement offsets and platform shortfall. Refund accounting separately stores merchandise and shipping and enforces seller/platform conservation with database checks. Seller/admin/analytics aggregates use net values, while API responses expose original and reconciliation fields.
+
 Source: `CommissionService._reverse_one`, `_reverse_across_order`, `_apply_debit`; `app/services/analytics_service.py`; `app/models/wallet.py`.
 
 Reversal creates a seller-wallet debit but leaves original commission-ledger amounts and cumulative earned/commission counters unchanged. Analytics reading those values therefore report original settlement amounts rather than refund-adjusted results. Preserving immutable original entries is reasonable only if compensating entries are included in net reporting; that reconciliation is absent here.
@@ -132,7 +138,9 @@ Recommended repair: distinguish original gross, seller reversal, platform commis
 
 ### F07 — Successful dispute resolution does not reconnect the return workflow
 
-Source: `app/services/return_service.py:184`, `:414`, `:434`, `:444`, `:515`.
+**Resolved in backend batch 3 (13 October 2026).** A customer-win now locks the rejected return and its seller order, revalidates every claimed item against other non-rejected returns, and atomically changes the return to `approved` with the dispute resolution. A seller-win leaves it rejected. Receipt, refund request and transfer confirmation remain separate explicit transitions; resolution creates none of them. A native race proves a customer-win and a competing claim cannot both own the same purchased quantity.
+
+Current repair source: `app/services/return_service.py:509` and `:568`. The original finding concerned the former dispute resolution and return-transition methods.
 
 A customer opens a dispute on a rejected return. Resolving it in the customer's favour changes the dispute only; the return stays rejected. Approval requires `requested`, receipt requires `approved`, and refund requires `received`. There is no implemented admin transition that lets the favourable decision proceed through the existing return/refund flow.
 
@@ -246,13 +254,13 @@ Recommended repair: precise authenticated assertions, boundary-level regression 
 
 `docs/verification.json` is explicitly the older Task 6 snapshot (8 October, 570 tests, revision 013, 171 schema operations). Later source and documentation include revisions 014/015 and more endpoints. Preserve that file as historical evidence or clearly version it; do not describe it as current verification. This review's fresh checks are recorded above, separately from historical results. The stored dependency advisory report is likewise historical, not a fresh vulnerability scan.
 
-## Suggested repair order — not executed
+## Original suggested repair order — current status
 
-1. Unify payout transitions; make return/refund creation atomic; correct wallet audit balances.
-2. Design coherent refund allocation, net accounting, shortfalls and hold/release reconciliation.
-3. Reconnect favourable disputes and notification business events, with end-to-end regression tests.
+1. **Completed in batch 1:** unify payout transitions; make return/refund creation atomic; correct wallet audit balances.
+2. **Completed in batch 2:** design coherent refund allocation, net accounting, shortfalls and hold/release reconciliation.
+3. **Partially completed in batch 3:** favourable disputes are reconnected with end-to-end regressions; notification business events remain open.
 4. Correct trusted-proxy handling, deletion lifecycle, cursor validation and moderation/configuration gaps.
 5. Rerun migrated native PostgreSQL/Redis tests, full coverage, contract checks, dependency/security review and production-like startup.
 6. Perform separately authorized provider sandbox and deployment checks; keep real charges and publishing gated.
 
-This order is a proposed follow-up. No fixes, commits, provider writes, balance reopening or deployment were authorized or performed as part of this review.
+This was the review's proposed follow-up order. Batches 1–3 subsequently completed the items marked above. No commit, provider write, historical-balance reopening or deployment was performed by those batches.

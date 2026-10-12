@@ -1,15 +1,22 @@
 """Commission settlement and refund reversal accounting."""
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 
-from sqlalchemy import select, func, update
+from sqlalchemy import func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.models.seller import SellerWallet
-from app.models.wallet import CommissionLedger, WalletTransaction, WalletTxType
+from app.models.wallet import (
+    CommissionLedger,
+    RefundAccounting,
+    RefundAllocation,
+    WalletTransaction,
+    WalletTxType,
+)
 from app.repositories.wallet_repo import CommissionRepository, WalletTransactionRepository
 from app.repositories.seller_repo import WalletRepository
 
@@ -33,13 +40,11 @@ class CommissionService:
 
         Idempotent — skips silently if this seller_order already has a ledger entry.
 
-        Edge-case handling: if a refund was confirmed before COD was collected (i.e.
-        the return was processed before the platform recorded the cash transfer), the
-        confirmed refund total is subtracted from gross before crediting the seller.
-        This prevents over-crediting in the rare pay-after-return scenario.
+        Refund allocations confirmed before settlement are applied as explicit
+        offsets against this seller's ledger before any wallet credit is created.
         """
         from app.models.order import SellerOrder
-        from app.models.payment import Payment, PaymentStatus, Refund
+        from app.models.payment import Payment, PaymentStatus
 
         result = await self.db.execute(
             select(SellerOrder).where(SellerOrder.id == seller_order_id).with_for_update()
@@ -63,40 +68,11 @@ class CommissionService:
         policy = await get_platform_settings(self.db)
         rate   = Decimal(str(policy.commission_rate))
 
-        # ── Edge case: subtract refunds that arrived before settlement ──────────
-        # In the normal flow this is 0; the query is cheap in the happy path.
-        pre_confirmed = await self.db.scalar(
-            select(func.coalesce(func.sum(Refund.amount), 0)).where(
-                Refund.payment_id == payment.id,
-                Refund.processed_at.is_not(None),
-            )
-        ) or Decimal("0")
+        gross_amount = Decimal(seller_order.subtotal)
+        commission_amount = self._money(gross_amount * rate)
+        seller_amount = gross_amount - commission_amount
 
-        if pre_confirmed > Decimal("0"):
-            # For multi-brand orders, prorate this seller's share of the refund by
-            # their share of the total settled subtotals on the order.
-            from app.models.order import SellerOrder as SO
-            seller_subtotals = (
-                await self.db.scalars(
-                    select(SO.subtotal).where(SO.order_id == seller_order.order_id)
-                )
-            ).all()
-            order_subtotal = sum(seller_subtotals, Decimal("0"))
-            if order_subtotal > Decimal("0") and seller_order.subtotal < order_subtotal:
-                # Multi-brand: prorate this seller's share.
-                seller_share  = (seller_order.subtotal / order_subtotal).quantize(
-                    Decimal("0.0001"), rounding=ROUND_HALF_UP
-                )
-                pre_confirmed = (pre_confirmed * seller_share).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                )
-            # Single-brand: apply full refund amount.
-
-        gross_amount      = max(seller_order.subtotal - pre_confirmed, Decimal("0"))
-        commission_amount = (gross_amount * rate).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-        seller_amount     = gross_amount - commission_amount
-
-        await self.comm_repo.create(
+        ledger = await self.comm_repo.create(
             seller_order_id   = seller_order_id,
             seller_id         = seller_order.seller_id,
             gross_amount      = gross_amount,
@@ -105,13 +81,36 @@ class CommissionService:
             seller_amount     = seller_amount,
         )
 
-        if seller_amount > Decimal("0"):
+        pending_allocations = (
+            await self.db.execute(
+                select(RefundAllocation)
+                .where(
+                    RefundAllocation.seller_order_id == seller_order_id,
+                    RefundAllocation.applied_at.is_(None),
+                )
+                .order_by(RefundAllocation.id)
+                .with_for_update()
+            )
+        ).scalars().all()
+        refund_ids: set[UUID] = set()
+        for allocation in pending_allocations:
+            await self._apply_allocation(
+                allocation,
+                ledger=ledger,
+                settlement_offset=True,
+            )
+            refund_ids.add(allocation.refund_id)
+
+        net_seller = ledger.net_seller_amount
+        net_commission = ledger.net_commission_amount
+
+        if net_seller > Decimal("0"):
             wallet = await self.wallet_repo.get_by_seller_id(seller_order.seller_id)
             if not wallet:
                 raise NotFoundError("Seller wallet not found")
 
-            await self.wallet_repo.credit_pending(seller_order.seller_id, seller_amount)
-            await self.wallet_repo.charge_commission(seller_order.seller_id, commission_amount)
+            await self.wallet_repo.credit_pending(seller_order.seller_id, net_seller)
+            await self.wallet_repo.charge_commission(seller_order.seller_id, net_commission)
 
             updated = await self.db.scalar(
                 select(SellerWallet)
@@ -121,27 +120,418 @@ class CommissionService:
             balance_after = updated.pending_balance
 
             note = (
-                f"Commission settled: PKR {gross_amount:,.2f} × {rate * 100}%"
-                f" = PKR {commission_amount:,.2f} WearHowZ,"
-                f" PKR {seller_amount:,.2f} seller"
+                f"Commission settled: PKR {ledger.net_gross_amount:,.2f} net"
+                f" = PKR {net_commission:,.2f} WearHowZ,"
+                f" PKR {net_seller:,.2f} seller"
             )
-            if pre_confirmed > Decimal("0"):
-                note += f" (adjusted PKR {pre_confirmed:,.2f} pre-confirmed refund)"
+            if ledger.refunded_gross_amount > Decimal("0"):
+                note += (
+                    f" (PKR {ledger.refunded_gross_amount:,.2f}"
+                    " pre-settlement refund allocation)"
+                )
 
             await self.tx_repo.create(
                 seller_id       = seller_order.seller_id,
                 type            = WalletTxType.credit_commission,
-                amount          = seller_amount,
+                amount          = net_seller,
                 balance_after   = balance_after,
                 reference       = str(seller_order_id),
                 seller_order_id = seller_order_id,
                 note            = note,
             )
 
+        for refund_id in refund_ids:
+            await self._refresh_refund_accounting(refund_id)
+
         if commit:
             await self.db.commit()
         else:
             await self.db.flush()
+
+    async def _create_refund_accounting(
+        self,
+        *,
+        refund_id: UUID,
+        seller_order_id: UUID | None,
+        order_id: UUID | None,
+        refund_amount: Decimal,
+    ) -> RefundAccounting:
+        """Persist one deterministic merchandise/shipping allocation for a refund."""
+        from app.models.order import Order, SellerOrder
+        from app.models.payment import Payment, Refund
+
+        if seller_order_id is not None:
+            seller_order = await self.db.scalar(
+                select(SellerOrder)
+                .where(SellerOrder.id == seller_order_id)
+                .with_for_update()
+            )
+            if seller_order is None:
+                raise NotFoundError("Seller order for refund allocation was not found")
+            resolved_order_id = seller_order.order_id
+            seller_orders = [seller_order]
+        elif order_id is not None:
+            resolved_order_id = order_id
+            seller_orders = (
+                await self.db.execute(
+                    select(SellerOrder)
+                    .where(SellerOrder.order_id == order_id)
+                    .order_by(SellerOrder.id)
+                    .with_for_update()
+                )
+            ).scalars().all()
+        else:
+            raise BusinessRuleError("A seller order or order is required for refund allocation")
+
+        order = await self.db.get(Order, resolved_order_id)
+        if order is None or not seller_orders:
+            raise BusinessRuleError("Refund order has no seller allocation")
+
+        unallocated_historical = await self.db.scalar(
+            select(Refund.id)
+            .join(Payment, Refund.payment_id == Payment.id)
+            .where(
+                Payment.order_id == resolved_order_id,
+                Refund.id != refund_id,
+                Refund.processed_at.is_not(None),
+                ~select(RefundAccounting.refund_id)
+                .where(RefundAccounting.refund_id == Refund.id)
+                .exists(),
+            )
+            .limit(1)
+        )
+        if unallocated_historical is not None:
+            raise BusinessRuleError(
+                "Historical refunds on this order require reconciliation before another refund"
+            )
+
+        prior_rows = (
+            await self.db.execute(
+                select(
+                    RefundAllocation.seller_order_id,
+                    func.coalesce(func.sum(RefundAllocation.merchandise_amount), 0),
+                )
+                .where(
+                    RefundAllocation.seller_order_id.in_([so.id for so in seller_orders])
+                )
+                .group_by(RefundAllocation.seller_order_id)
+            )
+        ).all()
+        prior = {row[0]: Decimal(row[1]) for row in prior_rows}
+        capacities = [
+            (so, max(Decimal(so.subtotal) - prior.get(so.id, Decimal("0")), Decimal("0")))
+            for so in seller_orders
+        ]
+
+        if seller_order_id is not None:
+            merchandise_amount = refund_amount
+            shipping_amount = Decimal("0")
+            if merchandise_amount > capacities[0][1]:
+                raise BusinessRuleError(
+                    "Return refund exceeds this seller order's remaining merchandise value"
+                )
+            split = [(seller_orders[0], merchandise_amount)]
+        else:
+            merchandise_capacity = sum((capacity for _, capacity in capacities), Decimal("0"))
+            merchandise_amount = min(refund_amount, merchandise_capacity)
+            shipping_amount = refund_amount - merchandise_amount
+            prior_shipping = await self.db.scalar(
+                select(func.coalesce(func.sum(RefundAccounting.shipping_amount), 0))
+                .join(Refund, RefundAccounting.refund_id == Refund.id)
+                .join(Payment, Refund.payment_id == Payment.id)
+                .where(Payment.order_id == resolved_order_id)
+            ) or Decimal("0")
+            if shipping_amount > max(Decimal(order.shipping_fee) - prior_shipping, Decimal("0")):
+                raise BusinessRuleError("Refund exceeds remaining merchandise and shipping value")
+            split = self._split_allocation(merchandise_amount, capacities)
+
+        accounting = RefundAccounting(
+            refund_id=refund_id,
+            merchandise_amount=merchandise_amount,
+            shipping_amount=shipping_amount,
+            commission_reversal_amount=Decimal("0"),
+            seller_reversal_amount=Decimal("0"),
+            recovered_amount=Decimal("0"),
+            settlement_offset_amount=Decimal("0"),
+            platform_shortfall_amount=Decimal("0"),
+            platform_funded_amount=shipping_amount,
+        )
+        self.db.add(accounting)
+        for seller_order, amount in split:
+            if amount <= Decimal("0"):
+                continue
+            self.db.add(
+                RefundAllocation(
+                    refund_id=refund_id,
+                    seller_order_id=seller_order.id,
+                    seller_id=seller_order.seller_id,
+                    merchandise_amount=amount,
+                    commission_reversal_amount=Decimal("0"),
+                    seller_reversal_amount=Decimal("0"),
+                    recovered_amount=Decimal("0"),
+                    settlement_offset_amount=Decimal("0"),
+                    platform_shortfall_amount=Decimal("0"),
+                )
+            )
+        await self.db.flush()
+        return accounting
+
+    @classmethod
+    def _split_allocation(cls, amount: Decimal, capacities: list[tuple[object, Decimal]]):
+        """Split cents proportionally; the final eligible seller absorbs the residual."""
+        eligible = [(seller_order, capacity) for seller_order, capacity in capacities if capacity > 0]
+        if amount <= 0:
+            return []
+        if amount > sum((capacity for _, capacity in eligible), Decimal("0")):
+            raise BusinessRuleError("Refund exceeds remaining merchandise value")
+
+        result = []
+        remaining_amount = amount
+        remaining_capacity = sum((capacity for _, capacity in eligible), Decimal("0"))
+        for index, (seller_order, capacity) in enumerate(eligible):
+            if index == len(eligible) - 1:
+                share = remaining_amount
+            else:
+                share = min(
+                    capacity,
+                    cls._money(remaining_amount * capacity / remaining_capacity),
+                )
+            if share > 0:
+                result.append((seller_order, share))
+                remaining_amount -= share
+            remaining_capacity -= capacity
+        if remaining_amount != Decimal("0"):
+            raise BusinessRuleError("Refund allocation left an unreconciled rounding residual")
+        return result
+
+    async def _apply_allocation(
+        self,
+        allocation: RefundAllocation,
+        *,
+        ledger: CommissionLedger | None = None,
+        settlement_offset: bool = False,
+    ) -> bool:
+        """Apply one allocation to its ledger and wallet exactly once."""
+        if allocation.applied_at is not None:
+            return True
+        if ledger is None:
+            ledger = await self.db.scalar(
+                select(CommissionLedger)
+                .where(CommissionLedger.seller_order_id == allocation.seller_order_id)
+                .with_for_update()
+            )
+        if ledger is None:
+            return False
+
+        gross_remaining = ledger.net_gross_amount
+        commission_remaining = ledger.net_commission_amount
+        seller_remaining = ledger.net_seller_amount
+        merchandise = Decimal(allocation.merchandise_amount)
+        if merchandise > gross_remaining:
+            raise BusinessRuleError("Refund allocation exceeds remaining ledger gross")
+
+        commission_reversal = min(
+            self._money(merchandise * Decimal(ledger.commission_rate)),
+            commission_remaining,
+        )
+        seller_reversal = merchandise - commission_reversal
+        if seller_reversal > seller_remaining:
+            seller_reversal = seller_remaining
+            commission_reversal = merchandise - seller_reversal
+        if commission_reversal > commission_remaining:
+            raise BusinessRuleError("Refund allocation exceeds remaining commission")
+
+        if settlement_offset:
+            recovered = Decimal("0")
+            offset = seller_reversal
+            shortfall = Decimal("0")
+        else:
+            from app.models.payment import Refund
+
+            return_id = await self.db.scalar(
+                select(Refund.return_id).where(Refund.id == allocation.refund_id)
+            )
+            reference = f"return-refund:{allocation.refund_id}"
+            if return_id is None:
+                reference += f":{allocation.seller_order_id}"
+            recovered = await self._apply_debit(
+                seller_id=ledger.seller_id,
+                debit=seller_reversal,
+                reference=reference,
+                seller_order_id=allocation.seller_order_id,
+                released=ledger.released_at is not None,
+                note=(
+                    f"Refund allocation: PKR {merchandise:,.2f} merchandise"
+                    f" -> seller reversal PKR {seller_reversal:,.2f}"
+                ),
+            )
+            offset = Decimal("0")
+            shortfall = seller_reversal - recovered
+            await self.db.execute(
+                update(SellerWallet)
+                .where(SellerWallet.seller_id == ledger.seller_id)
+                .values(
+                    total_earned=SellerWallet.total_earned - seller_reversal,
+                    total_commission=(
+                        SellerWallet.total_commission - commission_reversal
+                    ),
+                )
+            )
+
+        ledger.refunded_gross_amount += merchandise
+        ledger.reversed_commission_amount += commission_reversal
+        ledger.reversed_seller_amount += seller_reversal
+        ledger.recovered_seller_amount += recovered
+        ledger.settlement_offset_amount += offset
+        ledger.platform_shortfall_amount += shortfall
+
+        allocation.commission_rate = ledger.commission_rate
+        allocation.commission_reversal_amount = commission_reversal
+        allocation.seller_reversal_amount = seller_reversal
+        allocation.recovered_amount = recovered
+        allocation.settlement_offset_amount = offset
+        allocation.platform_shortfall_amount = shortfall
+        allocation.applied_at = datetime.now(UTC)
+        await self.db.flush()
+        return True
+
+    async def _refresh_refund_accounting(self, refund_id: UUID) -> None:
+        accounting = await self.db.scalar(
+            select(RefundAccounting)
+            .where(RefundAccounting.refund_id == refund_id)
+            .with_for_update()
+        )
+        if accounting is None:
+            return
+        allocations = (
+            await self.db.execute(
+                select(RefundAllocation).where(RefundAllocation.refund_id == refund_id)
+            )
+        ).scalars().all()
+        accounting.commission_reversal_amount = sum(
+            (row.commission_reversal_amount for row in allocations), Decimal("0")
+        )
+        accounting.seller_reversal_amount = sum(
+            (row.seller_reversal_amount for row in allocations), Decimal("0")
+        )
+        accounting.recovered_amount = sum(
+            (row.recovered_amount for row in allocations), Decimal("0")
+        )
+        accounting.settlement_offset_amount = sum(
+            (row.settlement_offset_amount for row in allocations), Decimal("0")
+        )
+        accounting.platform_shortfall_amount = sum(
+            (row.platform_shortfall_amount for row in allocations), Decimal("0")
+        )
+        accounting.platform_funded_amount = (
+            accounting.shipping_amount
+            + accounting.commission_reversal_amount
+            + accounting.platform_shortfall_amount
+        )
+        accounting.reconciled_at = (
+            datetime.now(UTC)
+            if all(row.applied_at is not None for row in allocations)
+            else None
+        )
+        await self.db.flush()
+
+    @staticmethod
+    def _money(value: Decimal) -> Decimal:
+        return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    async def release_mature(self, *, now: datetime | None = None) -> int:
+        """Release each mature ledger's net entitlement unless that seller is held."""
+        from app.models.order import SellerOrder
+        from app.models.payment import Payment, Refund
+        from app.models.return_ import Dispute, DisputeStatus, Return, ReturnStatus
+        from app.services.platform_settings import get_platform_settings
+
+        now = now or datetime.now(UTC)
+        policy = await get_platform_settings(self.db)
+        rows = (
+            await self.db.execute(
+                select(CommissionLedger)
+                .where(
+                    CommissionLedger.released_at.is_(None),
+                    CommissionLedger.settled_at
+                    <= now - timedelta(days=policy.wallet_hold_days),
+                )
+                .order_by(CommissionLedger.settled_at, CommissionLedger.id)
+                .with_for_update(skip_locked=True)
+            )
+        ).scalars().all()
+        released = 0
+        for ledger in rows:
+            seller_order = await self.db.get(SellerOrder, ledger.seller_order_id)
+            if seller_order is None or seller_order.status.value != "delivered":
+                continue
+
+            active_hold = await self.db.scalar(
+                select(Return.id)
+                .outerjoin(Dispute, Dispute.return_id == Return.id)
+                .where(
+                    Return.seller_order_id == ledger.seller_order_id,
+                    or_(
+                        Return.status.in_(
+                            [
+                                ReturnStatus.requested,
+                                ReturnStatus.approved,
+                                ReturnStatus.received,
+                            ]
+                        ),
+                        Dispute.status.in_(
+                            [
+                                DisputeStatus.open,
+                                DisputeStatus.under_review,
+                                DisputeStatus.resolved_customer,
+                            ]
+                        ),
+                    ),
+                )
+                .limit(1)
+            )
+            if active_hold is not None:
+                continue
+
+            legacy_refund = await self.db.scalar(
+                select(Refund.id)
+                .join(Payment, Refund.payment_id == Payment.id)
+                .where(
+                    Payment.order_id == seller_order.order_id,
+                    Refund.processed_at.is_not(None),
+                    ~select(RefundAccounting.refund_id)
+                    .where(RefundAccounting.refund_id == Refund.id)
+                    .exists(),
+                )
+                .limit(1)
+            )
+            if legacy_refund is not None:
+                continue
+
+            amount = ledger.net_seller_amount
+            wallet = await self.db.scalar(
+                select(SellerWallet)
+                .where(SellerWallet.seller_id == ledger.seller_id)
+                .with_for_update()
+            )
+            if wallet is None or wallet.pending_balance < amount:
+                continue
+            if amount > Decimal("0"):
+                wallet.pending_balance -= amount
+                wallet.available_balance += amount
+                await self.tx_repo.create(
+                    seller_id=ledger.seller_id,
+                    type=WalletTxType.credit_adjustment,
+                    amount=amount,
+                    balance_after=wallet.pending_balance + wallet.available_balance,
+                    reference=str(ledger.id),
+                    seller_order_id=ledger.seller_order_id,
+                    note="Settlement hold released",
+                )
+            ledger.released_at = now
+            released += 1
+        await self.db.commit()
+        return released
 
     # ── Refund reversal ─────────────────────────────────────────────────────────
 
@@ -169,18 +559,33 @@ class CommissionService:
         - No-op if no CommissionLedger exists yet (settle() will handle it via the
           pre-confirmed refund check above).
         """
-        if seller_order_id is not None:
-            await self._reverse_one(
+        accounting = await self.db.scalar(
+            select(RefundAccounting)
+            .where(RefundAccounting.refund_id == refund_id)
+            .with_for_update()
+        )
+        if accounting is None:
+            accounting = await self._create_refund_accounting(
                 refund_id=refund_id,
                 seller_order_id=seller_order_id,
-                refund_amount=refund_amount,
-            )
-        elif order_id is not None:
-            await self._reverse_across_order(
-                refund_id=refund_id,
                 order_id=order_id,
-                refund_amount=refund_amount,
+                refund_amount=self._money(refund_amount),
             )
+
+        allocations = (
+            await self.db.execute(
+                select(RefundAllocation)
+                .where(
+                    RefundAllocation.refund_id == refund_id,
+                    RefundAllocation.applied_at.is_(None),
+                )
+                .order_by(RefundAllocation.id)
+                .with_for_update()
+            )
+        ).scalars().all()
+        for allocation in allocations:
+            await self._apply_allocation(allocation)
+        await self._refresh_refund_accounting(refund_id)
 
         if commit:
             await self.db.commit()
@@ -319,7 +724,7 @@ class CommissionService:
         seller_order_id: UUID,
         released: bool,
         note: str,
-    ) -> None:
+    ) -> Decimal:
         """
         Debit the seller wallet, best effort.
 
@@ -337,7 +742,7 @@ class CommissionService:
             .with_for_update()
         )
         if not wallet:
-            return
+            return Decimal("0")
 
         # SQLAlchemy may synchronize the loaded wallet when the UPDATE below is
         # executed. Capture the pre-update values so balance_after is independent
@@ -383,6 +788,7 @@ class CommissionService:
             seller_order_id = seller_order_id,
             note            = note,
         )
+        return from_pending + from_available
 
     async def _enqueue_release(self, seller_id: UUID, amount: Decimal) -> None:
         try:

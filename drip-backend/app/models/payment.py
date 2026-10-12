@@ -106,7 +106,11 @@ class Refund(Base):
     )
 
     payment: Mapped["Payment"] = relationship(back_populates="refunds")
+    accounting: Mapped["RefundAccounting | None"] = relationship(
+        back_populates="refund", uselist=False
+    )
 
 
 if TYPE_CHECKING:
     from app.models.order import Order
+    from app.models.wallet import RefundAccounting

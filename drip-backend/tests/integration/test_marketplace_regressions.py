@@ -444,6 +444,14 @@ async def test_admin_refund_queue_detail_history_and_balances(client, db, market
     assert body["history"][1]["transfer_reference"] == "REFUND-TRANSFER-READ-001"
     assert Decimal(body["payment"]["pending_refund_amount"]) == Decimal("0")
     assert Decimal(body["payment"]["completed_refund_amount"]) == Decimal("600.00")
+    accounting = body["accounting"]
+    assert Decimal(accounting["merchandise_amount"]) == Decimal("600.00")
+    assert Decimal(accounting["shipping_amount"]) == Decimal("0.00")
+    assert Decimal(accounting["seller_reversal_amount"]) == Decimal("0.00")
+    assert accounting["reconciled"] is False
+    assert len(accounting["allocations"]) == 1
+    assert accounting["allocations"][0]["seller_order_id"]
+    assert accounting["allocations"][0]["reconciled"] is False
 
     second = await service.refund(
         payment.id,
@@ -1400,7 +1408,7 @@ async def test_return_refund_reverses_seller_pending_balance(db, market, isolate
     Expected debit: 2040 × (1200 / 2400) = 1020.
     Expected pending after: 2040 − 1020 = 1020.
     """
-    from app.models.wallet import WalletTransaction, WalletTxType
+    from app.models.wallet import RefundAccounting, RefundAllocation, WalletTransaction, WalletTxType
 
     order, so, payment, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
     assert wallet.pending_balance == Decimal("2040.00")
@@ -1422,6 +1430,21 @@ async def test_return_refund_reverses_seller_pending_balance(db, market, isolate
     assert tx is not None
     assert tx.amount == Decimal("1020.00")
 
+    accounting = await db.get(RefundAccounting, refund_id)
+    allocation = await db.scalar(
+        select(RefundAllocation).where(RefundAllocation.refund_id == refund_id)
+    )
+    assert accounting.merchandise_amount == Decimal("1200.00")
+    assert accounting.shipping_amount == Decimal("0.00")
+    assert accounting.commission_reversal_amount == Decimal("180.00")
+    assert accounting.seller_reversal_amount == Decimal("1020.00")
+    assert accounting.recovered_amount == Decimal("1020.00")
+    assert accounting.platform_shortfall_amount == Decimal("0.00")
+    assert accounting.platform_funded_amount == Decimal("180.00")
+    assert accounting.reconciled_at is not None
+    assert allocation.seller_order_id == so.id
+    assert allocation.recovered_amount == Decimal("1020.00")
+
     # Stock: 8 original − 2 sold + 1 returned = 7.
     await db.refresh(market.inventory)
     assert market.inventory.stock == 7
@@ -1432,7 +1455,11 @@ async def test_return_refund_reverses_seller_available_balance(db, market, isola
     When funds have been released from the hold period (released_at set), the
     reversal targets available_balance, not pending_balance.
     """
-    from app.models.wallet import CommissionLedger, WalletTransaction, WalletTxType
+    from app.models.wallet import (
+        CommissionLedger,
+        WalletTransaction,
+        WalletTxType,
+    )
 
     order, so, payment, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
     assert wallet.pending_balance == Decimal("2040.00")
@@ -1496,15 +1523,16 @@ async def test_return_refund_idempotent_no_double_reversal(db, market, isolated_
     assert market.inventory.stock == 7  # 8 − 2 + 1, restocked once
 
 
-async def test_refund_before_settlement_reduces_gross_at_settle_time(db, market, isolated_redis):
+async def test_refund_before_settlement_creates_auditable_settlement_offset(
+    db, market, isolated_redis
+):
     """
     Edge case: admin confirms a direct refund before COD is collected.
-    When settle() runs, the pre-confirmed refund reduces gross_amount so the
-    seller is never over-credited.
+    When settle() runs, the original entitlement remains auditable and the
+    seller-specific refund is recorded as an offset before wallet credit.
 
     Order: 2400 subtotal.  Direct refund of 1200 confirmed before COD.
-    Expected gross at settle: 2400 − 1200 = 1200.
-    Expected seller_amount: 1200 × 0.85 = 1020.
+    Original gross remains 2400; net gross is 1200 and net seller credit is 1020.
     """
     from app.models.wallet import CommissionLedger
     from app.services.admin_service import AdminService
@@ -1548,17 +1576,24 @@ async def test_refund_before_settlement_reduces_gross_at_settle_time(db, market,
     await db.commit()
 
     await PaymentService(db).confirm_refund(refund.id, market.admin.id, "BANK-PRE-001")
-    # No CommissionLedger exists yet → _reverse_one is a no-op.
+    # No CommissionLedger exists yet: the allocation remains pending for settle().
 
-    # Now admin collects COD → settle() sees the pre-confirmed refund.
+    # Now admin collects COD: settle() applies only this seller's persisted offset.
     await PaymentService(db).record_cod_collection(payment.id, market.admin.id, "COD-POST-001")
 
     ledger = await db.scalar(
         select(CommissionLedger).where(CommissionLedger.seller_order_id == so.id)
     )
-    assert ledger.gross_amount == Decimal("1200.00")  # 2400 − 1200
-    assert ledger.seller_amount == Decimal("1020.00")  # 1200 × 0.85
-    assert ledger.commission_amount == Decimal("180.00")  # 1200 × 0.15
+    assert ledger.gross_amount == Decimal("2400.00")
+    assert ledger.commission_amount == Decimal("360.00")
+    assert ledger.seller_amount == Decimal("2040.00")
+    assert ledger.refunded_gross_amount == Decimal("1200.00")
+    assert ledger.reversed_commission_amount == Decimal("180.00")
+    assert ledger.reversed_seller_amount == Decimal("1020.00")
+    assert ledger.settlement_offset_amount == Decimal("1020.00")
+    assert ledger.net_gross_amount == Decimal("1200.00")
+    assert ledger.net_commission_amount == Decimal("180.00")
+    assert ledger.net_seller_amount == Decimal("1020.00")
 
     wallet = await db.scalar(select(SellerWallet).where(SellerWallet.seller_id == market.seller.id))
     assert wallet.pending_balance == Decimal("1020.00")
@@ -1586,7 +1621,13 @@ async def test_direct_refund_prorates_across_two_sellers(db, market):
     from app.models.payment import Refund
     from app.models.seller import Seller, SellerStatus
     from app.models.user import User, UserRole
-    from app.models.wallet import CommissionLedger, WalletTransaction, WalletTxType
+    from app.models.wallet import (
+        CommissionLedger,
+        RefundAccounting,
+        RefundAllocation,
+        WalletTransaction,
+        WalletTxType,
+    )
     from app.services.commission_service import CommissionService
 
     # ── Second seller ────────────────────────────────────────────────────────
@@ -1704,6 +1745,86 @@ async def test_direct_refund_prorates_across_two_sellers(db, market):
     )
     assert len(txs) == 2
 
+    accounting = await db.get(RefundAccounting, refund.id)
+    allocations = (
+        (
+            await db.execute(
+                select(RefundAllocation)
+                .where(RefundAllocation.refund_id == refund.id)
+                .order_by(RefundAllocation.merchandise_amount.desc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert accounting.merchandise_amount == Decimal("1000.00")
+    assert accounting.shipping_amount == Decimal("0.00")
+    assert accounting.commission_reversal_amount == Decimal("150.00")
+    assert accounting.seller_reversal_amount == Decimal("850.00")
+    assert accounting.recovered_amount == Decimal("850.00")
+    assert accounting.platform_funded_amount == Decimal("150.00")
+    assert [row.merchandise_amount for row in allocations] == [
+        Decimal("600.00"),
+        Decimal("400.00"),
+    ]
+
+    # A seller-specific allocation must not touch the other brand.
+    seller_refund = Refund(
+        payment_id=pmt.id,
+        amount=Decimal("100.00"),
+        reason="Seller-one-only adjustment",
+        processed_by=market.admin.id,
+    )
+    db.add(seller_refund)
+    await db.commit()
+    await CommissionService(db).reverse_for_refund(
+        seller_refund.id,
+        seller_order_id=so1.id,
+        refund_amount=seller_refund.amount,
+    )
+    await db.refresh(wallet1)
+    await db.refresh(wallet2)
+    assert wallet1.pending_balance == Decimal("425.00")
+    assert wallet2.pending_balance == Decimal("340.00")
+    seller_allocations = (
+        (
+            await db.execute(
+                select(RefundAllocation).where(
+                    RefundAllocation.refund_id == seller_refund.id
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    assert [row.seller_order_id for row in seller_allocations] == [so1.id]
+
+    # The remaining merchandise plus part of shipping reconciles to the cent.
+    final_refund = Refund(
+        payment_id=pmt.id,
+        amount=Decimal("1000.00"),
+        reason="Remaining merchandise and shipping adjustment",
+        processed_by=market.admin.id,
+    )
+    db.add(final_refund)
+    await db.commit()
+    await CommissionService(db).reverse_for_refund(
+        final_refund.id,
+        order_id=order.id,
+        refund_amount=final_refund.amount,
+    )
+    final_accounting = await db.get(RefundAccounting, final_refund.id)
+    assert final_accounting.merchandise_amount == Decimal("900.00")
+    assert final_accounting.shipping_amount == Decimal("100.00")
+    assert final_accounting.commission_reversal_amount == Decimal("135.00")
+    assert final_accounting.seller_reversal_amount == Decimal("765.00")
+    assert final_accounting.recovered_amount == Decimal("765.00")
+    assert final_accounting.platform_funded_amount == Decimal("235.00")
+    assert (
+        final_accounting.merchandise_amount + final_accounting.shipping_amount
+        == final_refund.amount
+    )
+
 
 async def test_seller_already_withdrawn_platform_absorbs_shortfall(db, market, isolated_redis):
     """
@@ -1713,7 +1834,12 @@ async def test_seller_already_withdrawn_platform_absorbs_shortfall(db, market, i
     """
     from datetime import UTC, datetime
 
-    from app.models.wallet import CommissionLedger, WalletTransaction, WalletTxType
+    from app.models.wallet import (
+        CommissionLedger,
+        RefundAccounting,
+        WalletTransaction,
+        WalletTxType,
+    )
 
     order, so, payment, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
     assert wallet.pending_balance == Decimal("2040.00")
@@ -1743,3 +1869,99 @@ async def test_seller_already_withdrawn_platform_absorbs_shortfall(db, market, i
     )
     assert tx is not None
     assert tx.amount == Decimal("1020.00")  # intended, not actual (for audit)
+
+    accounting = await db.get(RefundAccounting, refund_id)
+    assert accounting.recovered_amount == Decimal("0.00")
+    assert accounting.platform_shortfall_amount == Decimal("1020.00")
+    assert accounting.platform_funded_amount == Decimal("1200.00")
+
+
+async def test_partial_refund_releases_only_remaining_mature_entitlement(
+    db, market, isolated_redis
+):
+    """A processed partial return no longer freezes the valid remainder forever."""
+    from datetime import timedelta
+
+    from app.models.wallet import CommissionLedger
+    from app.services.commission_service import CommissionService
+
+    order, so, _, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
+    refund_id = await _do_return_and_process(db, market, order, so)
+    await PaymentService(db).confirm_refund(refund_id, market.admin.id, "BANK-PARTIAL-RELEASE")
+
+    ledger = await db.scalar(
+        select(CommissionLedger).where(CommissionLedger.seller_order_id == so.id)
+    )
+    ledger.settled_at = datetime.now(UTC) - timedelta(days=10)
+    await db.commit()
+
+    assert await CommissionService(db).release_mature() == 1
+    await db.refresh(wallet)
+    await db.refresh(ledger)
+    assert wallet.pending_balance == Decimal("0.00")
+    assert wallet.available_balance == Decimal("1020.00")
+    assert ledger.released_at is not None
+
+
+async def test_mature_release_obeys_return_and_dispute_lifecycle(
+    db, market, isolated_redis
+):
+    """Requested returns and open disputes hold funds; seller-win resolution releases them."""
+    from datetime import timedelta
+
+    from app.models.return_ import Dispute, DisputeStatus, Return, ReturnStatus
+    from app.models.wallet import CommissionLedger
+    from app.services.commission_service import CommissionService
+
+    order, so, _, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
+    returned, _ = await _request_single_item_return(db, market, order, so)
+    ledger = await db.scalar(
+        select(CommissionLedger).where(CommissionLedger.seller_order_id == so.id)
+    )
+    ledger.settled_at = datetime.now(UTC) - timedelta(days=10)
+    await db.commit()
+
+    assert await CommissionService(db).release_mature() == 0
+    returned_row = await db.get(Return, returned.id)
+    returned_row.status = ReturnStatus.rejected
+    dispute = Dispute(
+        return_id=returned.id,
+        seller_id=market.seller.id,
+        user_id=market.buyer.id,
+        status=DisputeStatus.open,
+    )
+    db.add(dispute)
+    await db.commit()
+
+    assert await CommissionService(db).release_mature() == 0
+    dispute.status = DisputeStatus.resolved_seller
+    await db.commit()
+
+    assert await CommissionService(db).release_mature() == 1
+    await db.refresh(wallet)
+    assert wallet.pending_balance == Decimal("0.00")
+    assert wallet.available_balance == Decimal("2040.00")
+
+
+async def test_refund_records_mixed_recovery_and_platform_shortfall(
+    db, market, isolated_redis
+):
+    """Recovery spans pending/available funds and persists the exact uncovered amount."""
+    from app.models.wallet import RefundAccounting
+
+    order, so, _, wallet = await _fulfil_and_collect_cod(db, market, isolated_redis)
+    wallet.pending_balance = Decimal("600.00")
+    wallet.available_balance = Decimal("300.00")
+    await db.commit()
+
+    refund_id = await _do_return_and_process(db, market, order, so)
+    await PaymentService(db).confirm_refund(refund_id, market.admin.id, "BANK-MIXED-RECOVERY")
+
+    await db.refresh(wallet)
+    accounting = await db.get(RefundAccounting, refund_id)
+    assert wallet.pending_balance == Decimal("0.00")
+    assert wallet.available_balance == Decimal("0.00")
+    assert accounting.seller_reversal_amount == Decimal("1020.00")
+    assert accounting.recovered_amount == Decimal("900.00")
+    assert accounting.platform_shortfall_amount == Decimal("120.00")
+    assert accounting.platform_funded_amount == Decimal("300.00")

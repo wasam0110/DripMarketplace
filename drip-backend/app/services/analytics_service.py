@@ -62,9 +62,9 @@ class SellerAnalyticsService:
 
         # Commission totals
         comm_q = select(
-            func.coalesce(func.sum(CommissionLedger.gross_amount), 0),
-            func.coalesce(func.sum(CommissionLedger.commission_amount), 0),
-            func.coalesce(func.sum(CommissionLedger.seller_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.net_gross_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.net_commission_amount), 0),
+            func.coalesce(func.sum(CommissionLedger.net_seller_amount), 0),
             func.count(CommissionLedger.id),
         ).where(
             CommissionLedger.seller_id == seller_id,
@@ -126,9 +126,9 @@ class SellerAnalyticsService:
         q = (
             select(
                 func.date_trunc(trunc_unit, CommissionLedger.settled_at).label("bucket"),
-                func.sum(CommissionLedger.gross_amount).label("gross"),
-                func.sum(CommissionLedger.commission_amount).label("commission"),
-                func.sum(CommissionLedger.seller_amount).label("net"),
+                func.sum(CommissionLedger.net_gross_amount).label("gross"),
+                func.sum(CommissionLedger.net_commission_amount).label("commission"),
+                func.sum(CommissionLedger.net_seller_amount).label("net"),
                 func.count(CommissionLedger.id).label("orders"),
             )
             .where(
@@ -272,7 +272,7 @@ class AdminAnalyticsService:
             )
         )
         commission_revenue = await scalar(
-            select(func.coalesce(func.sum(CommissionLedger.commission_amount), 0)).where(
+            select(func.coalesce(func.sum(CommissionLedger.net_commission_amount), 0)).where(
                 CommissionLedger.settled_at >= date_from
             )
         )
@@ -329,9 +329,9 @@ class AdminAnalyticsService:
         q = (
             select(
                 func.date_trunc(trunc_unit, CommissionLedger.settled_at).label("bucket"),
-                func.sum(CommissionLedger.gross_amount).label("gross"),
-                func.sum(CommissionLedger.commission_amount).label("commission"),
-                func.sum(CommissionLedger.seller_amount).label("net"),
+                func.sum(CommissionLedger.net_gross_amount).label("gross"),
+                func.sum(CommissionLedger.net_commission_amount).label("commission"),
+                func.sum(CommissionLedger.net_seller_amount).label("net"),
                 func.count(CommissionLedger.id).label("orders"),
             )
             .where(CommissionLedger.settled_at >= date_from)
@@ -363,8 +363,8 @@ class AdminAnalyticsService:
                 Seller.id,
                 Seller.brand_name,
                 Seller.logo_url,
-                func.coalesce(func.sum(CommissionLedger.gross_amount), 0).label("gmv"),
-                func.coalesce(func.sum(CommissionLedger.commission_amount), 0).label("commission"),
+                func.coalesce(func.sum(CommissionLedger.net_gross_amount), 0).label("gmv"),
+                func.coalesce(func.sum(CommissionLedger.net_commission_amount), 0).label("commission"),
                 func.count(CommissionLedger.id).label("order_count"),
             )
             .outerjoin(

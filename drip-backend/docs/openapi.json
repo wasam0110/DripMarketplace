@@ -266,6 +266,16 @@
       },
       "AdminRefundDetailResponse": {
         "properties": {
+          "accounting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RefundAccountingResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "amount": {
             "title": "Amount",
             "type": "string"
@@ -398,6 +408,16 @@
       },
       "AdminRefundRowResponse": {
         "properties": {
+          "accounting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RefundAccountingResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "amount": {
             "title": "Amount",
             "type": "string"
@@ -2080,6 +2100,50 @@
             "title": "Id",
             "type": "string"
           },
+          "original_commission_amount": {
+            "title": "Original Commission Amount",
+            "type": "string"
+          },
+          "original_gross_amount": {
+            "title": "Original Gross Amount",
+            "type": "string"
+          },
+          "original_seller_amount": {
+            "title": "Original Seller Amount",
+            "type": "string"
+          },
+          "platform_shortfall_amount": {
+            "title": "Platform Shortfall Amount",
+            "type": "string"
+          },
+          "recovered_seller_amount": {
+            "title": "Recovered Seller Amount",
+            "type": "string"
+          },
+          "refunded_gross_amount": {
+            "title": "Refunded Gross Amount",
+            "type": "string"
+          },
+          "released_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Released At"
+          },
+          "reversed_commission_amount": {
+            "title": "Reversed Commission Amount",
+            "type": "string"
+          },
+          "reversed_seller_amount": {
+            "title": "Reversed Seller Amount",
+            "type": "string"
+          },
           "seller_amount": {
             "title": "Seller Amount",
             "type": "string"
@@ -2093,6 +2157,10 @@
             "format": "date-time",
             "title": "Settled At",
             "type": "string"
+          },
+          "settlement_offset_amount": {
+            "title": "Settlement Offset Amount",
+            "type": "string"
           }
         },
         "required": [
@@ -2102,6 +2170,16 @@
           "commission_rate",
           "commission_amount",
           "seller_amount",
+          "original_gross_amount",
+          "original_commission_amount",
+          "original_seller_amount",
+          "refunded_gross_amount",
+          "reversed_commission_amount",
+          "reversed_seller_amount",
+          "recovered_seller_amount",
+          "settlement_offset_amount",
+          "platform_shortfall_amount",
+          "released_at",
           "settled_at"
         ],
         "title": "CommissionEntryResponse",
@@ -2109,6 +2187,18 @@
       },
       "CommissionSummary": {
         "properties": {
+          "original_commission": {
+            "title": "Original Commission",
+            "type": "string"
+          },
+          "original_gross": {
+            "title": "Original Gross",
+            "type": "string"
+          },
+          "original_net": {
+            "title": "Original Net",
+            "type": "string"
+          },
           "total_commission": {
             "title": "Total Commission",
             "type": "string"
@@ -2120,12 +2210,45 @@
           "total_net": {
             "title": "Total Net",
             "type": "string"
+          },
+          "total_platform_shortfall": {
+            "title": "Total Platform Shortfall",
+            "type": "string"
+          },
+          "total_recovered_seller": {
+            "title": "Total Recovered Seller",
+            "type": "string"
+          },
+          "total_refunded_gross": {
+            "title": "Total Refunded Gross",
+            "type": "string"
+          },
+          "total_reversed_commission": {
+            "title": "Total Reversed Commission",
+            "type": "string"
+          },
+          "total_reversed_seller": {
+            "title": "Total Reversed Seller",
+            "type": "string"
+          },
+          "total_settlement_offset": {
+            "title": "Total Settlement Offset",
+            "type": "string"
           }
         },
         "required": [
           "total_gross",
           "total_commission",
-          "total_net"
+          "total_net",
+          "original_gross",
+          "original_commission",
+          "original_net",
+          "total_refunded_gross",
+          "total_reversed_commission",
+          "total_reversed_seller",
+          "total_recovered_seller",
+          "total_settlement_offset",
+          "total_platform_shortfall"
         ],
         "title": "CommissionSummary",
         "type": "object"
@@ -4923,6 +5046,134 @@
           "is_primary"
         ],
         "title": "ProductImageResponse",
+        "type": "object"
+      },
+      "RefundAccountingResponse": {
+        "properties": {
+          "allocations": {
+            "items": {
+              "$ref": "#/components/schemas/RefundAllocationResponse"
+            },
+            "title": "Allocations",
+            "type": "array"
+          },
+          "commission_reversal_amount": {
+            "title": "Commission Reversal Amount",
+            "type": "string"
+          },
+          "merchandise_amount": {
+            "title": "Merchandise Amount",
+            "type": "string"
+          },
+          "platform_funded_amount": {
+            "title": "Platform Funded Amount",
+            "type": "string"
+          },
+          "platform_shortfall_amount": {
+            "title": "Platform Shortfall Amount",
+            "type": "string"
+          },
+          "reconciled": {
+            "title": "Reconciled",
+            "type": "boolean"
+          },
+          "recovered_amount": {
+            "title": "Recovered Amount",
+            "type": "string"
+          },
+          "seller_reversal_amount": {
+            "title": "Seller Reversal Amount",
+            "type": "string"
+          },
+          "settlement_offset_amount": {
+            "title": "Settlement Offset Amount",
+            "type": "string"
+          },
+          "shipping_amount": {
+            "title": "Shipping Amount",
+            "type": "string"
+          }
+        },
+        "required": [
+          "merchandise_amount",
+          "shipping_amount",
+          "commission_reversal_amount",
+          "seller_reversal_amount",
+          "recovered_amount",
+          "settlement_offset_amount",
+          "platform_shortfall_amount",
+          "platform_funded_amount",
+          "reconciled",
+          "allocations"
+        ],
+        "title": "RefundAccountingResponse",
+        "type": "object"
+      },
+      "RefundAllocationResponse": {
+        "properties": {
+          "commission_rate": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Commission Rate"
+          },
+          "commission_reversal_amount": {
+            "title": "Commission Reversal Amount",
+            "type": "string"
+          },
+          "merchandise_amount": {
+            "title": "Merchandise Amount",
+            "type": "string"
+          },
+          "platform_shortfall_amount": {
+            "title": "Platform Shortfall Amount",
+            "type": "string"
+          },
+          "reconciled": {
+            "title": "Reconciled",
+            "type": "boolean"
+          },
+          "recovered_amount": {
+            "title": "Recovered Amount",
+            "type": "string"
+          },
+          "seller_id": {
+            "format": "uuid",
+            "title": "Seller Id",
+            "type": "string"
+          },
+          "seller_order_id": {
+            "format": "uuid",
+            "title": "Seller Order Id",
+            "type": "string"
+          },
+          "seller_reversal_amount": {
+            "title": "Seller Reversal Amount",
+            "type": "string"
+          },
+          "settlement_offset_amount": {
+            "title": "Settlement Offset Amount",
+            "type": "string"
+          }
+        },
+        "required": [
+          "seller_order_id",
+          "seller_id",
+          "merchandise_amount",
+          "commission_rate",
+          "commission_reversal_amount",
+          "seller_reversal_amount",
+          "recovered_amount",
+          "settlement_offset_amount",
+          "platform_shortfall_amount",
+          "reconciled"
+        ],
+        "title": "RefundAllocationResponse",
         "type": "object"
       },
       "RefundHistoryEvent": {

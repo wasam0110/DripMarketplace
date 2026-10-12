@@ -1,0 +1,56 @@
+{
+  "date": "2026-10-13",
+  "timezone": "Asia/Karachi",
+  "scope": "Backend repair batch 2 (F04-F06); not release approval",
+  "full_suite": {
+    "passed": 614,
+    "skipped": 1,
+    "failed": 0,
+    "errors": 0,
+    "warnings": 637,
+    "exit_code": 0,
+    "duration_seconds": 440.28,
+    "junit_cases": 615
+  },
+  "coverage": {
+    "statements": 8831,
+    "covered": 7568,
+    "missed": 1263,
+    "percent": 85.6981089344355,
+    "required_percent": 85,
+    "gate_passed": true
+  },
+  "focused_b2": {
+    "accounting_and_release_cases_passed": 9,
+    "multi_brand_and_admin_contract_cases_passed": 2,
+    "commission_service_unit_cases_passed": 20,
+    "native_release_cases_passed": 11
+  },
+  "native_services": {
+    "postgres": "15-alpine",
+    "redis": "7-alpine",
+    "disposable": true,
+    "development_services_used": false,
+    "audit_containers_removed": true,
+    "development_redis_untouched": true
+  },
+  "migrations": {
+    "fresh_upgrade": "016",
+    "round_trip": "016 -> 012 -> 016",
+    "all_model_tables_read": true,
+    "new_revision_added": true,
+    "production_data_rehearsal": false
+  },
+  "contract": {
+    "openapi_exported": true,
+    "documented_operations": 188
+  },
+  "lint": {
+    "fatal_error_selection_passed": true,
+    "full_configured_ruff_clean": false,
+    "note": "The repository retains inherited Ruff findings."
+  },
+  "frontend_inspected_or_modified": false,
+  "commit_or_push_performed": false,
+  "remaining_findings": "F07-F17"
+}

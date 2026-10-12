@@ -1,0 +1,54 @@
+{
+  "date": "2026-10-13",
+  "timezone": "Asia/Karachi",
+  "scope": "Backend repair batch 3 (F07); not release approval",
+  "full_suite": {
+    "passed": 617,
+    "skipped": 1,
+    "failed": 0,
+    "errors": 0,
+    "warnings": 669,
+    "exit_code": 0,
+    "duration_seconds": 521.24,
+    "junit_cases": 618
+  },
+  "coverage": {
+    "statements": 8845,
+    "covered": 7586,
+    "missed": 1259,
+    "percent": 85.7659694742793,
+    "required_percent": 85,
+    "gate_passed": true
+  },
+  "focused_b3": {
+    "new_cases_passed": 3,
+    "affected_regressions_passed": 47,
+    "native_quantity_race_passed": 1
+  },
+  "native_services": {
+    "postgres": "15-alpine",
+    "redis": "7-alpine",
+    "disposable": true,
+    "development_services_used": false,
+    "audit_containers_removed": true,
+    "development_redis_untouched": true
+  },
+  "migrations": {
+    "head": "016",
+    "new_revision_added": false,
+    "existing_native_migration_regression_passed": true,
+    "production_data_rehearsal": false
+  },
+  "contract": {
+    "schema_changed": false,
+    "documented_operations": 188
+  },
+  "lint": {
+    "fatal_error_selection_passed": true,
+    "full_configured_ruff_clean": false,
+    "note": "The repository retains inherited Ruff findings."
+  },
+  "frontend_inspected_or_modified": false,
+  "commit_or_push_performed": false,
+  "remaining_findings": "F08-F17"
+}
