@@ -1,5 +1,6 @@
 """Worker contracts: resource lifecycle, delivery failures and maintenance."""
 
+from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
@@ -47,6 +48,13 @@ EMAIL_CASES = [
 @pytest.mark.parametrize("task,provider,args", EMAIL_CASES)
 @pytest.mark.parametrize("success", [True, False])
 async def test_email_delivery_retries_failures(monkeypatch, task, provider, args, success):
+    # This unit contract tests provider retry handling. Native DB privacy tests
+    # below the integration suite exercise the real recipient guard.
+    @asynccontextmanager
+    async def authorized(*unused_args, **unused_kwargs):
+        yield "Ali"
+
+    monkeypatch.setattr(email_tasks, "checked_email_recipient", authorized)
     sender = AsyncMock(return_value=success)
     monkeypatch.setattr(email_tasks, provider, sender)
     run = getattr(email_tasks, "task_send_" + task)
@@ -56,7 +64,12 @@ async def test_email_delivery_retries_failures(monkeypatch, task, provider, args
         with pytest.raises(Retry) as exc:
             await run({"job_try": 2}, *args)
         assert exc.value.defer_score == 60_000
-    sender.assert_awaited_once_with(*args)
+    if task == "seller_approved":
+        sender.assert_awaited_once_with(
+            args[0], args[1], f"{email_tasks.settings.FRONTEND_URL}/seller/dashboard"
+        )
+    else:
+        sender.assert_awaited_once_with(*args)
 
 
 def test_worker_session_requires_startup(monkeypatch):
@@ -112,13 +125,17 @@ async def test_reset_cleanup_prunes_only_missing_tokens(isolated_redis):
     assert await isolated_redis.smembers("reset_tokens:all") == {"reset:live"}
 
 
-@pytest.mark.parametrize(
-    "task", ["cleanup_expired_sessions", "cleanup_soft_deleted_users", "archive_old_notifications"]
-)
+@pytest.mark.parametrize("task", ["cleanup_expired_sessions", "archive_old_notifications"])
 async def test_database_cleanup_commits(worker_db, task):
     await getattr(cleanup_tasks, task)({})
     worker_db.execute.assert_awaited_once()
     worker_db.commit.assert_awaited_once()
+
+
+async def test_user_cleanup_never_hard_deletes_history(worker_db):
+    await cleanup_tasks.cleanup_soft_deleted_users({})
+    worker_db.execute.assert_not_awaited()
+    worker_db.commit.assert_not_awaited()
 
 
 async def test_orphan_cleanup_retains_recent_and_referenced_files(worker_db, monkeypatch):
@@ -220,6 +237,7 @@ async def test_notification_tasks_retry_failures(
 
 
 async def test_broadcast_task_rolls_back_and_retries(worker_db):
+    worker_db.scalar.return_value = SimpleNamespace(deleted_at=None)
     worker_db.execute.side_effect = RuntimeError("temporary")
     with pytest.raises(Retry):
         await notification_tasks.broadcast_notification(

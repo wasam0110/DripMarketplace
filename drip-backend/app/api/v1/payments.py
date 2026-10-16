@@ -4,7 +4,6 @@ app/api/v1/payments.py — PayFast + COD only.
 
 from __future__ import annotations
 
-import ipaddress
 from typing import Annotated
 from uuid import UUID
 
@@ -12,6 +11,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentAdmin, OptionalUser, get_db
+from app.core.client_ip import client_ip, matches_ip as _matches_ip
 from app.schemas.payment import (
     AdminRefundDetailResponse,
     GatewayStatusResponse,
@@ -89,28 +89,10 @@ async def retry_payment(
 # ── PayFast IPN callback (no auth — called by PayFast) ────────────────────────
 
 
-def _matches_ip(value: str, allowed: list[str]) -> bool:
-    try:
-        address = ipaddress.ip_address(value)
-        return any(address in ipaddress.ip_network(item, strict=False) for item in allowed)
-    except ValueError:
-        return False
-
-
 def _client_ip(request: Request) -> str:
     """Trust forwarding headers only from explicitly configured reverse proxies."""
-    peer = request.client.host if request.client else ""
     from app.core.config import settings
-
-    if peer and _matches_ip(peer, settings.PAYFAST_TRUSTED_PROXY_IPS):
-        forwarded = request.headers.get("X-Forwarded-For", "")
-        if forwarded:
-            candidate = forwarded.split(",", 1)[0].strip()
-            try:
-                return str(ipaddress.ip_address(candidate))
-            except ValueError:
-                pass
-    return peer
+    return client_ip(request, settings.PAYFAST_TRUSTED_PROXY_IPS or settings.TRUSTED_PROXY_IPS)
 
 
 @router.api_route("/callback/payfast", methods=["GET", "POST"], include_in_schema=False)

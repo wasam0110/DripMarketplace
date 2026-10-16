@@ -1,5 +1,11 @@
 # Backend definition index
 
+Historical index, not a current-source hash manifest. Subsequent pre-ship changes
+are described in [checkpoint 8](../PRE_SHIP_CHECKPOINT_8.md); its 16 October 2026
+test XML and coverage JSON are retained in this directory. Do not interpret the
+older source ranges or hashes below as verification of the current working tree.
+Checkpoint 8: 854 passed, 1 skipped, 87.13% coverage.
+
 Validated 13 October 2026: the original review index covers all 163 pre-repair Python files and 1,953 class/function definitions. Backend repair batches changed indexed files and added regression/migration source; the [batch-1](b1-changes.md), [batch-2](b2-changes.md) and [batch-3](b3-changes.md) supplements supersede the affected entries. Hashes in each supplement describe that batch's verified snapshot.
 
 This generated index lists source ranges, annotated field names, backend imports and selected syntactic calls. It is not a resolved call graph, an independently authored explanation of every statement, or proof that a function works. Use the [walkthrough](../BACKEND_WALKTHROUGH.md) for system flow and the [findings](../BACKEND_DEEP_REVIEW.md) for correctness issues.

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy import Index as SchemaIndex
+
+from sqlalchemy import text as sql_text
+
 import enum
 from datetime import datetime
 from uuid import UUID, uuid4
@@ -29,14 +33,19 @@ class DisputeStatus(str, enum.Enum):
 
 class Return(Base):
     __tablename__ = "returns"
+    __table_args__ = (
+        SchemaIndex("ix_returns_order_id", "order_id"),
+        SchemaIndex("ix_returns_status", "status"),
+        SchemaIndex("ix_returns_user_id", "user_id"),
+    )
 
-    id:             Mapped[UUID]          = mapped_column(primary_key=True, default=uuid4)
+    id:             Mapped[UUID]          = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     order_id:       Mapped[UUID]          = mapped_column(ForeignKey("orders.id"))
     seller_order_id:Mapped[UUID]          = mapped_column(ForeignKey("seller_orders.id"))
     user_id:        Mapped[UUID | None]   = mapped_column(ForeignKey("users.id"))
     status:         Mapped[ReturnStatus]  = mapped_column(
                         SAEnum(ReturnStatus, name="return_status", create_type=False),
-                        default=ReturnStatus.requested,
+                        default=ReturnStatus.requested, server_default="requested",
                     )
     reason:         Mapped[str]           = mapped_column(Text)
     notes:          Mapped[str | None]    = mapped_column(Text)
@@ -49,8 +58,11 @@ class Return(Base):
 
 class ReturnItem(Base):
     __tablename__ = "return_items"
+    __table_args__ = (
+        SchemaIndex("ix_return_items_return_id", "return_id"),
+    )
 
-    id:            Mapped[UUID]      = mapped_column(primary_key=True, default=uuid4)
+    id:            Mapped[UUID]      = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     return_id:     Mapped[UUID]      = mapped_column(ForeignKey("returns.id", ondelete="CASCADE"))
     order_item_id: Mapped[UUID]      = mapped_column(ForeignKey("order_items.id"))
     quantity:      Mapped[int]       = mapped_column(Integer)
@@ -61,14 +73,18 @@ class ReturnItem(Base):
 
 class Dispute(Base):
     __tablename__ = "disputes"
+    __table_args__ = (
+        SchemaIndex("ix_disputes_return_id", "return_id"),
+        SchemaIndex("ix_disputes_status", "status"),
+    )
 
-    id:              Mapped[UUID]          = mapped_column(primary_key=True, default=uuid4)
+    id:              Mapped[UUID]          = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     return_id:       Mapped[UUID]          = mapped_column(ForeignKey("returns.id"))
     seller_id:       Mapped[UUID]          = mapped_column(ForeignKey("sellers.id"))
     user_id:         Mapped[UUID]          = mapped_column(ForeignKey("users.id"))
     status:          Mapped[DisputeStatus] = mapped_column(
                          SAEnum(DisputeStatus, name="dispute_status", create_type=False),
-                         default=DisputeStatus.open,
+                         default=DisputeStatus.open, server_default="open",
                      )
     resolution_note: Mapped[str | None]    = mapped_column(Text)
     resolved_by:     Mapped[UUID | None]   = mapped_column(ForeignKey("users.id"))
@@ -81,8 +97,11 @@ class Dispute(Base):
 
 class DisputeMessage(Base):
     __tablename__ = "dispute_messages"
+    __table_args__ = (
+        SchemaIndex("ix_dispute_messages_dispute_id", "dispute_id"),
+    )
 
-    id:         Mapped[UUID]     = mapped_column(primary_key=True, default=uuid4)
+    id:         Mapped[UUID]     = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     dispute_id: Mapped[UUID]     = mapped_column(ForeignKey("disputes.id", ondelete="CASCADE"))
     sender_id:  Mapped[UUID]     = mapped_column(ForeignKey("users.id"))
     body:       Mapped[str]      = mapped_column(Text)

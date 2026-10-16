@@ -168,6 +168,22 @@ async def require_admin(
     return payload
 
 
+async def require_seller_account(
+    db: AsyncSession = Depends(get_db),
+    payload: dict = Depends(get_current_user_payload),
+) -> dict:
+    """Seller-owned onboarding/profile access without requiring an active brand."""
+    if payload.get("role") != "seller":
+        raise PermissionDeniedError(message="A seller account is required.")
+    from app.repositories.seller_repo import SellerRepository
+
+    seller = await SellerRepository(db).get_by_user_id(UUID(payload["sub"]))
+    if not seller or seller.deleted_at:
+        raise PermissionDeniedError(message="Seller account not found.")
+    payload["seller_id"] = str(seller.id)
+    return payload
+
+
 # ── Ownership verification helpers ───────────────────────────────────────────
 
 
@@ -208,5 +224,6 @@ def assert_owns_seller_resource(
 
 CurrentUser = Annotated[dict, Depends(require_customer)]
 CurrentSeller = Annotated[dict, Depends(require_seller)]
+CurrentSellerAccount = Annotated[dict, Depends(require_seller_account)]
 CurrentAdmin = Annotated[dict, Depends(require_admin)]
 OptionalUser = Annotated[dict | None, Depends(get_optional_user_payload)]

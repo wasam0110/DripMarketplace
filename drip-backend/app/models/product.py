@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy import Index as SchemaIndex
+
+from sqlalchemy import text as sql_text
+
 import enum
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -37,12 +41,12 @@ class SizeType(str, enum.Enum):
 class Category(Base):
     __tablename__ = "categories"
 
-    id:         Mapped[UUID]       = mapped_column(primary_key=True, default=uuid4)
+    id:         Mapped[UUID]       = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     parent_id:  Mapped[UUID | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
     name:       Mapped[str]        = mapped_column(String(100))
     slug:       Mapped[str]        = mapped_column(String(120), unique=True)
     image_url:  Mapped[str | None] = mapped_column(String(500))
-    sort_order: Mapped[int]        = mapped_column(Integer, default=0)
+    sort_order: Mapped[int]        = mapped_column(Integer, default=0, server_default="0")
     is_active:  Mapped[bool]       = mapped_column(Boolean, default=True, server_default="true")
 
     parent:   Mapped["Category | None"] = relationship(
@@ -67,7 +71,7 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
         Index("ix_products_is_published","is_published"),
     )
 
-    id:               Mapped[UUID]           = mapped_column(primary_key=True, default=uuid4)
+    id:               Mapped[UUID]           = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     seller_id:        Mapped[UUID]           = mapped_column(ForeignKey("sellers.id", ondelete="RESTRICT"))
     category_id:      Mapped[UUID | None]    = mapped_column(ForeignKey("categories.id"))
     name:             Mapped[str]            = mapped_column(String(200))
@@ -111,8 +115,11 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
 
 class ProductImage(Base):
     __tablename__ = "product_images"
+    __table_args__ = (
+        SchemaIndex("ix_product_images_product_id", "product_id"),
+    )
 
-    id:         Mapped[UUID]       = mapped_column(primary_key=True, default=uuid4)
+    id:         Mapped[UUID]       = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     product_id: Mapped[UUID]       = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
     url:        Mapped[str]        = mapped_column(String(500))
     alt_text:   Mapped[str | None] = mapped_column(String(200))
@@ -126,10 +133,12 @@ class ProductImage(Base):
 class ProductVariant(Base):
     __tablename__ = "product_variants"
     __table_args__ = (
+        SchemaIndex("ix_product_variants_product_id", "product_id"),
+
         UniqueConstraint("product_id", "size_value", "colour", name="uq_product_variants_combo"),
     )
 
-    id:             Mapped[UUID]           = mapped_column(primary_key=True, default=uuid4)
+    id:             Mapped[UUID]           = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     product_id:     Mapped[UUID]           = mapped_column(ForeignKey("products.id", ondelete="CASCADE"))
     sku:            Mapped[str]            = mapped_column(String(100), unique=True)
     size_type:      Mapped[SizeType]       = mapped_column(
@@ -157,14 +166,16 @@ class ProductInventory(Base):
         CheckConstraint("stock >= 0",             name="ck_inventory_stock_gte_zero"),
         CheckConstraint("reserved >= 0",          name="ck_inventory_reserved_gte_zero"),
         CheckConstraint("stock >= reserved",      name="ck_inventory_stock_gte_reserved"),
+        CheckConstraint("reorder_point BETWEEN 0 AND 999999", name="ck_inventory_reorder_point"),
     )
 
-    id:         Mapped[UUID]     = mapped_column(primary_key=True, default=uuid4)
+    id:         Mapped[UUID]     = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     variant_id: Mapped[UUID]     = mapped_column(
                     ForeignKey("product_variants.id", ondelete="CASCADE"), unique=True
                 )
     stock:      Mapped[int]      = mapped_column(Integer, default=0, server_default="0")
     reserved:   Mapped[int]      = mapped_column(Integer, default=0, server_default="0")
+    reorder_point: Mapped[int] = mapped_column(Integer, default=5, server_default="5")
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default="now()")
 
     variant: Mapped["ProductVariant"] = relationship(back_populates="inventory")
@@ -177,7 +188,7 @@ class ProductInventory(Base):
 class Tag(Base):
     __tablename__ = "tags"
 
-    id:   Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    id:   Mapped[UUID] = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     name: Mapped[str]  = mapped_column(String(50), unique=True)
 
     products: Mapped[list["Product"]] = relationship(

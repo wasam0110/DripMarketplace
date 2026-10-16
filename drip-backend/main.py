@@ -17,7 +17,7 @@ Shutdown sequence:
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from contextlib import AsyncExitStack, asynccontextmanager
 from typing import Any
 
 from fastapi import FastAPI, Request
@@ -30,6 +30,7 @@ from app.core.config import settings
 from app.core.database import close_db, init_db
 from app.core.exceptions import DRIPException, RateLimitError, ServerError
 from app.core.logging import configure_logging, get_logger
+from app.core.log_privacy import scrub_sentry_event
 from app.core.middleware import (
     LoggingMiddleware,
     RateLimitMiddleware,
@@ -54,27 +55,36 @@ async def lifespan(app: FastAPI):
         environment=settings.ENVIRONMENT,
     )
 
-    await init_db()
-    await init_redis()
+    # Register cleanup before initialization: a failed connection check can
+    # already have allocated a pool. The stack attempts both closures even if
+    # another closure fails, and also runs on cancellation/startup failure.
+    async with AsyncExitStack() as resources:
+        resources.push_async_callback(close_redis)
+        resources.push_async_callback(close_db)
+        await init_db()
+        await init_redis()
 
-    # Sentry initialisation (production only)
-    if settings.SENTRY_DSN and settings.is_production:
-        import sentry_sdk
-        sentry_sdk.init(
-            dsn=settings.SENTRY_DSN,
-            environment=settings.ENVIRONMENT,
-            release=f"drip-api@{settings.APP_VERSION}",
-            traces_sample_rate=0.1,
-        )
-        logger.info("sentry.initialised")
+        # Sentry initialisation (production only)
+        if settings.SENTRY_DSN and settings.is_production:
+            import sentry_sdk
+            sentry_sdk.init(
+                dsn=settings.SENTRY_DSN,
+                environment=settings.ENVIRONMENT,
+                release=f"drip-api@{settings.APP_VERSION}",
+                traces_sample_rate=0.1,
+                send_default_pii=False,
+                include_local_variables=False,
+                max_request_body_size="never",
+                before_send=scrub_sentry_event,
+                before_send_transaction=scrub_sentry_event,
+            )
+            logger.info("sentry.initialised")
 
-    logger.info("drip.ready")
-    yield
-
-    # ── Shutdown ──────────────────────────────────────────────────────────────
-    logger.info("drip.shutdown")
-    await close_db()
-    await close_redis()
+        logger.info("drip.ready")
+        try:
+            yield
+        finally:
+            logger.info("drip.shutdown")
     logger.info("drip.stopped")
 
 

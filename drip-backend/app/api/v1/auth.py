@@ -10,7 +10,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Cookie, Depends, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import CurrentUser, DBSession, get_current_user_payload
+from app.api.deps import CurrentAdmin, CurrentUser, DBSession, get_current_user_payload
 from app.core.security import REFRESH_TOKEN_COOKIE_NAME, get_cookie_params
 from app.schemas.auth import (
     AuthResponse,
@@ -307,7 +307,7 @@ async def change_password(
 )
 async def setup_2fa(
     db: DBSession,
-    token_payload: CurrentUser,
+    token_payload: CurrentAdmin,
 ) -> TOTPSetupResponse:
     """
     Generate a TOTP secret and QR code URI for the authenticator app.
@@ -334,7 +334,7 @@ async def setup_2fa(
 async def verify_2fa_setup(
     payload: VerifyTOTPRequest,
     db: DBSession,
-    token_payload: CurrentUser,
+    token_payload: CurrentAdmin,
 ) -> MessageResponse:
     import uuid
 

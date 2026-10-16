@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from typing import Optional
 
 from sqlalchemy import and_, func, select, update
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessRuleError, NotFoundError, PermissionDeniedError
@@ -26,7 +27,6 @@ from app.repositories.inventory_repo import InventoryRepository
 
 logger = get_logger(__name__)
 
-DEFAULT_REORDER_THRESHOLD = 5
 
 
 class InventoryService:
@@ -60,7 +60,6 @@ class InventoryService:
         inv: ProductInventory,
         variant: ProductVariant,
         product: Product,
-        reorder_threshold: int = DEFAULT_REORDER_THRESHOLD,
     ) -> dict:
         available = inv.stock - inv.reserved
         return dict(
@@ -73,8 +72,8 @@ class InventoryService:
             stock=inv.stock,
             reserved=inv.reserved,
             available=available,
-            reorder_point=reorder_threshold,
-            is_low_stock=available <= reorder_threshold,
+            reorder_point=inv.reorder_point,
+            is_low_stock=available <= inv.reorder_point,
             last_restocked_at=inv.updated_at.isoformat() if inv.updated_at else None,
         )
 
@@ -107,7 +106,7 @@ class InventoryService:
             )
         if low_stock_only:
             stmt = stmt.where(
-                (ProductInventory.stock - ProductInventory.reserved) <= DEFAULT_REORDER_THRESHOLD
+                (ProductInventory.stock - ProductInventory.reserved) <= ProductInventory.reorder_point
             )
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -135,7 +134,7 @@ class InventoryService:
             .where(
                 Product.seller_id == seller_id,
                 Product.deleted_at.is_(None),
-                (ProductInventory.stock - ProductInventory.reserved) <= DEFAULT_REORDER_THRESHOLD,
+                (ProductInventory.stock - ProductInventory.reserved) <= ProductInventory.reorder_point,
             )
             .order_by((ProductInventory.stock - ProductInventory.reserved).asc())
         )
@@ -164,10 +163,15 @@ class InventoryService:
         inv, variant, product = await self._get_inventory_for_seller(variant_id, seller_id)
         if stock < inv.reserved:
             raise BusinessRuleError("Stock cannot fall below reserved units")
+        if reorder_point is not None and not 0 <= reorder_point <= 999_999:
+            raise BusinessRuleError("Reorder point must be between 0 and 999,999")
+        values = {"stock": stock, "updated_at": datetime.now(UTC)}
+        if reorder_point is not None:
+            values["reorder_point"] = reorder_point
         await self.db.execute(
             update(ProductInventory)
             .where(ProductInventory.variant_id == variant_id)
-            .values(stock=stock, updated_at=datetime.now(UTC))
+            .values(**values)
         )
         await self.db.commit()
         await self.db.refresh(inv)
@@ -243,7 +247,7 @@ class InventoryService:
             )
         if low_stock_only:
             stmt = stmt.where(
-                (ProductInventory.stock - ProductInventory.reserved) <= DEFAULT_REORDER_THRESHOLD
+                (ProductInventory.stock - ProductInventory.reserved) <= ProductInventory.reorder_point
             )
 
         count_stmt = select(func.count()).select_from(stmt.subquery())
@@ -262,28 +266,43 @@ class InventoryService:
         )
 
     async def bulk_update_stock(self, updates: list):
-        from app.api.v1.inventory import BulkStockUpdateResponse
+        from app.api.v1.inventory import BulkStockUpdateRequest, BulkStockUpdateResponse
 
+        # Validate internal callers too, before any writes or row locks.
+        batch = BulkStockUpdateRequest(updates=updates).updates
         updated = 0
-        failed  = 0
-        errors  = []
+        failures = {}
+        try:
+            # Overlapping bulk requests acquire row locks in the same order.
+            for item in sorted(batch, key=lambda item: item.variant_id):
+                try:
+                    # PostgreSQL aborts a transaction after a statement error.
+                    # Isolate recoverable row errors without losing earlier rows.
+                    async with self.db.begin_nested():
+                        result = await self.db.execute(
+                            update(ProductInventory)
+                            .where(
+                                ProductInventory.variant_id == item.variant_id,
+                                ProductInventory.reserved <= item.stock,
+                            )
+                            .values(stock=item.stock, updated_at=datetime.now(UTC))
+                        )
+                    if result.rowcount == 0:
+                        failures[item.variant_id] = "Variant not found or stock is below reserved units"
+                    else:
+                        updated += 1
+                except (IntegrityError, DataError):
+                    failures[item.variant_id] = "Inventory update failed"
+            await self.db.commit()
+        except Exception:
+            # Disconnects, deadlocks, programming errors and failed commits are
+            # not ordinary row failures. Never report uncommitted successes.
+            await self.db.rollback()
+            raise
 
-        for item in updates:
-            try:
-                result = await self.db.execute(
-                    update(ProductInventory)
-                    .where(ProductInventory.variant_id == item.variant_id, ProductInventory.reserved <= item.stock)
-                    .values(stock=item.stock, updated_at=datetime.now(UTC))
-                )
-                if result.rowcount == 0:
-                    failed += 1
-                    errors.append({"variant_id": str(item.variant_id), "error": "Variant not found or stock is below reserved units"})
-                else:
-                    updated += 1
-            except Exception as exc:
-                failed += 1
-                errors.append({"variant_id": str(item.variant_id), "error": "Inventory update failed"})
-
-        await self.db.commit()
-        logger.info("bulk_stock_update", updated=updated, failed=failed)
-        return BulkStockUpdateResponse(updated=updated, failed=failed, errors=errors)
+        errors = [
+            {"variant_id": str(item.variant_id), "error": failures[item.variant_id]}
+            for item in batch if item.variant_id in failures
+        ]
+        logger.info("bulk_stock_update", updated=updated, failed=len(errors))
+        return BulkStockUpdateResponse(updated=updated, failed=len(errors), errors=errors)

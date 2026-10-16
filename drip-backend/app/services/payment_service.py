@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from uuid import UUID
 
 import httpx
@@ -36,6 +36,7 @@ from app.schemas.payment import (
     RetryPaymentRequest,
 )
 from app.services.order_access import authorized_order
+from app.services.notification_outbox import queue_notification
 
 
 def _build_payfast() -> PayFastClient:
@@ -55,6 +56,21 @@ def _build_payfast() -> PayFastClient:
     )
 
 
+def _provider_money_matches(data: dict, amount: Decimal, currency: str) -> bool:
+    """Require explicit, consistent monetary evidence from the authenticated API."""
+    amounts = [data[key] for key in ("txnamt", "amount") if key in data]
+    currencies = [data[key] for key in ("currency_code", "currency") if key in data]
+    if not amounts or not currencies:
+        return False
+    try:
+        values = [Decimal(str(value)) for value in amounts]
+    except (InvalidOperation, ValueError):
+        return False
+    return all(value.is_finite() and value > 0 and value == amount for value in values) and all(
+        isinstance(value, str) and value.strip().upper() == currency for value in currencies
+    )
+
+
 class PaymentService:
     def __init__(self, db: AsyncSession) -> None:
         self.db = db
@@ -68,6 +84,8 @@ class PaymentService:
         customer_ip: str = "",
     ) -> PaymentInitResponse:
         order = await authorized_order(self.db, order_id, user_id, guest_token, lock=True)
+        if order.payment_method.value not in {"payfast", "cod"}:
+            raise BusinessRuleError("Historical payment methods cannot initiate new payments")
         if order.status not in (OrderStatus.pending_payment, OrderStatus.pending_cod_verification):
             raise BusinessRuleError("Order is not awaiting payment")
         payment = await self.payment_repo.get_by_order_id(order.id)
@@ -205,14 +223,13 @@ class PaymentService:
         repo = OrderRepository(self.db)
         order = await repo.get_by_id(order_id, for_update=True)
         payment = await self.payment_repo.get_by_order_id(order_id)
-        callback.is_verified = True
         if not order or not payment or payment.method != "payfast":
             await self.db.commit()
             raise BusinessRuleError("Payment callback does not match an online payment")
         callback.payment_id = payment.id
         if (
             (parsed["amount"] is not None and parsed["amount"] != payment.amount)
-            or parsed.get("currency") != payment.currency
+            or (parsed.get("currency") is not None and parsed["currency"] != payment.currency)
             or payment.amount != order.total
             or not parsed["txn_id"]
         ):
@@ -229,6 +246,7 @@ class PaymentService:
             if payment.gateway_reference != parsed["txn_id"]:
                 await self.db.commit()
                 raise BusinessRuleError("Unexpected transaction reference")
+            callback.is_verified = True
             await self.db.commit()
             return
         if order.status != OrderStatus.pending_payment:
@@ -236,21 +254,29 @@ class PaymentService:
             await self.db.commit()
             raise BusinessRuleError("Order requires payment reconciliation")
         if parsed["status"] == "completed":
-            payment.status = PaymentStatus.completed
-            payment.gateway_reference = parsed["txn_id"]
-            payment.paid_at = datetime.now(UTC)
-            payment.failure_reason = None
-            await repo.update_status(
-                order.id, OrderStatus.payment_confirmed, note="Verified payment callback"
-            )
+            # The callback hash does not bind amount, currency or transaction ID.
+            # Only the authenticated status API may authorize the paid transition.
+            try:
+                result = await self.reconcile_payfast(
+                    order.id, expected_transaction_id=parsed["txn_id"]
+                )
+            except (ExternalServiceError, BusinessRuleError):
+                await self.db.commit()  # Retain the unverified callback attempt.
+                raise
+            if not result.matched or result.local_status != "completed":
+                raise BusinessRuleError("Payment could not be confirmed by PayFast")
+            callback.is_verified = True
         elif parsed["status"] == "failed":
+            callback.is_verified = True
             payment.status = PaymentStatus.failed
             detail = parsed.get("error_message") or "Gateway reported failure"
             payment.failure_reason = f"PayFast {parsed['error_code']}: {detail}"[:500]
         payment.gateway_payload = {**(payment.gateway_payload or {}), "callback": parsed["raw"]}
         await self.db.commit()
 
-    async def reconcile_payfast(self, order_id: UUID) -> PayFastReconcileResponse:
+    async def reconcile_payfast(
+        self, order_id: UUID, *, expected_transaction_id: str | None = None
+    ) -> PayFastReconcileResponse:
         """Reconcile a pending PayFast payment using the provider status API."""
         from app.repositories.order_repo import OrderRepository
 
@@ -273,7 +299,8 @@ class PaymentService:
         except (TypeError, ValueError) as exc:
             raise BusinessRuleError("Stored PayFast order date is invalid") from exc
         customer_ip = str(request_data.get("customer_ip") or "").strip()
-        if not payment.gateway_reference and not customer_ip:
+        lookup_transaction_id = payment.gateway_reference or expected_transaction_id or ""
+        if not lookup_transaction_id and not customer_ip:
             raise BusinessRuleError("Customer IP is missing; manual reconciliation is required")
 
         try:
@@ -281,7 +308,7 @@ class PaymentService:
                 basket_id=str(order.id),
                 order_date=order_date,
                 customer_ip=customer_ip,
-                transaction_id=payment.gateway_reference or "",
+                transaction_id=lookup_transaction_id,
             )
         except (httpx.HTTPError, PayFastProtocolError) as exc:
             raise ExternalServiceError("PayFast reconciliation is temporarily unavailable") from exc
@@ -299,6 +326,8 @@ class PaymentService:
         identifiers_match = provider_basket == str(order.id) and bool(transaction_id)
         if payment.gateway_reference and transaction_id != payment.gateway_reference:
             identifiers_match = False
+        if expected_transaction_id and transaction_id != expected_transaction_id:
+            identifiers_match = False
         duplicate = (
             await self.payment_repo.get_by_gateway_reference(transaction_id)
             if transaction_id
@@ -306,12 +335,17 @@ class PaymentService:
         )
         if duplicate is not None and duplicate.id != payment.id:
             identifiers_match = False
+        evidence_matches = (
+            identifiers_match
+            and payment.amount == order.total
+            and _provider_money_matches(normalized, payment.amount, payment.currency)
+        )
 
         audit = PaymentCallback(
             payment_id=payment.id,
             gateway="payfast_reconciliation",
             raw_payload=provider,
-            is_verified=identifiers_match,
+            is_verified=evidence_matches,
         )
         self.db.add(audit)
 
@@ -319,12 +353,12 @@ class PaymentService:
         success = status_key in {"00", "000", "SUCCESS", "COMPLETED", "PAID"}
         failed = status_key in {"FAILED", "DECLINED", "CANCELLED", "CANCELED"}
         detail = "Provider response recorded; no local state changed"
-        if not identifiers_match:
-            detail = "Provider identifiers did not match this payment"
+        if not evidence_matches:
+            detail = "Provider identifiers, amount or currency did not match this payment"
         elif success:
             if payment.status in (PaymentStatus.completed, PaymentStatus.refunded):
                 if payment.gateway_reference != transaction_id:
-                    identifiers_match = False
+                    evidence_matches = False
                     audit.is_verified = False
                     detail = "Completed payment has a different transaction reference"
                 else:
@@ -338,6 +372,13 @@ class PaymentService:
                     order.id,
                     OrderStatus.payment_confirmed,
                     note="Verified using PayFast status API",
+                )
+                await queue_notification(
+                    self.db,
+                    f"order:{order.id}:status:payment_confirmed",
+                    "send_order_status_update",
+                    str(order.id),
+                    OrderStatus.payment_confirmed.value,
                 )
                 detail = "Payment reconciled successfully"
             else:
@@ -360,7 +401,7 @@ class PaymentService:
             provider_status=provider_status,
             local_status=payment.status.value,
             transaction_id=transaction_id or None,
-            matched=identifiers_match,
+            matched=evidence_matches,
             detail=detail,
         )
 

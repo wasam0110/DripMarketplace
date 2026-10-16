@@ -10,7 +10,7 @@ Flow
 1. Backend requests a one-time access token for the exact basket and amount.
 2. The client POSTs documented uppercase fields to PayFast hosted checkout.
 3. PayFast calls /api/v1/payments/callback/payfast.
-4. Backend verifies the documented validation hash and order invariants.
+4. Backend verifies the hash, then requires authoritative status and monetary evidence.
 5. An admin can query PayFast status to reconcile a missed callback.
 
 PAYFAST_ENABLED remains false until merchant-specific UAT acceptance passes.
@@ -24,6 +24,7 @@ import secrets
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from urllib.parse import quote
 
 import httpx
 
@@ -196,7 +197,8 @@ class PayFastClient:
             "error_code": error_code,
             "error_message": normalized.get("err_msg", "").strip(),
             "amount": amount,
-            "currency": (normalized.get("currency_code") or "PKR").upper(),
+            "currency": normalized["currency_code"].strip().upper()
+            if "currency_code" in normalized else None,
             "txn_id": transaction_id,
             "payment_name": normalized.get("paymentname", "").strip(),
             "raw": dict(payload),
@@ -230,10 +232,10 @@ class PayFastClient:
         if not access_token:
             raise PayFastProtocolError("PayFast API token response did not contain a token")
         if transaction_id:
-            url = f"{self.api_base_url}/transaction/{transaction_id}"
+            url = f"{self.api_base_url}/transaction/{quote(transaction_id, safe='')}"
             params = None
         else:
-            url = f"{self.api_base_url}/transaction/basket_id/{basket_id}"
+            url = f"{self.api_base_url}/transaction/basket_id/{quote(basket_id, safe='')}"
             params = {"order_date": order_date.isoformat(), "customer_ip": customer_ip}
         response = await self._get(
             url,

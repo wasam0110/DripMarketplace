@@ -10,6 +10,8 @@ Models:
 
 from __future__ import annotations
 
+from sqlalchemy import text as sql_text
+
 import enum
 import uuid
 from datetime import datetime
@@ -49,9 +51,9 @@ class Review(TimestampMixin, Base):
     __tablename__ = "reviews"
     __table_args__ = (
         # One review per customer per product
-        UniqueConstraint("user_id", "product_id", name="uq_reviews_user_product"),
+        UniqueConstraint("user_id", "product_id", name="reviews_user_id_product_id_key"),
         # Rating must be 1–5
-        CheckConstraint("rating BETWEEN 1 AND 5", name="ck_reviews_rating_range"),
+        CheckConstraint("rating BETWEEN 1 AND 5", name="reviews_rating_check"),
         # Helpful counts must be non-negative
         CheckConstraint("helpful_count >= 0",     name="ck_reviews_helpful_gte_0"),
         CheckConstraint("unhelpful_count >= 0",   name="ck_reviews_unhelpful_gte_0"),
@@ -61,7 +63,7 @@ class Review(TimestampMixin, Base):
         Index("ix_reviews_rating",     "rating"),
     )
 
-    id:              Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id:              Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=sql_text("gen_random_uuid()"))
     user_id:         Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"),    nullable=False)
     product_id:      Mapped[uuid.UUID]        = mapped_column(UUID(as_uuid=True), ForeignKey("products.id", ondelete="CASCADE"), nullable=False)
     order_id:        Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("orders.id",  ondelete="SET NULL"), nullable=True)
@@ -99,7 +101,7 @@ class ReviewImage(Base):
         Index("ix_review_images_review_id", "review_id"),
     )
 
-    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    id:         Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4, server_default=sql_text("gen_random_uuid()"))
     review_id:  Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("reviews.id", ondelete="CASCADE"), nullable=False)
     url:        Mapped[str]       = mapped_column(String(500), nullable=False)
     sort_order: Mapped[int]       = mapped_column(Integer, nullable=False, default=0, server_default="0")

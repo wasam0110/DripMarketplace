@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy import Index as SchemaIndex
+
+from sqlalchemy import text as sql_text
+
 import enum
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -39,6 +43,15 @@ class PaymentMethod(str, enum.Enum):
     cod     = "cod"
 
 
+class StoredPaymentMethod(str, enum.Enum):
+    """Read historical methods without offering them in new checkout requests."""
+    jazzcash = "jazzcash"
+    easypaisa = "easypaisa"
+    card = "card"
+    cod = "cod"
+    payfast = "payfast"
+
+
 class SellerOrderStatus(str, enum.Enum):
     pending    = "pending"
     processing = "processing"
@@ -58,12 +71,12 @@ class Order(Base, TimestampMixin):
         Index("ix_orders_order_number","order_number"),
     )
 
-    id:              Mapped[UUID]           = mapped_column(primary_key=True, default=uuid4)
+    id:              Mapped[UUID]           = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     user_id:         Mapped[UUID | None]    = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     order_number:    Mapped[str]            = mapped_column(String(20), unique=True)
     status:          Mapped[OrderStatus]    = mapped_column(
                          SAEnum(OrderStatus, name="order_status", create_type=False),
-                         default=OrderStatus.pending_payment,
+                         default=OrderStatus.pending_payment, server_default="pending_payment",
                      )
     guest_email:     Mapped[str | None]     = mapped_column(String(254))
     guest_name:      Mapped[str | None]     = mapped_column(String(200))
@@ -72,8 +85,8 @@ class Order(Base, TimestampMixin):
     discount_amount: Mapped[Decimal]        = mapped_column(Numeric(12, 2), default=Decimal("0.00"), server_default="0")
     shipping_fee:    Mapped[Decimal]        = mapped_column(Numeric(10, 2), default=Decimal("200.00"), server_default="200")
     total:           Mapped[Decimal]        = mapped_column(Numeric(12, 2))
-    payment_method:  Mapped[PaymentMethod]  = mapped_column(
-                         SAEnum(PaymentMethod, name="payment_method", create_type=False)
+    payment_method:  Mapped[StoredPaymentMethod]  = mapped_column(
+                         SAEnum(StoredPaymentMethod, name="payment_method", create_type=False)
                      )
     coupon_id:       Mapped[UUID | None]    = mapped_column(ForeignKey("coupons.id"))
     notes:           Mapped[str | None]     = mapped_column(Text)
@@ -92,7 +105,7 @@ class Order(Base, TimestampMixin):
 class OrderAddress(Base):
     __tablename__ = "order_addresses"
 
-    id:             Mapped[UUID]      = mapped_column(primary_key=True, default=uuid4)
+    id:             Mapped[UUID]      = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     order_id:       Mapped[UUID]      = mapped_column(ForeignKey("orders.id", ondelete="CASCADE"), unique=True)
     recipient_name: Mapped[str]       = mapped_column(String(200))
     phone:          Mapped[str]       = mapped_column(String(20))
@@ -107,10 +120,13 @@ class OrderAddress(Base):
 class OrderItem(Base):
     __tablename__ = "order_items"
     __table_args__ = (
+        SchemaIndex("ix_order_items_order_id", "order_id"),
+        SchemaIndex("ix_order_items_seller_id", "seller_id"),
+
         CheckConstraint("quantity > 0", name="ck_order_items_qty_positive"),
     )
 
-    id:            Mapped[UUID]    = mapped_column(primary_key=True, default=uuid4)
+    id:            Mapped[UUID]    = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     order_id:      Mapped[UUID]    = mapped_column(ForeignKey("orders.id", ondelete="RESTRICT"))
     seller_id:     Mapped[UUID]    = mapped_column(ForeignKey("sellers.id"))
     product_id:    Mapped[UUID]    = mapped_column(ForeignKey("products.id"))
@@ -134,12 +150,12 @@ class SellerOrder(Base, TimestampMixin):
         Index("ix_seller_orders_order_id",  "order_id"),
     )
 
-    id:              Mapped[UUID]              = mapped_column(primary_key=True, default=uuid4)
+    id:              Mapped[UUID]              = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     order_id:        Mapped[UUID]              = mapped_column(ForeignKey("orders.id", ondelete="RESTRICT"))
     seller_id:       Mapped[UUID]              = mapped_column(ForeignKey("sellers.id"))
     status:          Mapped[SellerOrderStatus] = mapped_column(
                          SAEnum(SellerOrderStatus, name="seller_order_status", create_type=False),
-                         default=SellerOrderStatus.pending,
+                         default=SellerOrderStatus.pending, server_default="pending",
                      )
     subtotal:        Mapped[Decimal]           = mapped_column(Numeric(12, 2))
     tracking_number: Mapped[str | None]        = mapped_column(String(100))
@@ -154,7 +170,7 @@ class SellerOrder(Base, TimestampMixin):
 class OrderStatusHistory(Base):
     __tablename__ = "order_status_history"
 
-    id:              Mapped[UUID]       = mapped_column(primary_key=True, default=uuid4)
+    id:              Mapped[UUID]       = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     order_id:        Mapped[UUID | None] = mapped_column(ForeignKey("orders.id"))
     seller_order_id: Mapped[UUID | None] = mapped_column(ForeignKey("seller_orders.id"))
     old_status:      Mapped[str | None]  = mapped_column(String(50))

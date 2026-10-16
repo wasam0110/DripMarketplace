@@ -22,6 +22,7 @@ from app.schemas.admin import (
     PaginatedAdminSellers, AdminOrderRowResponse, OrderTotals, PaginatedAdminOrders,
     CODQueueItem, BannerResponse, PlatformSettingsResponse,
 )
+from app.services.notification_outbox import queue_notification
 
 COD_TIMEOUT_MINUTES = 30
 
@@ -179,6 +180,14 @@ class AdminService:
                 updated_at=datetime.utcnow(),
             )
         )
+        await queue_notification(
+            self.db,
+            f"seller:{seller_id}:decision:approved",
+            "notify_seller_decision",
+            str(seller_id),
+            True,
+            None,
+        )
         await self.db.commit()
         return {"message": f"Seller '{seller.brand_name}' approved and activated"}
 
@@ -194,6 +203,14 @@ class AdminService:
                 updated_at=datetime.utcnow(),
             )
         )
+        await queue_notification(
+            self.db,
+            f"seller:{seller_id}:decision:rejected",
+            "notify_seller_decision",
+            str(seller_id),
+            False,
+            reason,
+        )
         await self.db.commit()
         return {"message": f"Seller '{seller.brand_name}' rejected"}
 
@@ -208,12 +225,8 @@ class AdminService:
                 updated_at=datetime.utcnow(),
             )
         )
-        # Hide all products
-        await self.db.execute(
-            update(Product)
-            .where(Product.seller_id == seller_id, Product.deleted_at.is_(None))
-            .values(admin_hidden=True)
-        )
+        # Public reads/cart/checkout gate on seller status. Do not overwrite
+        # independent product moderation decisions while suspending the seller.
         await self.db.commit()
         return {"message": f"Seller '{seller.brand_name}' suspended. All products hidden."}
 
@@ -229,12 +242,7 @@ class AdminService:
                 updated_at=datetime.utcnow(),
             )
         )
-        # Restore products
-        await self.db.execute(
-            update(Product)
-            .where(Product.seller_id == seller_id, Product.deleted_at.is_(None))
-            .values(admin_hidden=False)
-        )
+        # Re-enabling seller visibility must not unhide moderated products.
         await self.db.commit()
         return {"message": f"Seller '{seller.brand_name}' reinstated. Products restored."}
 
@@ -358,6 +366,13 @@ class AdminService:
         if order.status != OrderStatus.pending_cod_verification:
             raise BusinessRuleError(f"Order is not awaiting COD verification (status: {order.status.value})")
         await repo.update_status(order_id, OrderStatus.processing, changed_by=admin_id, note=note or "COD verified by admin")
+        await queue_notification(
+            self.db,
+            f"order:{order.id}:status:processing",
+            "send_order_status_update",
+            str(order.id),
+            OrderStatus.processing.value,
+        )
         await self.db.commit()
         return {"message": f"COD order {order.order_number} verified and moved to processing"}
 
@@ -386,6 +401,13 @@ class AdminService:
             order_id, OrderStatus.cancelled,
             changed_by=admin_id,
             note=reason or "COD verification timeout — cancelled by admin",
+        )
+        await queue_notification(
+            self.db,
+            f"order:{order.id}:status:cancelled",
+            "send_order_status_update",
+            str(order.id),
+            OrderStatus.cancelled.value,
         )
         await self.db.commit()
         return {"message": f"COD order {order.order_number} cancelled. Inventory released."}

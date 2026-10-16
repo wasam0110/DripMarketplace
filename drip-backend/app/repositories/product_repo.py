@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from uuid import UUID
 from typing import Optional, Sequence
 from datetime import datetime, timedelta
@@ -182,16 +182,24 @@ class ProductRepository:
         ascending = sort == "price_asc"
         if cursor:
             try:
+                if len(cursor) > 2048:
+                    raise ValueError("cursor too long")
                 data = json.loads(base64.b64decode(cursor, validate=True))
+                if not isinstance(data, dict) or not all(
+                    isinstance(data.get(field), str) for field in ("sort", "id", "value")
+                ):
+                    raise ValueError("invalid cursor shape")
                 if data.get("sort") != sort:
                     raise ValueError("sort mismatch")
                 cursor_id = UUID(data["id"])
                 value = datetime.fromisoformat(data["value"]) if sort == "newest" else Decimal(data["value"])
                 if isinstance(value, Decimal) and not value.is_finite():
                     raise ValueError("invalid value")
+                if isinstance(value, datetime) and value.tzinfo is None:
+                    raise ValueError("timestamp must include timezone")
                 comparison = sort_column > value if ascending else sort_column < value
                 query = query.where(or_(comparison, and_(sort_column == value, Product.id < cursor_id)))
-            except (ValueError, KeyError, TypeError) as exc:
+            except (ValueError, KeyError, TypeError, InvalidOperation) as exc:
                 raise BusinessRuleError("Invalid catalogue cursor") from exc
         query = query.order_by(asc(sort_column) if ascending else desc(sort_column), desc(Product.id))
 

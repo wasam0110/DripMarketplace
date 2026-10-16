@@ -3,7 +3,8 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 
 from app.core.config import settings
 from app.core.exceptions import NotFoundError, AuthenticationError
@@ -36,7 +37,7 @@ def guest_token_matches(token: str | None, order_id: UUID) -> bool:
             algorithms=["RS256"],
             audience="wearhowz-guest-order",
             issuer="wearhowz-api",
-            options={"require_exp": True, "require_sub": True},
+            options={"require": ["exp", "sub", "iat"]},
         )
         return claims["sub"] == str(order_id)
     except JWTError:

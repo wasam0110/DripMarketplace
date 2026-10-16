@@ -1,28 +1,38 @@
 from __future__ import annotations
 
-from typing import Optional
-from pydantic import BaseModel
+from decimal import Decimal
+from typing import Annotated, Optional
+from pydantic import BaseModel, Field
+
+
+# Pydantic serializes Decimal as a JSON string, matching dashboard/wallet APIs.
+AnalyticsMoney = Annotated[
+    Decimal,
+    Field(decimal_places=2, allow_inf_nan=False,
+          description="PKR major units as a decimal string, not integer paisa. "
+                      "Analytics emits two decimal places; averages use ROUND_HALF_UP."),
+]
 
 
 # ── Seller ─────────────────────────────────────────────────────────────────────
 
 class SellerAnalyticsOverview(BaseModel):
     period:          str
-    gross_revenue:   int
-    commission_paid: int
-    net_earnings:    int
+    gross_revenue:   AnalyticsMoney
+    commission_paid: AnalyticsMoney
+    net_earnings:    AnalyticsMoney
     order_count:     int
     units_sold:      int
-    avg_order_value: int
+    avg_order_value: AnalyticsMoney
     total_views:     int
     conversion_rate: float
 
 
 class RevenueDayRow(BaseModel):
     date:       str
-    gross:      int
-    commission: int
-    net:        int
+    gross:      AnalyticsMoney
+    commission: AnalyticsMoney
+    net:        AnalyticsMoney
     orders:     int
 
 
@@ -36,7 +46,7 @@ class TopProductRow(BaseModel):
     product_id:   str
     product_name: str
     image_url:    Optional[str]
-    revenue:      int
+    revenue:      AnalyticsMoney
     units_sold:   int
     views:        int
     avg_rating:   float
@@ -49,6 +59,13 @@ class TopProductsResponse(BaseModel):
 
 
 class InventoryHealthResponse(BaseModel):
+    """Active variants on non-deleted seller products.
+
+    In-stock includes low-stock variants. Low stock means positive available
+    units at or below that variant's reorder point; zero availability is counted
+    separately as out of stock. Available units exclude reservations.
+    """
+
     total_variants: int
     in_stock:       int
     low_stock:      int
@@ -60,13 +77,13 @@ class InventoryHealthResponse(BaseModel):
 
 class PlatformAnalytics(BaseModel):
     period:             str
-    total_gmv:          int
-    commission_revenue: int
-    slot_revenue:       int
+    total_gmv:          AnalyticsMoney
+    commission_revenue: AnalyticsMoney
+    slot_revenue:       AnalyticsMoney
     total_orders:       int
     new_customers:      int
     active_sellers:     int
-    avg_order_value:    int
+    avg_order_value:    AnalyticsMoney
     cod_rate:           float
     cancellation_rate:  float
 
@@ -75,8 +92,8 @@ class TopSellerRow(BaseModel):
     seller_id:   str
     brand_name:  str
     logo_url:    Optional[str]
-    gmv:         int
-    commission:  int
+    gmv:         AnalyticsMoney
+    commission:  AnalyticsMoney
     order_count: int
 
 
@@ -98,7 +115,7 @@ class CohortResponse(BaseModel):
 
 class PaymentMethodStat(BaseModel):
     count:             int
-    total:             int
+    total:             AnalyticsMoney
     share:             float
     verified_rate:     Optional[float] = None
     cancellation_rate: Optional[float] = None
@@ -113,7 +130,7 @@ class PaymentMethodsResponse(BaseModel):
 class CityRow(BaseModel):
     city:        str
     order_count: int
-    total_gmv:   int
+    total_gmv:   AnalyticsMoney
     share:       float
 
 

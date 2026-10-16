@@ -18,27 +18,17 @@ import structlog
 from structlog.types import EventDict, WrappedLogger
 
 from app.core.config import settings
+from app.core.log_privacy import redact, safe_exception
 
 
 # ── PII scrubber ──────────────────────────────────────────────────────────────
-_SENSITIVE_KEYS = frozenset({
-    "password", "password_hash", "token", "access_token", "refresh_token",
-    "jwt", "secret", "api_key", "apikey", "authorization",
-    "card_number", "cvv", "cvc", "integrity_salt", "hash_key",
-    "private_key", "service_role_key", "totp_secret",
-})
-
-
 def _scrub_sensitive(
     logger: WrappedLogger,
     method: str,
     event_dict: EventDict,
 ) -> EventDict:
     """Remove sensitive fields from log events before they are written."""
-    for key in list(event_dict.keys()):
-        if key.lower() in _SENSITIVE_KEYS:
-            event_dict[key] = "[REDACTED]"
-    return event_dict
+    return redact(event_dict)
 
 
 # ── Shared processors ─────────────────────────────────────────────────────────
@@ -47,9 +37,7 @@ _shared_processors: list[Any] = [
     structlog.stdlib.add_log_level,
     structlog.stdlib.add_logger_name,
     structlog.processors.TimeStamper(fmt="iso", utc=True),
-    structlog.processors.StackInfoRenderer(),
-    _scrub_sensitive,
-    structlog.processors.dict_tracebacks,
+    safe_exception,
 ]
 
 
@@ -79,6 +67,7 @@ def configure_logging() -> None:
         foreign_pre_chain=_shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
+            _scrub_sensitive,
             renderer,
         ],
     )

@@ -11,7 +11,8 @@ from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 from fastapi.responses import RedirectResponse
 
 from app.core.config import settings
@@ -101,12 +102,18 @@ async def finish_google_login(request, db):
             token_response.raise_for_status()
             keys = await client.get("https://www.googleapis.com/oauth2/v3/certs")
             keys.raise_for_status()
+        id_token = token_response.json()["id_token"]
+        header = jwt.get_unverified_header(id_token)
+        matching_keys = [key for key in jwt.PyJWKSet.from_dict(keys.json()).keys
+                         if key.key_id == header.get("kid")]
+        if header.get("alg") != "RS256" or len(matching_keys) != 1:
+            raise AuthenticationError("Google identity signing key is invalid")
         claims = jwt.decode(
-            token_response.json()["id_token"],
-            keys.json(),
+            id_token,
+            matching_keys[0].key,
             algorithms=["RS256"],
             audience=settings.GOOGLE_CLIENT_ID,
-            options={"require_exp": True, "require_sub": True, "require_iat": True},
+            options={"require": ["exp", "sub", "iat"]},
         )
         if claims.get("iss") not in ("accounts.google.com", "https://accounts.google.com"):
             raise AuthenticationError("Google identity issuer is invalid")
@@ -116,7 +123,7 @@ async def finish_google_login(request, db):
             raise AuthenticationError("Google identity nonce is invalid")
         if claims.get("email_verified") is not True or not claims.get("email"):
             raise AuthenticationError("Google email must be verified")
-    except (httpx.HTTPError, JWTError, KeyError, ValueError) as exc:
+    except (httpx.HTTPError, JWTError, KeyError, ValueError, TypeError) as exc:
         raise AuthenticationError("Google sign-in could not be verified") from exc
     user = await UserRepository.get_by_google_id(db, claims["sub"])
     if user is None:

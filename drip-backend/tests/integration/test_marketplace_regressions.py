@@ -548,6 +548,7 @@ async def test_payment_callback_amount_signature_and_replay(db, market, monkeypa
         err_msg="Approved",
         transaction_id="test-txn-001",
     )
+    monkeypatch.setattr(gateway, "check_status", AsyncMock(return_value={**data, "status_code": "00"}))
     with pytest.raises(BusinessRuleError):
         await service.handle_payfast_callback({**data, "validation_hash": "forged"})
     wrong = {**data, "txnamt": "26.00"}
@@ -555,6 +556,26 @@ async def test_payment_callback_amount_signature_and_replay(db, market, monkeypa
     with pytest.raises(BusinessRuleError):
         await service.handle_payfast_callback(wrong)
     data["validation_hash"] = gateway.callback_hash(basket_id=str(order.id), error_code="000")
+    # A valid callback hash cannot substitute for provider monetary/reference evidence.
+    gateway.check_status.return_value = {**data, "status_code": "00", "txnamt": "26.00"}
+    with pytest.raises(BusinessRuleError, match="could not be confirmed"):
+        await service.handle_payfast_callback(data)
+    assert order.status == OrderStatus.pending_payment
+    gateway.check_status.return_value = {
+        **data, "status_code": "00", "transaction_id": "unrelated-transaction",
+    }
+    with pytest.raises(BusinessRuleError, match="could not be confirmed"):
+        await service.handle_payfast_callback(data)
+    assert (await db.get(Payment, initialized.payment_id)).status == PaymentStatus.pending
+    from app.core.exceptions import ExternalServiceError
+    from app.integrations.payfast import PayFastProtocolError
+
+    gateway.check_status.side_effect = PayFastProtocolError("Provider temporarily unavailable")
+    with pytest.raises(ExternalServiceError):
+        await service.handle_payfast_callback(data)
+    assert order.status == OrderStatus.pending_payment
+    gateway.check_status.side_effect = None
+    gateway.check_status.return_value = {**data, "status_code": "00"}
     await service.handle_payfast_callback(data)
     assert order.status == OrderStatus.payment_confirmed
     order.status = OrderStatus.delivered
@@ -567,7 +588,14 @@ async def test_payment_callback_amount_signature_and_replay(db, market, monkeypa
     assert (await db.get(Payment, initialized.payment_id)).status == PaymentStatus.completed
 
 
-async def test_payfast_status_reconciliation_is_verified_and_idempotent(db, market, monkeypatch):
+@pytest.mark.parametrize("invalid_evidence", [
+    {"amount": None}, {"amount": "NaN"}, {"amount": "26.00"},
+    {"currency": None}, {"currency": "USD"}, {"txnamt": "1.00"},
+    {"currency_code": "USD"},
+])
+async def test_payfast_status_reconciliation_is_verified_and_idempotent(
+    db, market, monkeypatch, invalid_evidence
+):
     from unittest.mock import AsyncMock
 
     import app.services.payment_service as module
@@ -590,8 +618,17 @@ async def test_payfast_status_reconciliation_is_verified_and_idempotent(db, mark
         "status_msg": "Approved",
         "basket_id": str(order.id),
         "transaction_id": "reconciled-txn-1",
+        "amount": "2600.00",
+        "currency": "PKR",
     }
-    monkeypatch.setattr(gateway, "check_status", AsyncMock(return_value=status))
+    lookup = AsyncMock(return_value={**status, **invalid_evidence})
+    monkeypatch.setattr(gateway, "check_status", lookup)
+
+    rejected = await service.reconcile_payfast(order.id)
+    assert rejected.matched is False
+    assert rejected.local_status == "pending"
+    assert order.status == OrderStatus.pending_payment
+    lookup.return_value = status
 
     first = await service.reconcile_payfast(order.id)
     second = await service.reconcile_payfast(order.id)

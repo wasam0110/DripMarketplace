@@ -29,7 +29,7 @@ def main() -> None:
             "PAYFAST_ENABLED": "false",
         }
     )
-    from fastapi.routing import APIRoute
+    from fastapi.routing import APIRoute, iter_route_contexts
     from main import app
 
     target = ROOT / "docs"
@@ -48,8 +48,8 @@ def main() -> None:
 
     rows = []
     seen = set()
-    for route in app.routes:
-        if not isinstance(route, APIRoute):
+    for route in iter_route_contexts(app.routes):
+        if not isinstance(route.original_route, APIRoute):
             continue
         deps = dependencies(route.dependant)
         access = (
@@ -59,6 +59,7 @@ def main() -> None:
                     & {
                         "require_admin",
                         "require_seller",
+                        "require_seller_account",
                         "require_customer",
                         "get_current_user_payload",
                         "get_optional_user_payload",
@@ -80,6 +81,14 @@ def main() -> None:
                     route.endpoint.__module__ + "." + route.endpoint.__name__,
                 )
             )
+    spec_operations = {
+        (path, method.upper())
+        for path, methods in schema["paths"].items()
+        for method in methods
+        if method.lower() in {"get", "post", "put", "patch", "delete", "head", "options", "trace"}
+    }
+    if not rows or not spec_operations.issubset(seen):
+        raise RuntimeError("Route inventory is empty or omits documented operations")
     lines = [
         "# WearHowZ endpoint inventory",
         "",

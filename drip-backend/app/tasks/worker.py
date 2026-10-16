@@ -38,6 +38,8 @@ from app.tasks.notification_tasks import (
     send_payout_notification,
     notify_seller_decision,
     broadcast_notification,
+    dispatch_notification_outbox,
+    deliver_notification_outbox,
 )
 
 # ── Cleanup tasks (all scheduled via cron_jobs below) ─────────────────────────
@@ -55,18 +57,25 @@ logger = get_logger(__name__)
 
 async def startup(ctx: dict) -> None:
     configure_logging()
-    from app.core.database import init_db
-    from app.core.redis import init_redis
-    await init_db()
-    await init_redis()
+    from contextlib import AsyncExitStack
+    from app.core.database import close_db, init_db
+    from app.core.redis import close_redis, init_redis
+    async with AsyncExitStack() as cleanup:
+        cleanup.push_async_callback(close_db)
+        await init_db()
+        cleanup.push_async_callback(close_redis)
+        await init_redis()
+        cleanup.pop_all()  # Normal shutdown owns successfully initialized resources.
     logger.info("worker.started")
 
 
 async def shutdown(ctx: dict) -> None:
     from app.core.database import close_db
     from app.core.redis import close_redis
-    await close_db()
-    await close_redis()
+    try:
+        await close_redis()
+    finally:
+        await close_db()
     logger.info("worker.stopped")
 
 
@@ -88,6 +97,8 @@ class WorkerSettings:
         send_payout_notification,
         notify_seller_decision,
         broadcast_notification,
+        dispatch_notification_outbox,
+        deliver_notification_outbox,
         # Wallet / commission
         settle_commission,
         move_pending_to_available,
@@ -107,12 +118,19 @@ class WorkerSettings:
 
     max_jobs    = 10
     job_timeout = 300
-    keep_result = 3600
+    # ARQ also uses this default for exhausted retries / pre-execution failures,
+    # bypassing per-function retention. Results contain original job args (PII
+    # and auth tokens). Durable notification status lives in the DB outbox.
+    keep_result = 0
+    keep_result_forever = False
+    log_results = False
     retry_jobs  = True
     max_tries   = 3
     queue_name  = "arq:queue"
 
     cron_jobs = [
+        # Durable notification outbox publisher — every minute.
+        cron(dispatch_notification_outbox, minute=set(range(60))),
         # Wallet hold release — every 10 minutes.
         cron(move_pending_to_available, minute={0, 10, 20, 30, 40, 50}),
         # Expired COD / pending-payment sweep — every 5 minutes.

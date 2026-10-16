@@ -31,6 +31,8 @@ class Settings(BaseSettings):
 
     # ── CORS ──────────────────────────────────────────────────────────────────
     ALLOWED_ORIGINS: list[str] = ["http://localhost:5173"]
+    # Only socket peers in these networks may supply forwarding headers.
+    TRUSTED_PROXY_IPS: list[str] = []
 
     # ── Database ──────────────────────────────────────────────────────────────
     DATABASE_URL: str  # postgresql+asyncpg://user:pass@host:5432/db
@@ -44,7 +46,7 @@ class Settings(BaseSettings):
     # ── Auth — JWT (RS256) ────────────────────────────────────────────────────
     JWT_PRIVATE_KEY: str  # PEM-encoded RS256 private key
     JWT_PUBLIC_KEY: str  # PEM-encoded RS256 public key
-    JWT_ALGORITHM: str = "RS256"
+    JWT_ALGORITHM: Literal["RS256"] = "RS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
@@ -107,7 +109,8 @@ class Settings(BaseSettings):
         return v
 
     @field_validator(
-        "ALLOWED_ORIGINS", "PAYFAST_IPN_IPS", "PAYFAST_TRUSTED_PROXY_IPS", mode="before"
+        "ALLOWED_ORIGINS", "TRUSTED_PROXY_IPS", "PAYFAST_IPN_IPS",
+        "PAYFAST_TRUSTED_PROXY_IPS", mode="before"
     )
     @classmethod
     def parse_origins(cls, v: str | list[str]) -> list[str]:
@@ -134,6 +137,7 @@ class Settings(BaseSettings):
                 "PAYFAST_MERCHANT_ID",
                 "PAYFAST_SECURED_KEY",
                 "PAYFAST_MERCHANT_NAME",
+                "PAYFAST_API_BASE_URL",
             ]
             missing = [key for key in payfast_required if not getattr(self, key, "").strip()]
             if missing:

@@ -1,7 +1,8 @@
 # ── Web framework ─────────────────────────────────────────────────────────────
-fastapi==0.115.6
+fastapi==0.143.0
+starlette==1.8.0               # Explicit security-reviewed framework pin
 uvicorn[standard]==0.32.1
-python-multipart==0.0.20        # File uploads
+python-multipart==0.0.32        # File uploads
 
 # ── Database ──────────────────────────────────────────────────────────────────
 sqlalchemy[asyncio]==2.0.36
@@ -14,8 +15,8 @@ pydantic-settings==2.7.0
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 argon2-cffi==23.1.0
-cryptography==44.0.0            # RS256 JWT signing
-python-jose[cryptography]==3.3.0
+cryptography==50.0.2            # RS256 JWT signing
+PyJWT[crypto]==2.15.1           # Replaces python-jose / unpatched ecdsa dependency
 pyotp==2.9.0                    # Admin TOTP 2FA
 qrcode==8.0                     # TOTP QR code generation
 
@@ -25,9 +26,10 @@ arq==0.26.1                     # Async Redis queue (background tasks)
 
 # ── Logging ───────────────────────────────────────────────────────────────────
 structlog==24.4.0
+sentry-sdk==2.72.0             # Optional production error tracking runtime
 
 # ── File handling ─────────────────────────────────────────────────────────────
-pillow==11.1.0                  # Image processing + WebP conversion
+pillow==12.3.0                  # Image processing + WebP conversion
 python-magic==0.4.27            # Magic-byte MIME detection
 
 # ── HTTP client ───────────────────────────────────────────────────────────────
@@ -44,12 +46,7 @@ supabase==2.11.0
 
 # ── Utilities ─────────────────────────────────────────────────────────────────
 python-slugify==8.0.4           # URL slug generation
-orjson==3.10.12                 # Fast JSON serialisation
+orjson==3.13.0                  # Fast JSON serialisation
 
 # ── Testing ───────────────────────────────────────────────────────────────────
-pytest==8.3.4
-pytest-asyncio==0.25.2
-pytest-cov==6.0.0
-httpx==0.28.1                   # Async test client
-factory-boy==3.3.1              # Test fixtures
-pip-audit==2.8.0                # Dependency vulnerability scanning
+# Development tooling is installed only via requirements-dev.txt.

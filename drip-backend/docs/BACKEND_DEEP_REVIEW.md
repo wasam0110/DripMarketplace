@@ -4,6 +4,11 @@ Review dates: 11–12 October 2026. Scope: `drip-backend` only. This is a review
 
 ## Bottom line
 
+Historical baseline below. Subsequent repairs and current remaining boundaries are
+tracked in [the pre-ship audit](PRE_SHIP_AUDIT.md); checkpoint 8 partially repairs F16
+with exact Decimal analytics and documented response-type changes. Checkpoint 7's
+bulk-stock integrity and checkpoint 6's seller isolation/reorder repairs remain in place.
+
 The backend has substantial working functionality and useful regression tests, but it is **not complete except for production configuration**. Financial workflow, notification, account-lifecycle and validation gaps remain in application code. The highest-priority issues are listed below with source locations, consequences and proposed verification.
 
 The review itself changed no application logic, development/production data, provider configuration or frontend source. Backend repair batches 1 through 3 were subsequently implemented on 12–13 October and are recorded below and in their source supplements. Runtime checks used disposable local test services and synthetic data. New review documents are separate from historical release reports.
@@ -148,6 +153,10 @@ Recommended repair: define the appropriate reopening/approval transition, with q
 
 ### F08 — Payment reconciliation does not verify amount and currency
 
+14 October update: local fail-closed verification implemented and regression-tested;
+see [checkpoint 2](PRE_SHIP_CHECKPOINT_2.md). Merchant response mapping/UAT remains
+gated. The following text records the original finding, not current implementation.
+
 Source: `app/services/payment_service.py:251`.
 
 Reconciliation matches basket and transaction identifiers, then treats several provider statuses as success. It does not compare authoritative provider amount/currency with the stored payment before setting `completed`. The callback path has an amount comparison only when an amount is supplied, so missing-value handling also needs protocol-level validation.
@@ -180,6 +189,9 @@ Recommended repair: use one trusted-proxy address resolver and explicit bucket s
 
 ### F11 — Account deletion misses active payment states; eventual hard deletion conflicts with retained orders
 
+14 October update: eligibility/profile safeguards implemented and bulk hard-delete
+disabled; complete retention/offboarding/erasure remains open. See checkpoint 2.
+
 Source: `app/services/customer_service.py:595`; `app/tasks/cleanup_tasks.py:79`; `app/models/order.py:55`; migrations 001, 002 and 004.
 
 The active-order guard omits `pending_payment` and `payment_confirmed`, so a customer with a paid but unfulfilled order can soft-delete their account. The shared `CurrentUser` dependency also permits sellers/admins on customer endpoints; seller offboarding needs an explicit policy rather than inheriting customer deletion.
@@ -197,6 +209,11 @@ Base64 decoding and JSON parsing do not validate that the result is an object be
 Recommended repair: validate cursor shape, expected sort, UUID and finite numeric/date value, and consistently return a client error. Add malformed list/null/scalar/price/date/oversized cursor cases.
 
 ### F13 — Inventory reorder-point input is accepted but ignored
+
+14 October update: repaired with persisted per-item thresholds in migration 018 and
+native regression tests; see checkpoint 2. On 16 October, checkpoint 6 also replaces
+the analytics inventory-health constant with the persisted per-variant threshold,
+with failing-before/passing-after HTTP regressions. The text below is the original finding.
 
 Source: `app/services/inventory_service.py:155` and inventory route schemas.
 
@@ -221,6 +238,13 @@ Production startup imports `sentry_sdk` when a DSN is configured, but the SDK is
 Recommended repair: declare the runtime dependency if supported, and test the enabled configuration. Also guarantee resource cleanup if a later startup step fails after pools are opened.
 
 ### F16 — Configuration, precision and response contracts need consolidation
+
+Checkpoint 8 partially repairs this finding: all eight money-bearing analytics
+routes now preserve Decimal fractions and emit PKR decimal strings, with explicit
+two-place average rounding. Native fractional/empty/share cases and schema tests
+cover the change. Coupon/slot/notification precision, canonical links and error
+envelopes remain open. See [checkpoint 8](PRE_SHIP_CHECKPOINT_8.md) for compatibility
+changes and unchanged reporting bases; the historical description below is the baseline.
 
 Sources: `app/integrations/resend_client.py:121` and `:138`; `app/core/config.py`; `app/schemas/analytics.py`; `app/services/analytics_service.py`; `main.py` exception handlers.
 

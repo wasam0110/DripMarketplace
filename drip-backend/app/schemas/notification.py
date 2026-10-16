@@ -33,6 +33,9 @@ class NotificationPreferencesResponse(BaseModel):
     payout_notifications:     bool
     new_review_notifications: bool
     low_stock_alerts:         bool
+    email_new_arrivals:       bool
+    sms_order_updates:        bool
+    whatsapp_order_updates:   bool
 
     model_config = {"from_attributes": True}
 
@@ -44,6 +47,9 @@ class UpdatePreferencesRequest(BaseModel):
     payout_notifications:     Optional[bool] = None
     new_review_notifications: Optional[bool] = None
     low_stock_alerts:         Optional[bool] = None
+    email_new_arrivals:       Optional[bool] = None
+    sms_order_updates:        Optional[bool] = None
+    whatsapp_order_updates:   Optional[bool] = None
 
 
 class BroadcastRequest(BaseModel):

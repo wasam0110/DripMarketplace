@@ -1,0 +1,52 @@
+{
+  "date": "2026-10-13",
+  "timezone": "Asia/Karachi",
+  "scope": "Backend repair batch 4 (F09); not release approval",
+  "full_suite": {
+    "passed": 621,
+    "skipped": 1,
+    "failed": 0,
+    "errors": 0,
+    "exit_code": 0
+  },
+  "coverage": {
+    "statements": 8946,
+    "covered": 7683,
+    "missed": 1263,
+    "percent": 85.88195841716968,
+    "required_percent": 85,
+    "gate_passed": true
+  },
+  "focused_b4": {
+    "new_cases_passed": 4,
+    "notification_regressions_passed": 75,
+    "marketplace_regression_module_passed": true,
+    "real_messages_sent": false
+  },
+  "native_services": {
+    "postgres": "16-alpine",
+    "redis": "7-alpine",
+    "disposable": true,
+    "development_services_used": false
+  },
+  "migrations": {
+    "head": "017",
+    "fresh_upgrade_passed": true,
+    "round_trip": "017 -> 016 -> 017",
+    "round_trip_passed": true,
+    "production_data_rehearsal": false
+  },
+  "delivery_guarantee": {
+    "transactional_outbox": true,
+    "local_deduplication": true,
+    "provider_exactly_once_claimed": false
+  },
+  "lint": {
+    "compile_and_diff_checks_passed": true,
+    "full_configured_ruff_clean": false,
+    "note": "The repository retains inherited Ruff findings."
+  },
+  "frontend_inspected_or_modified": false,
+  "commit_or_push_performed": false,
+  "remaining_findings": "F08 and F10-F17"
+}

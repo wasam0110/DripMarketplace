@@ -1,8 +1,20 @@
 # WearHowZ backend setup and release checks
 
-Backend review candidate, refreshed 8 October 2026. Not approved for production; see
-[known limits](KNOWN_LIMITS.md) and [verification report](docs/TASK_6_REPORT.md).
+Backend review candidate, refreshed 16 October 2026. Not approved for production; see
+[known limits](KNOWN_LIMITS.md) and [latest verification](docs/PRE_SHIP_CHECKPOINT_8.md).
 Run commands from `drip-backend`. Never replace an existing local `.env`.
+
+Customer deletion now records retryable external cleanup. Review the
+[customer privacy runbook](docs/CUSTOMER_PRIVACY.md), deploy API/workers together and
+monitor failed cleanup events. Financial retention expiry and managed seller/admin
+offboarding remain disabled pending final policy/design approval.
+
+Checkpoint 5 also adds send-time checks for legacy email jobs and disables ARQ
+result retention (including exhausted retries). Restart all workers together;
+do not use ARQ result polling as delivery evidence. Consult the
+[notification recovery runbook](docs/NOTIFICATION_RECOVERY.md) for the distinction
+between durable outbox deliveries and legacy auth jobs that require manual resend.
+Old result keys and pending-job payloads are not retroactively purged.
 
 ## Local development
 
@@ -19,6 +31,13 @@ The database driver URL is `postgresql+asyncpg://...`. Keep `PAYFAST_ENABLED=fal
 Do not reuse the historical sample database password; its owner must rotate it if active.
 
 Configure `FRONTEND_URL`, allowed origins and Google callback URLs consistently.
+For reverse-proxy deployments, configure `TRUSTED_PROXY_IPS` with only the actual
+trusted proxy addresses/CIDRs (JSON list, default `[]`). Run Uvicorn with
+`--no-proxy-headers`, as the Docker command now does, so application validation
+receives the socket peer. Proxies must append or replace `X-Forwarded-For`.
+The PayFast-specific list overrides the global list when nonempty; do not place
+PayFast callback-source addresses in the proxy list. Review ingress topology in
+staging: guessing broad trusted networks defeats this protection.
 For storage, provision the configured product, brand and avatar buckets; keep the
 service-role key server-side. Follow [connected-services setup](docs/CONNECTED_SERVICES_SETUP.md)
 for opt-in upload/delete and email checks. Follow [PayFast setup](docs/PAYFAST_SETUP.md)
@@ -29,10 +48,20 @@ Back up an existing database and inspect the migration state before applying any
 ```powershell
 .venv/Scripts/python.exe fix_migration.py --check
 .venv/Scripts/python.exe fix_migration.py --upgrade
-.venv/Scripts/python.exe -m uvicorn main:app --reload
+.venv/Scripts/python.exe -m uvicorn main:app --reload --no-proxy-headers
 ```
 
-Head revision is `015`. Revision 014 adds the refund requester audit field and queue
+Head revision is `020`. Revisions 019–020 add notification recovery/import bookkeeping
+and schema-alignment indexes/checks; review [recovery and migration precautions](docs/NOTIFICATION_RECOVERY.md).
+Stop/drain old workers before upgrading. Revision 020 refuses negative review helpful/
+unhelpful counts or image sort positions; review existing data before deployment.
+Historical payment methods remain readable but cannot be selected for new checkout.
+Revision 016 adds refund accounting/allocation records;
+revision 017 adds durable notification delivery and preference fields. Review their
+batch reports before upgrading an existing database. Revision 018 persists inventory
+reorder thresholds (default 5, range 0–999999). Export customized thresholds before
+downgrading 018: its downgrade removes that column and its values. Revision 014 adds
+the refund requester audit field and queue
 indexes. Revision 015 makes return ownership nullable for capability-authorized guest
 returns; downgrading it requires reconciling any guest-return rows first.
 Existing refund rows copy their latest recorded admin actor into `requested_by`; for an
@@ -43,6 +72,21 @@ and data. Never delete/stamp Alembic's version table to bypass migrations. See t
 legacy-settlement restriction below.
 
 The Linux worker entrypoint is `python -m arq app.tasks.worker.WorkerSettings`.
+`/health` returns HTTP 503 when its bounded database or Redis probe fails; use it for
+readiness, not as a dependency-independent process-liveness probe. The legacy
+`cleanup_soft_deleted_users` worker is intentionally non-destructive pending an
+approved retention policy. Customer self-deletion removes credentials/profile fields
+and saved addresses while retaining the user key and financial records. Seller/admin
+offboarding is not supported by that customer endpoint. Google-only customers must
+set a password before requesting deletion; a fresh OAuth reauthentication deletion
+flow is not implemented.
+
+PayFast success callbacks now require a successful authenticated status lookup that
+explicitly matches basket, transaction, amount and currency. Missing provider evidence
+does not default to the local amount or PKR. Confirm merchant status-API access and
+actual response field mapping in UAT before enabling PayFast; credentials alone are
+not proof of compatibility.
+
 Orphan-image deletion is disabled by default and must remain disabled until its storage
 smoke test passes. For local review, use disposable services and fake provider transports.
 ARQ 0.26.1 has Unix-signal assumptions on Windows;

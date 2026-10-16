@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 from typing import Optional
 
@@ -35,8 +35,6 @@ from app.schemas.analytics import (
     SearchQueryRow,
 )
 
-LOW_STOCK_THRESHOLD = 5
-
 
 def _period_to_days(period: str) -> int:
     return {"7d": 7, "30d": 30, "90d": 90, "1y": 365}.get(period, 30)
@@ -48,6 +46,11 @@ def _date_from(period: str) -> datetime:
 
 def _trunc(granularity: str) -> str:
     return {"day": "day", "week": "week", "month": "month"}.get(granularity, "day")
+
+
+def _money(value: Decimal | int) -> Decimal:
+    """Keep PKR fractions; round derived averages only at the response boundary."""
+    return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
 
 # ── Seller Analytics ───────────────────────────────────────────────────────────
@@ -71,9 +74,9 @@ class SellerAnalyticsService:
             CommissionLedger.settled_at >= date_from,
         )
         comm = (await self.db.execute(comm_q)).one()
-        gross = int(comm[0])
-        commission = int(comm[1])
-        net = int(comm[2])
+        gross = _money(comm[0])
+        commission = _money(comm[1])
+        net = _money(comm[2])
         orders = int(comm[3])
 
         # Units sold
@@ -102,7 +105,7 @@ class SellerAnalyticsService:
         )
         total_views = int((await self.db.execute(views_q)).scalar_one())
 
-        avg_order_value = gross // orders if orders else 0
+        avg_order_value = _money(gross / orders) if orders else _money(0)
         conversion_rate = round(orders / total_views * 100, 2) if total_views else 0.0
 
         return SellerAnalyticsOverview(
@@ -148,9 +151,9 @@ class SellerAnalyticsService:
             data=[
                 RevenueDayRow(
                     date=row.bucket.strftime("%Y-%m-%d"),
-                    gross=int(row.gross),
-                    commission=int(row.commission),
-                    net=int(row.net),
+                    gross=_money(row.gross),
+                    commission=_money(row.commission),
+                    net=_money(row.net),
                     orders=int(row.orders),
                 )
                 for row in rows
@@ -209,7 +212,7 @@ class SellerAnalyticsService:
                     product_id=str(r.id),
                     product_name=r.name,
                     image_url=None,  # hydrated on frontend
-                    revenue=int(r.revenue),
+                    revenue=_money(r.revenue),
                     units_sold=int(r.units_sold),
                     views=r.view_count,
                     avg_rating=float(r.avg_rating),
@@ -225,9 +228,9 @@ class SellerAnalyticsService:
             select(
                 func.count(ProductVariant.id).label("total"),
                 func.sum(case((avail > 0, 1), else_=0)).label("in_stock"),
-                func.sum(case((and_(avail > 0, avail <= LOW_STOCK_THRESHOLD), 1), else_=0)).label(
-                    "low_stock"
-                ),
+                func.sum(
+                    case((and_(avail > 0, avail <= ProductInventory.reorder_point), 1), else_=0)
+                ).label("low_stock"),
                 func.sum(case((avail <= 0, 1), else_=0)).label("out_of_stock"),
                 func.coalesce(func.sum(avail), 0).label("total_units"),
             )
@@ -303,7 +306,8 @@ class AdminAnalyticsService:
             )
         )
 
-        avg_order_value = int(total_gmv) // int(total_orders) if total_orders else 0
+        total_gmv = _money(total_gmv)
+        avg_order_value = _money(total_gmv / total_orders) if total_orders else _money(0)
         cod_rate = round(int(cod_orders) / int(total_orders) * 100, 2) if total_orders else 0.0
         cancel_rate = (
             round(int(cancelled_orders) / int(total_orders) * 100, 2) if total_orders else 0.0
@@ -311,9 +315,9 @@ class AdminAnalyticsService:
 
         return PlatformAnalytics(
             period=period,
-            total_gmv=int(total_gmv),
-            commission_revenue=int(commission_revenue),
-            slot_revenue=int(slot_revenue),
+            total_gmv=total_gmv,
+            commission_revenue=_money(commission_revenue),
+            slot_revenue=_money(slot_revenue),
             total_orders=int(total_orders),
             new_customers=int(new_customers),
             active_sellers=int(active_sellers),
@@ -346,9 +350,9 @@ class AdminAnalyticsService:
             data=[
                 RevenueDayRow(
                     date=r.bucket.strftime("%Y-%m-%d"),
-                    gross=int(r.gross),
-                    commission=int(r.commission),
-                    net=int(r.net),
+                    gross=_money(r.gross),
+                    commission=_money(r.commission),
+                    net=_money(r.net),
                     orders=int(r.orders),
                 )
                 for r in result.all()
@@ -388,8 +392,8 @@ class AdminAnalyticsService:
                     seller_id=str(r.id),
                     brand_name=r.brand_name,
                     logo_url=r.logo_url,
-                    gmv=int(r.gmv),
-                    commission=int(r.commission),
+                    gmv=_money(r.gmv),
+                    commission=_money(r.commission),
                     order_count=int(r.order_count),
                 )
                 for r in rows
@@ -459,15 +463,15 @@ class AdminAnalyticsService:
         )
 
         rows = (await self.db.execute(q)).all()
-        data = {r.payment_method: {"count": int(r.count), "total": int(r.total)} for r in rows}
-        all_total = sum(v["total"] for v in data.values()) or 1
+        data = {r.payment_method: {"count": int(r.count), "total": _money(r.total)} for r in rows}
+        all_total = sum((v["total"] for v in data.values()), Decimal(0)) or Decimal(1)
 
         def stat(method: str, **extra) -> PaymentMethodStat:
-            d = data.get(method, {"count": 0, "total": 0})
+            d = data.get(method, {"count": 0, "total": _money(0)})
             return PaymentMethodStat(
                 count=d["count"],
                 total=d["total"],
-                share=round(d["total"] / all_total * 100, 2),
+                share=float(round(d["total"] / all_total * 100, 2)),
                 **extra,
             )
 
@@ -526,7 +530,7 @@ class AdminAnalyticsService:
         )
 
         rows = (await self.db.execute(q)).all()
-        all_gmv = sum(int(r.gmv) for r in rows) or 1
+        all_gmv = sum((r.gmv for r in rows), Decimal(0)) or Decimal(1)
 
         return CitiesResponse(
             period=period,
@@ -534,8 +538,8 @@ class AdminAnalyticsService:
                 CityRow(
                     city=r.city,
                     order_count=int(r.order_count),
-                    total_gmv=int(r.gmv),
-                    share=round(int(r.gmv) / all_gmv * 100, 2),
+                    total_gmv=_money(r.gmv),
+                    share=float(round(r.gmv / all_gmv * 100, 2)),
                 )
                 for r in rows
             ],

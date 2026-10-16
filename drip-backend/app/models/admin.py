@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy import Index as SchemaIndex
+
+from sqlalchemy import text as sql_text
+
 from uuid import UUID, uuid4
 from datetime import datetime
 from typing import Optional
@@ -25,8 +29,12 @@ class SystemSetting(Base):
 class Banner(Base, TimestampMixin):
     """Promotional banners displayed on the storefront."""
     __tablename__ = "banners"
+    __table_args__ = (
+        SchemaIndex("ix_banners_is_active", "is_active"),
+        SchemaIndex("ix_banners_position", "position"),
+    )
 
-    id:          Mapped[UUID]          = mapped_column(primary_key=True, default=uuid4)
+    id:          Mapped[UUID]          = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     title:       Mapped[str]           = mapped_column(String(200))
     image_url:   Mapped[str]           = mapped_column(String(500))
     link_url:    Mapped[str | None]    = mapped_column(String(500))

@@ -5,7 +5,7 @@ Middleware stack (applied in order in main.py):
   1. SecurityHeadersMiddleware  — adds HTTP security headers to every response
   2. RequestIDMiddleware        — stamps each request with a unique ID
   3. LoggingMiddleware          — structured request/response logging
-  4. RateLimitMiddleware        — sliding-window rate limiting via Redis
+  4. RateLimitMiddleware        — fixed-window rate limiting via Redis
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.types import ASGIApp
 
 from app.core.config import settings
+from app.core.client_ip import client_ip
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -113,11 +114,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _get_client_ip(request: Request) -> str:
-        # Respect X-Forwarded-For if set by a trusted proxy (Railway injects this)
-        forwarded = request.headers.get("X-Forwarded-For")
-        if forwarded:
-            return forwarded.split(",")[0].strip()
-        return request.client.host if request.client else "unknown"
+        return client_ip(request, settings.TRUSTED_PROXY_IPS) or "unknown"
 
 
 # ── 4. Rate Limiting ──────────────────────────────────────────────────────────
@@ -138,7 +135,7 @@ _RATE_LIMIT_RULES: list[tuple[str, str, int, int]] = [
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     """
-    Sliding-window rate limiter backed by Redis.
+    Fixed-window rate limiter backed by Redis.
 
     Key structure: drip:rl:{method}:{path_prefix}:{identifier}
     Identifier: user_id if authenticated, otherwise client IP.
@@ -152,9 +149,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if request.url.path == "/api/v1/health" or request.method == "OPTIONS":
             return await call_next(request)
 
-        limit, window = self._get_limit(request.method, request.url.path)
+        scope, limit, window = self._get_rule(request.method, request.url.path)
         identifier    = self._get_identifier(request)
-        key           = f"drip:rl:{request.method}:{request.url.path[:50]}:{identifier}"
+        key           = f"drip:rl:{scope}:{identifier}"
 
         try:
             allowed, remaining = await self._check(key, limit, window)
@@ -190,40 +187,45 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
         response = await call_next(request)
         response.headers["X-RateLimit-Limit"]     = str(limit)
-        response.headers["X-RateLimit-Remaining"] = str(max(0, remaining - 1))
+        response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
         return response
 
     @staticmethod
     def _get_limit(method: str, path: str) -> tuple[int, int]:
+        _, limit, window = RateLimitMiddleware._get_rule(method, path)
+        return limit, window
+
+    @staticmethod
+    def _get_rule(method: str, path: str) -> tuple[str, int, int]:
         for rule_method, rule_path, limit, window in _RATE_LIMIT_RULES:
             method_match = not rule_method or method == rule_method
-            if method_match and path.startswith(rule_path):
-                return limit, window
-        return 200, 60  # Default
+            if method_match and (path == rule_path or path.startswith(rule_path + "/")):
+                return f"{rule_method or '*'}:{rule_path}", limit, window
+        return "*:default", 200, 60
 
     @staticmethod
     def _get_identifier(request: Request) -> str:
-        # Prefer user ID from token (set by auth dependency later in the chain)
+        # Only use an identity supplied by earlier trusted middleware. Route auth
+        # dependencies run later, so the normal outer limiter is per client IP.
         user_id = getattr(request.state, "user_id", None)
         if user_id:
             return f"u:{user_id}"
         # Fall back to IP address
-        forwarded = request.headers.get("X-Forwarded-For")
-        ip = forwarded.split(",")[0].strip() if forwarded else (
-            request.client.host if request.client else "unknown"
-        )
+        ip = client_ip(request, settings.TRUSTED_PROXY_IPS) or "unknown"
         return f"ip:{ip}"
 
     @staticmethod
     async def _check(key: str, limit: int, window: int) -> tuple[bool, int]:
         """
-        Increment the counter and return (allowed, current_count).
-        Uses Redis INCR + EXPIRE for atomic sliding-window behaviour.
+        Increment the counter and return (allowed, remaining_requests).
+        Redis MULTI/EXEC keeps INCR and initial expiry atomic. EXPIRE NX also
+        repairs legacy counters missing a TTL without extending active windows.
         """
         from app.core.redis import get_redis
         redis = get_redis()
 
-        count = await redis.incr(key)
-        if count == 1:
-            await redis.expire(key, window)
+        async with redis.pipeline(transaction=True) as pipeline:
+            pipeline.incr(key)
+            pipeline.expire(key, window, nx=True)
+            count, _ = await pipeline.execute()
         return count <= limit, limit - count

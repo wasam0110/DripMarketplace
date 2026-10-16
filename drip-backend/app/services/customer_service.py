@@ -29,6 +29,7 @@ from app.models.user import User, UserAddress
 from app.models.review import Review, ReviewImage, ReviewStatus
 from app.models.product import Product
 from app.repositories.user_repo import UserRepository
+from app.services.account_lifecycle import lock_active_user
 from app.schemas.user import (
     UserProfileResponse,
     UpdateProfileRequest,
@@ -115,7 +116,7 @@ class CustomerService:
     async def update_profile(
         self, user_id: uuid.UUID, payload: UpdateProfileRequest
     ) -> UserProfileResponse:
-        user = await self._get_user(user_id)
+        user = await lock_active_user(self.db, user_id)
         updates: dict = {}
         if payload.first_name is not None:
             updates["first_name"] = payload.first_name
@@ -139,7 +140,7 @@ class CustomerService:
     ) -> AvatarUploadResponse:
         from app.services.image_service import ImageService
         from app.core.config import settings
-        await self._get_user(user_id)
+        await lock_active_user(self.db, user_id)
         avatar_url = await ImageService().process_and_upload(
             file_bytes, str(user_id), bucket=settings.SUPABASE_STORAGE_BUCKET_AVATARS
         )
@@ -152,7 +153,7 @@ class CustomerService:
     async def change_password(
         self, user_id: uuid.UUID, payload: ChangePasswordRequest
     ) -> None:
-        user = await self._get_user(user_id)
+        user = await lock_active_user(self.db, user_id)
         if user.password_hash is None:
             raise BusinessRuleError("Cannot change password for OAuth-linked accounts.")
         if not verify_password(payload.current_password, user.password_hash):
@@ -199,6 +200,7 @@ class CustomerService:
     async def create_address(
         self, user_id: uuid.UUID, payload: CreateAddressRequest
     ) -> AddressResponse:
+        await lock_active_user(self.db, user_id)
         count_stmt = select(func.count()).where(UserAddress.user_id == user_id)
         count = (await self.db.execute(count_stmt)).scalar_one()
         if count >= MAX_ADDRESSES:
@@ -230,6 +232,7 @@ class CustomerService:
         address_id: uuid.UUID,
         payload: UpdateAddressRequest,
     ) -> AddressResponse:
+        await lock_active_user(self.db, user_id)
         stmt = select(UserAddress).where(
             UserAddress.id == address_id, UserAddress.user_id == user_id
         )
@@ -272,6 +275,11 @@ class CustomerService:
     async def set_default_address(
         self, user_id: uuid.UUID, address_id: uuid.UUID
     ) -> AddressResponse:
+        await lock_active_user(self.db, user_id)
+        if not await self.db.scalar(select(UserAddress.id).where(
+            UserAddress.id == address_id, UserAddress.user_id == user_id
+        )):
+            raise NotFoundError("Address")
         await self.db.execute(
             update(UserAddress)
             .where(UserAddress.user_id == user_id)
@@ -310,6 +318,7 @@ class CustomerService:
     async def create_review(
         self, user_id: uuid.UUID, payload: CreateReviewRequest
     ) -> ReviewResponse:
+        await lock_active_user(self.db, user_id)
         # Check product exists
         product = await self.db.get(Product, payload.product_id)
         if product is None:
@@ -359,6 +368,7 @@ class CustomerService:
         review_id: uuid.UUID,
         payload: UpdateReviewRequest,
     ) -> ReviewResponse:
+        await lock_active_user(self.db, user_id)
         stmt = select(Review).where(Review.id == review_id, Review.user_id == user_id)
         review = (await self.db.execute(stmt)).scalar_one_or_none()
         if review is None:
@@ -453,6 +463,7 @@ class CustomerService:
     async def vote_review(
         self, user_id: uuid.UUID, review_id: uuid.UUID, helpful: bool
     ) -> None:
+        await lock_active_user(self.db, user_id)
         review = await self.db.get(Review, review_id)
         if review is None:
             raise NotFoundError("Review")
@@ -530,6 +541,7 @@ class CustomerService:
     async def add_to_wishlist(
         self, user_id: uuid.UUID, product_id: uuid.UUID
     ) -> WishlistResponse:
+        await lock_active_user(self.db, user_id)
         product = await self.db.get(Product, product_id)
         if product is None or product.deleted_at is not None:
             raise NotFoundError("Product")
@@ -554,22 +566,15 @@ class CustomerService:
     async def get_notification_prefs(
         self, user_id: uuid.UUID
     ) -> NotificationPreferencesResponse:
-        # Defaults — stored in Redis hash for now
-        from app.core.redis import get_redis
-        redis = get_redis()
-        key = f"notif_prefs:{user_id}"
-        raw = await redis.hgetall(key)
-        raw = {(k.decode() if isinstance(k, bytes) else k): v for k, v in raw.items()}
-        def _bool(v: Optional[bytes], default: bool = True) -> bool:
-            if v is None:
-                return default
-            return v in (b"1", b"true", "1", "true")
+        from app.services.notification_service import NotificationService
+
+        prefs = await NotificationService(self.db).get_preferences(user_id)
         return NotificationPreferencesResponse(
-            email_order_updates    = _bool(raw.get("email_order_updates"),  True),
-            email_promotions       = _bool(raw.get("email_promotions"),     True),
-            email_new_arrivals     = _bool(raw.get("email_new_arrivals"),   False),
-            sms_order_updates      = _bool(raw.get("sms_order_updates"),    False),
-            whatsapp_order_updates = _bool(raw.get("whatsapp_order_updates"), True),
+            email_order_updates=prefs.order_updates_email,
+            email_promotions=prefs.promotions_email,
+            email_new_arrivals=prefs.email_new_arrivals,
+            sms_order_updates=prefs.sms_order_updates,
+            whatsapp_order_updates=prefs.whatsapp_order_updates,
         )
 
     async def update_notification_prefs(
@@ -577,15 +582,23 @@ class CustomerService:
         user_id: uuid.UUID,
         payload: UpdateNotificationPreferencesRequest,
     ) -> NotificationPreferencesResponse:
-        from app.core.redis import get_redis
-        redis = get_redis()
-        key = f"notif_prefs:{user_id}"
-        updates: dict = {}
-        for field, val in payload.model_dump(exclude_none=True).items():
-            updates[field] = "1" if val else "0"
-        if updates:
-            await redis.hset(key, mapping=updates)
-            await redis.expire(key, 60 * 60 * 24 * 365)
+        from app.schemas.notification import UpdatePreferencesRequest
+        from app.services.notification_service import NotificationService
+
+        values = payload.model_dump(exclude_none=True)
+        mapping = {
+            "email_order_updates": "order_updates_email",
+            "email_promotions": "promotions_email",
+            "email_new_arrivals": "email_new_arrivals",
+            "sms_order_updates": "sms_order_updates",
+            "whatsapp_order_updates": "whatsapp_order_updates",
+        }
+        await NotificationService(self.db).update_preferences(
+            user_id,
+            UpdatePreferencesRequest(
+                **{mapping[key]: value for key, value in values.items()}
+            ),
+        )
         return await self.get_notification_prefs(user_id)
 
     # ══════════════════════════════════════════════════════════════════════════
@@ -595,14 +608,27 @@ class CustomerService:
     async def delete_account(
         self, user_id: uuid.UUID, payload: DeleteAccountRequest
     ) -> None:
-        user = await self._get_user(user_id)
+        from app.models.user import UserRole
 
-        if user.password_hash and not verify_password(payload.password, user.password_hash):
+        # Serialize with checkout; refresh an identity cached before acquiring the lock.
+        user = await self.db.scalar(
+            select(User).where(User.id == user_id).with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if user is None or user.deleted_at is not None:
+            raise NotFoundError("User not found")
+        if user.role != UserRole.customer:
+            raise BusinessRuleError("Seller and administrator accounts require managed offboarding.")
+        if not user.password_hash:
+            raise BusinessRuleError("Set a password before requesting account deletion.")
+        if not verify_password(payload.password, user.password_hash):
             raise BusinessRuleError("Incorrect password.")
 
         # Block if active orders exist
         from app.models.order import Order, OrderStatus
         active_statuses = [
+            OrderStatus.pending_payment,
+            OrderStatus.payment_confirmed,
             OrderStatus.pending_cod_verification,
             OrderStatus.processing,
             OrderStatus.shipped,
@@ -618,16 +644,48 @@ class CustomerService:
                 "Please wait for them to be delivered or cancelled."
             )
 
-        # Soft-delete
+        from app.models.return_ import Dispute, DisputeStatus, Return, ReturnStatus
+        from app.models.payment import Payment, Refund
+
+        for model, pending in (
+            (Return, [ReturnStatus.requested, ReturnStatus.approved, ReturnStatus.received]),
+            (Dispute, [DisputeStatus.open, DisputeStatus.under_review]),
+        ):
+            if await self.db.scalar(
+                select(model.id).where(model.user_id == user_id, model.status.in_(pending)).limit(1)
+            ):
+                raise BusinessRuleError("Resolve open returns and disputes before deleting the account.")
+        if await self.db.scalar(
+            select(Refund.id).join(Payment, Refund.payment_id == Payment.id)
+            .join(Order, Payment.order_id == Order.id)
+            .where(Order.user_id == user_id, Refund.processed_at.is_(None)).limit(1)
+        ):
+            raise BusinessRuleError("Wait for pending refunds before deleting the account.")
+
+        # Record external cleanup in this transaction; failures remain retryable.
+        from app.services.customer_privacy import prepare_customer_cleanup
+        await prepare_customer_cleanup(self.db, user)
+        # Retain the identity key and financial history, but remove profile credentials.
         from datetime import datetime, timezone
         await self.db.execute(
             update(User).where(User.id == user_id).values(
                 deleted_at=datetime.now(timezone.utc),
                 email=f"deleted_{user_id}@wearhowz.deleted",
+                first_name=None, last_name=None, phone=None, avatar_url=None,
+                google_id=None, password_hash="!deleted", totp_secret=None,
+                is_2fa_enabled=False, has_verified_email=False, last_login_at=None,
+                auth_version=User.auth_version + 1,
             )
         )
         # Invalidate sessions
-        from app.models.user import UserSession
+        from app.models.user import UserAddress, UserSession
         await self.db.execute(delete(UserSession).where(UserSession.user_id == user_id))
+        await self.db.execute(delete(UserAddress).where(UserAddress.user_id == user_id))
         await self.db.commit()
+        # Best effort immediate cache removal; durable outbox retries on failure.
+        from app.services.customer_privacy import clear_customer_cache
+        try:
+            await clear_customer_cache(user_id)
+        except Exception:
+            logger.warning("privacy.cache_cleanup_pending", user_id=str(user_id))
         logger.info("account_deleted", user_id=str(user_id))

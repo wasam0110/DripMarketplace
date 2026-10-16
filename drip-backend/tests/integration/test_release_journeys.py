@@ -326,7 +326,7 @@ async def test_notifications_delivery_preferences_and_jobs(db, market, monkeypat
     from app.core import database
     from app.core.config import settings
     from app.integrations import resend_client
-    from app.models.notification import EmailLog
+    from app.models.notification import EmailLog, NotificationOutbox
     from app.models.order import Order
     from app.models.wallet import Payout
     from app.schemas.notification import BroadcastRequest, UpdatePreferencesRequest
@@ -377,22 +377,25 @@ async def test_notifications_delivery_preferences_and_jobs(db, market, monkeypat
         {}, [str(market.buyer.id)], "Announcement", "Test body", None, "test-broadcast"
     )
     notifications = await service.list_notifications(market.buyer.id)
-    assert notifications.total == 3
+    assert notifications.total == 2
     assert await service.mark_read(notifications.data[0].id, market.buyer.id)
-    assert await service.mark_all_read(market.buyer.id) == 2
+    assert await service.mark_all_read(market.buyer.id) == 1
     assert (await service.list_notifications(market.buyer.id, unread_only=True)).unread_count == 0
-    assert (await service.get_email_log(recipient_email=market.buyer.email))["total"] == 1
-    pool = AsyncMock()
-    import arq
-
-    monkeypatch.setattr(arq, "create_pool", AsyncMock(return_value=pool))
+    assert (await service.get_email_log(recipient_email=market.buyer.email))["total"] == 2
     for audience, count in [("all", 3), ("customers", 1), ("sellers", 1)]:
         broadcast = await service.broadcast(
             BroadcastRequest(audience=audience, title="Notice", body="Release test notice"),
             market.admin.id,
         )
         assert broadcast.recipient_count == count
-    assert pool.enqueue_job.await_count == 3
+    assert (
+        await db.scalar(
+            select(func.count(NotificationOutbox.id)).where(
+                NotificationOutbox.task_name == "broadcast_notification"
+            )
+        )
+        == 3
+    )
 
 
 async def test_user_repository_state_changes_and_invalid_fields(db, market):
@@ -489,7 +492,9 @@ async def test_admin_seller_bank_and_cod_management(db, market):
     assert (await admin.get_seller(market.seller.id)).brand_name == "Test Brand"
     await admin.suspend_seller(market.seller.id, market.admin.id, "Test suspension")
     await db.refresh(market.product)
-    assert market.product.admin_hidden
+    await db.refresh(market.seller)
+    assert market.seller.status == SellerStatus.suspended
+    assert not market.product.admin_hidden
     await admin.reinstate_seller(market.seller.id, market.admin.id)
     await db.refresh(market.product)
     assert not market.product.admin_hidden
@@ -679,7 +684,8 @@ async def test_google_signed_identity_callback_and_replay(db, isolated_redis, mo
     from urllib.parse import parse_qs, urlparse
 
     from fastapi import Request, Response
-    from jose import jwk, jwt
+    import jwt
+    from cryptography.hazmat.primitives.serialization import load_pem_public_key
 
     from app.core.config import settings
     from app.core.exceptions import AuthenticationError
@@ -706,7 +712,9 @@ async def test_google_signed_identity_callback_and_replay(db, isolated_redis, mo
         signed = jwt.encode(
             claims, settings.JWT_PRIVATE_KEY, algorithm="RS256", headers={"kid": "test-key"}
         )
-        key = jwk.construct(settings.JWT_PUBLIC_KEY, algorithm="RS256").to_dict()
+        key = jwt.algorithms.RSAAlgorithm.to_jwk(
+            load_pem_public_key(settings.JWT_PUBLIC_KEY.encode()), as_dict=True,
+        )
         key["kid"] = "test-key"
         transport = AsyncMock()
         transport.__aenter__.return_value = transport

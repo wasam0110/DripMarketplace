@@ -49,7 +49,7 @@ class UserRepository(BaseRepository[User]):
     async def verify_email(cls, db: AsyncSession, user_id: uuid.UUID) -> None:
         await db.execute(
             update(User)
-            .where(User.id == user_id)
+            .where(User.id == user_id, User.deleted_at.is_(None))
             .values(has_verified_email=True)
         )
         await db.flush()
@@ -58,7 +58,7 @@ class UserRepository(BaseRepository[User]):
     async def update_password(cls, db: AsyncSession, user_id: uuid.UUID, password_hash: str) -> None:
         await db.execute(
             update(User)
-            .where(User.id == user_id)
+            .where(User.id == user_id, User.deleted_at.is_(None))
             .values(password_hash=password_hash)
         )
         await db.flush()
@@ -67,7 +67,7 @@ class UserRepository(BaseRepository[User]):
     async def update_last_login(cls, db: AsyncSession, user_id: uuid.UUID) -> None:
         await db.execute(
             update(User)
-            .where(User.id == user_id)
+            .where(User.id == user_id, User.deleted_at.is_(None))
             .values(last_login_at=datetime.now(UTC))
         )
         await db.flush()
@@ -76,7 +76,7 @@ class UserRepository(BaseRepository[User]):
     async def set_totp(cls, db: AsyncSession, user_id: uuid.UUID, secret: str | None, enabled: bool) -> None:
         await db.execute(
             update(User)
-            .where(User.id == user_id)
+            .where(User.id == user_id, User.deleted_at.is_(None))
             .values(totp_secret=secret, is_2fa_enabled=enabled)
         )
         await db.flush()
@@ -95,6 +95,8 @@ class SessionRepository:
         ip_address: str | None = None,
         user_agent: str | None = None,
     ) -> UserSession:
+        from app.services.account_lifecycle import lock_active_user
+        await lock_active_user(db, user_id)
         session = UserSession(
             user_id=user_id,
             token_hash=token_hash,
@@ -108,6 +110,18 @@ class SessionRepository:
 
     @classmethod
     async def get_by_token_hash(cls, db: AsyncSession, token_hash: str) -> UserSession | None:
+        # Match deletion's user -> session lock order. Recheck the session after
+        # waiting so simultaneous refreshes cannot reuse the same old token.
+        user_id = await db.scalar(select(UserSession.user_id).where(
+            UserSession.token_hash == token_hash,
+            UserSession.expires_at > datetime.now(UTC),
+        ))
+        if user_id is None:
+            return None
+        user = await db.scalar(select(User).where(User.id == user_id).with_for_update()
+                               .execution_options(populate_existing=True))
+        if user is None or user.deleted_at is not None:
+            return None
         stmt = select(UserSession).where(
             UserSession.token_hash == token_hash,
             UserSession.expires_at > datetime.now(UTC),

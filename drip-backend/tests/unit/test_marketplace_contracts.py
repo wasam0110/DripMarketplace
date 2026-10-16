@@ -9,7 +9,9 @@ from app.core.security import revoke_token, is_token_revoked
 
 
 def test_unique_routes_and_gap_contracts():
-    routes = [(method, route.path) for route in app.routes for method in getattr(route, "methods", [])]
+    from fastapi.routing import iter_route_contexts
+    routes = [(method, route.path) for route in iter_route_contexts(app.routes)
+              for method in (route.methods or [])]
     assert not [key for key, count in Counter(routes).items() if count > 1]
     for method, path in [("GET", "/brands"), ("GET", "/categories"), ("GET", "/content/banners"), ("GET", "/admin/analytics/cohort"), ("GET", "/seller/analytics/revenue"), ("PATCH", "/admin/content/banners/{banner_id}"), ("PATCH", "/seller/products/{product_id}/variants/{variant_id}"), ("GET", "/auth/google/callback")]:
         assert (method, "/api/v1" + path) in routes

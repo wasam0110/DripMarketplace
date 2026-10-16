@@ -1,0 +1,49 @@
+{
+  "date": "2026-10-13",
+  "status": "in_progress_not_release_approved",
+  "scope": "backend_only",
+  "baseline_commit": "44f700dc459897a4ad711524733ab7ba58d6ac9e",
+  "checklist_items": 162,
+  "checklist_sections": 18,
+  "source_html_sha256": "4e5c0922ecf82851f4947b0b7b4a106899cb4f64b1cc4921691868281aaa86ff",
+  "tests": {
+    "passed": 662,
+    "skipped": 1,
+    "failures": 0,
+    "errors": 0,
+    "duration_seconds": 546.761,
+    "new_cases": 41,
+    "coverage": {
+      "covered_lines": 7688,
+      "num_statements": 8962,
+      "percent_covered": 85.78442311983932,
+      "percent_covered_display": "86",
+      "missing_lines": 1274,
+      "excluded_lines": 36,
+      "percent_statements_covered": 85.78442311983932,
+      "percent_statements_covered_display": "86"
+    },
+    "coverage_gate": 85,
+    "native_postgresql": 16,
+    "native_redis": 7
+  },
+  "checks": {
+    "new_files_ruff": "passed",
+    "repository_wide_lint": "not_established",
+    "git_diff_check": "passed",
+    "pip_check": "passed",
+    "dependency_audit": {
+      "advisory_entries": 45,
+      "affected_installed_packages": 9,
+      "status": "open"
+    }
+  },
+  "remaining_policy_decision": "Customer anonymization with financial-history retention; separate seller/admin offboarding. Owner confirmation and retention periods required.",
+  "containers_removed": [
+    "wearhowz_preship_postgres",
+    "wearhowz_preship_redis"
+  ],
+  "live_provider_checks_performed": false,
+  "frontend_touched": false,
+  "committed": false
+}

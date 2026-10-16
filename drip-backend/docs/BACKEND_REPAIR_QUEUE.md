@@ -1,10 +1,33 @@
 # Backend repair queue before frontend implementation
 
-Updated 13 October 2026. Backend only. This queue comes from the completed static source/test review, not from the older completion claims. Repair batches 1 through 3 are implemented; later batches remain pending. See [detailed findings](BACKEND_DEEP_REVIEW.md), [batch-1 report](BACKEND_B1_REPORT.md), [batch-2 report](BACKEND_B2_REPORT.md), [batch-3 report](BACKEND_B3_REPORT.md) and [system walkthrough](BACKEND_WALKTHROUGH.md).
+Current status, 16 October 2026: [pre-ship checkpoint 8](PRE_SHIP_CHECKPOINT_8.md)
+supersedes the baseline below. Cross-account resource tests and approved limited
+customer cleanup supplement notification recovery, legacy preference import,
+190 route policies and complete migrated-schema parity. Migration head: 020.
+Full suite (16 October): 854 passed, 1 skipped, 87.13% coverage. Checkpoint 8 preserves
+fractional analytics money and publishes decimal-string response contracts with
+rounding/empty-data/share regressions. F16 remains partially open. Checkpoint 7 fixes
+admin bulk-stock false success after row errors, validates batches and tests rollback
+and reservation/bulk races. Checkpoint 6 adds seller aggregate/filter isolation and
+fixes inventory-health thresholds;
+checkpoint 5's legacy email privacy checks and zero ARQ result retention remain.
+F08 has fail-closed local monetary verification (merchant acceptance still gated);
+F13 is implemented. F11 now has durable customer cleanup and deletion/case/refresh
+race safeguards, but final policy, pending/old queue payloads, cross-system erasure and managed
+offboarding remain open. Exhaustive ownership, static/type and broader review remain.
+Recommended next: coupon precision and minimum-spend/checkout consistency, then
+remaining slot/notification money conversions and F16 configuration/error contracts.
 
-Review baseline: 602 tests passed, 1 skipped, 85.59% coverage with native PostgreSQL/Redis enabled. After batch 3, the final suite is 617 passed, 1 skipped with 85.77% coverage; the unchanged 85% gate passes. F01-F07 are resolved, while F08-F17 remain open. See the [review verification](audit/verification-2026-10-12.json), [batch-1 verification](audit/b1-verification-2026-10-12.json), [batch-2 verification](audit/b2-verification-2026-10-13.json) and [batch-3 verification](audit/b3-verification-2026-10-13.json).
+Updated 13 October 2026. Backend only. This queue comes from the completed static source/test review, not from the older completion claims. Repair batches 1 through 4 are implemented; later batches remain pending. See [detailed findings](BACKEND_DEEP_REVIEW.md), [batch-1 report](BACKEND_B1_REPORT.md), [batch-2 report](BACKEND_B2_REPORT.md), [batch-3 report](BACKEND_B3_REPORT.md), [batch-4 report](BACKEND_B4_REPORT.md) and [system walkthrough](BACKEND_WALKTHROUGH.md).
+
+Review baseline: 602 tests passed, 1 skipped, 85.59% coverage with native PostgreSQL/Redis enabled. After batch 4, the final suite is 621 passed, 1 skipped with 85.88% coverage; the unchanged 85% gate passes. F01-F07 and F09 are resolved, while F08 and F10-F17 remain open. See the [review verification](audit/verification-2026-10-12.json), [batch-1 verification](audit/b1-verification-2026-10-12.json), [batch-2 verification](audit/b2-verification-2026-10-13.json), [batch-3 verification](audit/b3-verification-2026-10-13.json) and [batch-4 verification](audit/b4-verification-2026-10-13.json).
 
 ## 1. Completed — financial transaction integrity
+
+Current pre-ship delta: F12/F14 are repaired; F15 API startup/dependency handling and
+F10 proxy/rate-counter handling have regression coverage. The older baseline above
+describes the B4 checkpoint. The [162-item audit](PRE_SHIP_AUDIT.md) is authoritative
+for the broader ongoing checklist and explicitly records remaining gates.
 
 - **F01 completed:** the legacy admin completion route delegates to the locked payout state machine, requires/persists its receipt, preserves Decimal amounts and reports the reference.
 - **F02 completed:** return-linked refund creation is one caller-owned transaction; failure before its outer commit leaves no orphan refund.
@@ -28,18 +51,18 @@ Policy retained: sellers bear only their net merchandise entitlement; the platfo
 
 Acceptance evidence: the complete reject → dispute → customer-win → receipt → refund request → transfer confirmation journey passes. Resolution alone creates no refund, restock or transfer receipt. A native two-session race between customer-win activation and a new claim for the same purchased quantity permits exactly one active owner. See [batch-3 report](BACKEND_B3_REPORT.md).
 
-## 4. Notification delivery and preferences
+## 4. Completed — notification delivery and preferences
 
-- **F09: Dispatch missing business events.** Order confirmations/status, payouts and seller approval/rejection must actually enqueue their registered workers.
-- **F09: Preserve retry failures and deduplicate delivery.** A swallowed provider error must not look like a successful task. Coordinate DB changes and queue publishing reliably.
-- **F09: Unify preference storage and enforce it.** Customer Redis preferences and DB notification preferences currently differ, and event delivery does not consistently consult them. Explicitly distinguish optional marketing from required transactional notices.
-- Review template escaping and guest tracking-link access before enabling new delivery paths; interpolated product/customer content must not become unintended email markup.
+- **F09 completed:** order creation/status, payout status and seller decisions write deterministic events to revision-017's transactional outbox in the same commit as the business change. The registered minute worker publishes them to ARQ with deterministic job IDs and retries queue failures.
+- **F09 completed:** provider failures now persist on one keyed email-log row and propagate to ARQ. Retried in-app and email delivery is locally idempotent; successful delivery is not sent again.
+- **F09 completed:** both customer preference APIs use the same database row. Registered routine order email/push and seller payout notices enforce their toggles. Placement confirmations, guest lifecycle messages and seller application decisions are required transactional notices; promotion/new-arrival email toggles remain optional and no marketing sender is introduced here.
+- All interpolated order-item/status HTML is escaped. Guest email links contain a signed, order-scoped capability that the frontend must exchange for the existing `X-Guest-Token` header; forged or cross-order tokens remain denied.
 
-Acceptance: begin tests at the business API/service operation, inspect the resulting job, exercise delivery failure/retry and opt-out behaviour, and verify guest access. Do not send real messages during tests.
+Acceptance evidence starts at business service operations, inspects persisted events and published jobs, forces Redis and Resend failures/retries, proves opt-out and deduplication behavior, checks hostile HTML input, and exercises signed guest access. No real message was sent. See [batch-4 report](BACKEND_B4_REPORT.md).
 
 ## 5. Security and account lifecycle
 
-- **F10: Centralize trusted-proxy/IP handling.** Rate limiting must not trust arbitrary forwarding headers; use explicit bucket scope and test the real Redis behaviour.
+- **F10 partially repaired:** shared socket-peer/trusted-chain resolution, explicit rule buckets and atomic expiry counters are implemented and native Redis-tested. Ingress configuration and rate-limit outage policy remain audit items. See [pre-ship audit](PRE_SHIP_AUDIT.md).
 - **F11: Correct deletion eligibility and retention.** Include pending/confirmed-payment orders, define seller/admin offboarding and replace broken bulk hard deletion with an intentional retention/anonymization policy.
 - Decide/administer mandatory admin MFA or step-up rules; existing role checks and optional TOTP enrolment do not establish mandatory MFA assurance.
 - Validate mixed-operation lock ordering and stale ORM state with native concurrent tests before claiming races are fully covered.
@@ -48,10 +71,10 @@ Acceptance: spoofed/untrusted/trusted forwarding cases; existing accounts/orders
 
 ## 6. API behaviour and operational correctness
 
-- **F12:** Reject malformed catalogue cursors as client errors instead of 500s.
+- **F12 repaired:** malformed shape/types, invalid decimals, encoding, oversized cursors and timezone-less timestamps are rejected as client errors; regression tests added.
 - **F13:** Persist inventory reorder thresholds or reject/remove the unsupported input.
-- **F14:** Preserve independently hidden products when reinstating a seller.
-- **F15:** Declare/test the Sentry runtime dependency and clean up resources after partial startup failure.
+- **F14 repaired:** suspension uses seller visibility rather than overwriting product moderation. Reinstatement preserves independently hidden products, with native regression coverage. Legacy ambiguous hidden flags require manual review rather than automatic unhiding.
+- **F15 code repaired:** Sentry runtime dependency is declared and configuration tested without sending events; resource cleanup covers partial startup/application/shutdown failure. Real Sentry alert delivery remains external.
 - **F16:** Consolidate canonical frontend/callback/link configuration, money precision, error envelopes and duplicated limits.
 - Check compatibility aliases and public review visibility consistently. Preserve JWT/cookie/Redis compatibility identifiers unless an explicit migration is intended.
 

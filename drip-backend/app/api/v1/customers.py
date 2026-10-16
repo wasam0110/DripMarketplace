@@ -319,8 +319,9 @@ async def delete_account(
     current_user: CurrentUser,
 ) -> Response:
     """
-    Permanently delete the account. Requires password confirmation and the
-    phrase 'DELETE MY ACCOUNT'. Active orders block deletion.
+    Disable and anonymize the customer account; retain financial/dispute records.
+    Requires password confirmation and 'DELETE MY ACCOUNT'. Active cases block
+    deletion. External cache/image cleanup is durable and may complete later.
     """
     await CustomerService(db).delete_account(
         user_id=UUID(current_user["sub"]), payload=payload

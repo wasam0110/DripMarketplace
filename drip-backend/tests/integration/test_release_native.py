@@ -392,6 +392,7 @@ async def test_concurrent_payment_callbacks_preserve_one_transition(
         "err_msg": "Approved",
         "transaction_id": "race-txn",
     }
+    monkeypatch.setattr(gateway, "check_status", AsyncMock(return_value={**data, "status_code": "00"}))
     data["validation_hash"] = gateway.callback_hash(basket_id=str(order.id), error_code="000")
     assert await race(
         test_engine, lambda session: PaymentService(session).handle_payfast_callback(data)
@@ -483,6 +484,25 @@ async def test_fresh_migrations_round_trip_and_all_model_columns(test_engine):
                 command.upgrade(config, "head")
 
             await connection.run_sync(migrations)
+            def check_repaired_schema(sync_connection):
+                from sqlalchemy import inspect
+                from sqlalchemy.dialects.postgresql import JSONB
+
+                inspector = inspect(sync_connection)
+                outbox = {column["name"]: column for column in inspector.get_columns("notification_outbox")}
+                assert isinstance(outbox["args"]["type"], JSONB)
+                assert "gen_random_uuid" in outbox["id"]["default"]
+                assert any(index["name"] == "ix_notification_outbox_pending"
+                           for index in inspector.get_indexes("notification_outbox"))
+                assert any(constraint["name"] == "uq_email_log_delivery_key"
+                           for constraint in inspector.get_unique_constraints("email_log"))
+                inventory = {column["name"]: column for column in inspector.get_columns("product_inventory")}
+                assert inventory["reorder_point"]["nullable"] is False
+                assert str(inventory["reorder_point"]["default"]).startswith("5")
+                assert any(constraint["name"] == "ck_inventory_reorder_point"
+                           for constraint in inspector.get_check_constraints("product_inventory"))
+
+            await connection.run_sync(check_repaired_schema)
             for table in Base.metadata.sorted_tables:
                 await connection.execute(select(table).limit(0))
     finally:
@@ -506,7 +526,10 @@ async def test_native_worker_startup_health_and_shutdown(monkeypatch):
     monkeypatch.setattr(worker, "configure_logging", lambda: None)
     await worker.startup({})
     try:
-        assert (await health_check()).status == "ok"
+        from fastapi import Response
+        response = Response()
+        assert (await health_check(response)).status == "ok"
+        assert response.status_code == 200
         async with database.AsyncSessionLocal() as session, database.atomic(session):
             assert await session.scalar(text("SELECT 1")) == 1
     finally:

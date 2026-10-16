@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.services.account_lifecycle import lock_active_user
 from app.models.product import ProductVariant, ProductInventory, Product
 from app.models.seller import Seller
 from app.schemas.order import (
@@ -85,6 +86,7 @@ class CartService:
         return self._build_cart_response(items, free_threshold=policy.free_shipping_threshold, shipping_fee=policy.standard_shipping_fee)
 
     async def add_item(self, user_id: UUID, payload: AddToCartRequest) -> CartResponse:
+        await lock_active_user(self.db, user_id)
         variant = await self._get_variant(payload.variant_id)
         inv     = variant.inventory
         if not inv or inv.available_stock < payload.quantity:
@@ -109,6 +111,7 @@ class CartService:
     async def update_item(
         self, user_id: UUID, variant_id: UUID, quantity: int
     ) -> CartResponse:
+        await lock_active_user(self.db, user_id)
         if quantity == 0:
             await self.redis.hdel(_cart_key(user_id), str(variant_id))
         else:
@@ -129,6 +132,7 @@ class CartService:
         await self.redis.delete(_cart_key(user_id))
 
     async def sync(self, user_id: UUID, local_items: list[dict]) -> CartResponse:
+        await lock_active_user(self.db, user_id)
         for item in local_items:
             vid      = str(item["variant_id"])
             qty      = item["quantity"]

@@ -22,7 +22,9 @@ PAYFAST_TRUSTED_PROXY_IPS=
 The UAT and live hosted token/checkout URLs are built in. Only set
 `PAYFAST_TOKEN_URL` or `PAYFAST_CHECKOUT_URL` if PayFast gives this merchant different
 URLs. `PAYFAST_API_BASE_URL` is the merchant-specific REST base supplied by PayFast;
-it enables missed-callback reconciliation. Do not guess it from the hosted URL.
+it is required both for successful callback verification and missed-callback
+reconciliation. Enabling PayFast without it fails configuration validation. Do not
+guess it from the hosted URL.
 
 Register this public callback with PayFast:
 
@@ -30,7 +32,19 @@ Register this public callback with PayFast:
 
 If a reverse proxy supplies `X-Forwarded-For`, add only its direct IP/CIDR to
 `PAYFAST_TRUSTED_PROXY_IPS`. Add PayFast's confirmed callback IP/CIDR values to
-`PAYFAST_IPN_IPS`; an empty list relies on the cryptographic callback hash only.
+`PAYFAST_IPN_IPS`; an empty list disables source-IP filtering, not hash verification
+or the authoritative success lookup.
+
+The application now resolves trusted chains from the socket peer right-to-left.
+Run Uvicorn with `--no-proxy-headers`. When the PayFast-specific proxy list is empty,
+it uses `TRUSTED_PROXY_IPS` (default `[]`); never trust arbitrary internet networks.
+**Checkpoint 2:** the hash does not bind the amount or transaction reference, so a
+success callback cannot authorize payment on its own. The authenticated status lookup
+must return matching `basket_id`, `transaction_id`, explicit `amount`/`txnamt` and
+`currency`/`currency_code`. Missing, invalid or conflicting monetary aliases are
+rejected without crediting payment. These supported field mappings are locally
+tested, not merchant-certified: obtain the merchant's actual response contract and
+verify it in UAT. Keep PayFast disabled until that acceptance passes.
 
 ## UAT checklist
 
@@ -38,7 +52,8 @@ If a reverse proxy supplies `X-Forwarded-For`, add only its direct IP/CIDR to
 2. Keep `PAYFAST_SANDBOX=true`, then set `PAYFAST_ENABLED=true` in UAT only.
 3. Initiate a small test order and submit the returned form to `checkout_url`.
 4. Prove success, decline/cancel, duplicate callback, delayed callback, customer retry,
-   wrong basket, and wrong amount (when PayFast includes an amount).
+   wrong basket, wrong/missing amount or currency, mismatched transaction and status
+   API outage. Never accept missing provider monetary evidence using local defaults.
 5. Temporarily block a callback and use the admin reconciliation endpoint. Confirm an
    unknown or mismatched response does not change payment/order state.
 6. Confirm callback source ranges and the REST success codes with PayFast support.

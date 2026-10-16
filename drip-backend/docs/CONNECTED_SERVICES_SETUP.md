@@ -41,6 +41,10 @@ calls, and notification tasks retry database failures instead of silently succee
 
 ## Worker
 
+Durable outbox delivery, the admin failure/replay queue, retry limits and legacy
+preference migration are documented in [notification recovery](NOTIFICATION_RECOVERY.md).
+An ARQ result alone is not proof of notification completion; monitor outbox state.
+
 Run Redis and start the worker with:
 
 ```powershell

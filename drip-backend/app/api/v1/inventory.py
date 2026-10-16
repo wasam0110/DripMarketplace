@@ -22,7 +22,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import field_validator
+from pydantic import Field, field_validator
 
 from app.api.deps import get_db, CurrentSeller, CurrentAdmin
 from app.schemas.common import DRIPBaseModel, DRIPResponseModel
@@ -74,8 +74,8 @@ class SetStockRequest(DRIPBaseModel):
     @field_validator("reorder_point")
     @classmethod
     def reorder_non_negative(cls, v: Optional[int]) -> Optional[int]:
-        if v is not None and v < 0:
-            raise ValueError("Reorder point cannot be negative.")
+        if v is not None and not 0 <= v <= 999_999:
+            raise ValueError("Reorder point must be between 0 and 999,999.")
         return v
 
 
@@ -113,27 +113,18 @@ class StockAdjustmentResponse(DRIPResponseModel):
 
 class BulkStockUpdateItem(DRIPBaseModel):
     variant_id: UUID
-    stock:      int
+    stock:      int = Field(ge=0, le=999_999)
     reason:     Optional[str] = None
-
-    @field_validator("stock")
-    @classmethod
-    def stock_non_negative(cls, v: int) -> int:
-        if v < 0:
-            raise ValueError("Stock cannot be negative.")
-        return v
 
 
 class BulkStockUpdateRequest(DRIPBaseModel):
-    updates: list[BulkStockUpdateItem]
+    updates: list[BulkStockUpdateItem] = Field(min_length=1, max_length=500)
 
     @field_validator("updates")
     @classmethod
     def validate_updates(cls, v: list) -> list:
-        if len(v) == 0:
-            raise ValueError("At least one update is required.")
-        if len(v) > 500:
-            raise ValueError("Cannot update more than 500 variants at once.")
+        if len({item.variant_id for item in v}) != len(v):
+            raise ValueError("Each variant may appear only once per batch.")
         return v
 
 
@@ -278,8 +269,12 @@ async def admin_bulk_update_inventory(
 ) -> BulkStockUpdateResponse:
     """
     Admin: Bulk-correct stock levels across any variants. Used after CSV
-    import or a multi-seller warehouse audit. Errors are collected and
-    returned rather than rolling back the whole batch.
+    import or a multi-seller warehouse audit. Accepts 1-500 unique variants
+    with absolute stock between 0 and 999,999. Missing variants, stock below
+    reservations, and row constraint failures are returned per item; other
+    valid rows commit together. Fatal database/commit errors fail the batch
+    without a success response. Repeating an absolute correction does not
+    add stock; updated counts matched rows, including unchanged quantities.
     """
     from app.services.inventory_service import InventoryService
     return await InventoryService(db).bulk_update_stock(updates=payload.updates)

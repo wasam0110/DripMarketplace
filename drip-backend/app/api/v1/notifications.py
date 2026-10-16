@@ -5,6 +5,7 @@ from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
+from pydantic import BaseModel, Field
 
 from app.api.deps import get_db, CurrentUser, CurrentAdmin
 from app.schemas.notification import (
@@ -16,6 +17,27 @@ from app.services.notification_service import NotificationService
 
 router = APIRouter(tags=["notifications"])
 DB = Annotated[AsyncSession, Depends(get_db)]
+
+
+class ReplayNotificationRequest(BaseModel):
+    reason: str = Field(min_length=10, max_length=500)
+
+
+@router.get("/admin/notifications/failed")
+async def failed_notifications(
+    db: DB, current_admin: CurrentAdmin,
+    page: int = Query(default=1, ge=1), per_page: int = Query(default=25, ge=1, le=100),
+) -> dict:
+    from app.services.notification_outbox import list_failed_notifications
+    return await list_failed_notifications(db, page, per_page)
+
+
+@router.post("/admin/notifications/failed/{event_id}/replay")
+async def replay_notification(
+    event_id: UUID, payload: ReplayNotificationRequest, db: DB, current_admin: CurrentAdmin,
+) -> dict:
+    from app.services.notification_outbox import replay_failed_notification
+    return await replay_failed_notification(db, event_id, UUID(current_admin["sub"]), payload.reason)
 
 
 # ── User endpoints ─────────────────────────────────────────────────────────────

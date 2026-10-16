@@ -5,6 +5,7 @@ from typing import Optional, Sequence
 from datetime import datetime
 
 from sqlalchemy import select, update, func, desc
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.notification import Notification, NotificationPreference, EmailLog
@@ -19,6 +20,15 @@ class NotificationRepository:
         self.db.add(n)
         await self.db.flush()
         return n
+
+    async def create_once(self, notification_id: UUID, **kwargs) -> Notification:
+        statement = (
+            insert(Notification)
+            .values(id=notification_id, **kwargs)
+            .on_conflict_do_nothing(index_elements=[Notification.id])
+        )
+        await self.db.execute(statement)
+        return await self.db.get(Notification, notification_id)
 
     async def list_by_user(
         self,
@@ -97,6 +107,14 @@ class EmailLogRepository:
         self.db.add(entry)
         await self.db.flush()
         return entry
+
+    async def get_by_delivery_key(self, delivery_key: str) -> Optional[EmailLog]:
+        result = await self.db.execute(
+            select(EmailLog)
+            .where(EmailLog.delivery_key == delivery_key)
+            .with_for_update()
+        )
+        return result.scalar_one_or_none()
 
     async def list_admin(
         self,

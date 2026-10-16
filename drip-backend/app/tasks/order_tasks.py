@@ -63,6 +63,15 @@ async def cod_verification_timeout(ctx: dict, order_id: str) -> None:
                 OrderStatus.cancelled,
                 note="Auto-cancelled: COD verification deadline expired",
             )
+            from app.services.notification_outbox import queue_notification
+
+            await queue_notification(
+                db,
+                f"order:{order.id}:status:cancelled",
+                "send_order_status_update",
+                str(order.id),
+                OrderStatus.cancelled.value,
+            )
             await db.commit()
             logger.info(f"COD timeout: order {order_id} auto-cancelled")
 
@@ -90,6 +99,7 @@ async def expire_pending_orders(ctx: dict) -> None:
     from app.models.order import Order, OrderStatus, SellerOrderStatus
     from app.repositories.order_repo import OrderRepository, SellerOrderRepository
     from app.repositories.inventory_repo import InventoryRepository
+    from app.services.notification_outbox import queue_notification
     now = datetime.now(UTC)
     async with AsyncSessionLocal() as db:
         from app.services.platform_settings import get_platform_settings
@@ -105,4 +115,11 @@ async def expire_pending_orders(ctx: dict) -> None:
             for seller_order in order.seller_orders:
                 await SellerOrderRepository(db).update_status(seller_order.id, SellerOrderStatus.cancelled)
             await OrderRepository(db).update_status(order.id, OrderStatus.cancelled, note="Payment or COD verification deadline expired")
+            await queue_notification(
+                db,
+                f"order:{order.id}:status:cancelled",
+                "send_order_status_update",
+                str(order.id),
+                OrderStatus.cancelled.value,
+            )
         await db.commit()

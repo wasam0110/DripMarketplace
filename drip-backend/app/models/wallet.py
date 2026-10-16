@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+from sqlalchemy import Index as SchemaIndex
+
+from sqlalchemy import text as sql_text
+
 import enum
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -60,7 +64,7 @@ class CommissionLedger(Base):
         ),
     )
 
-    id:                Mapped[UUID]    = mapped_column(primary_key=True, default=uuid4)
+    id:                Mapped[UUID]    = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     seller_order_id:   Mapped[UUID]    = mapped_column(
                            ForeignKey("seller_orders.id", ondelete="RESTRICT"), unique=True
                        )
@@ -199,7 +203,7 @@ class RefundAllocation(Base):
         Index("ix_refund_allocations_seller_order_id", "seller_order_id"),
     )
 
-    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
+    id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     refund_id: Mapped[UUID] = mapped_column(
         ForeignKey("refund_accounting.refund_id", ondelete="CASCADE")
     )
@@ -233,17 +237,20 @@ class RefundAllocation(Base):
 class Payout(Base):
     __tablename__ = "payouts"
     __table_args__ = (
+        SchemaIndex("ix_payouts_seller_id", "seller_id"),
+        SchemaIndex("ix_payouts_status", "status"),
+
         CheckConstraint("amount >= 500", name="ck_payouts_amount_min"),
     )
 
-    id:             Mapped[UUID]          = mapped_column(primary_key=True, default=uuid4)
+    id:             Mapped[UUID]          = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     seller_id:      Mapped[UUID]          = mapped_column(ForeignKey("sellers.id"))
     amount:         Mapped[Decimal]       = mapped_column(Numeric(12, 2))
     payment_method: Mapped[str]           = mapped_column(String(50))
     payment_detail: Mapped[str]           = mapped_column(String(255))
     status:         Mapped[PayoutStatus]  = mapped_column(
                         SAEnum(PayoutStatus, name="payout_status", create_type=False),
-                        default=PayoutStatus.requested,
+                        default=PayoutStatus.requested, server_default="requested",
                     )
     admin_note:     Mapped[str | None]    = mapped_column(Text)
     transfer_reference: Mapped[str | None] = mapped_column(String(255))
@@ -258,8 +265,11 @@ class Payout(Base):
 
 class WalletTransaction(Base):
     __tablename__ = "wallet_transactions"
+    __table_args__ = (
+        SchemaIndex("ix_wallet_transactions_seller_id", "seller_id"),
+    )
 
-    id:              Mapped[UUID]         = mapped_column(primary_key=True, default=uuid4)
+    id:              Mapped[UUID]         = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     seller_id:       Mapped[UUID]         = mapped_column(ForeignKey("sellers.id"))
     type:            Mapped[WalletTxType] = mapped_column(
                          SAEnum(WalletTxType, name="wallet_tx_type", create_type=False)

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from sqlalchemy import UniqueConstraint, text as sql_text
+
 import enum
 from decimal import Decimal
 from uuid import UUID, uuid4
@@ -31,7 +33,7 @@ class Coupon(Base):
         CheckConstraint("discount_value > 0", name="ck_coupons_fixed_positive"),
     )
 
-    id:                    Mapped[UUID]         = mapped_column(primary_key=True, default=uuid4)
+    id:                    Mapped[UUID]         = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     code:                  Mapped[str]          = mapped_column(String(30), unique=True)
     discount_type:         Mapped[DiscountType] = mapped_column(
                                SAEnum(DiscountType, name="discount_type", create_type=False)
@@ -51,8 +53,9 @@ class Coupon(Base):
 
 class CouponUsage(Base):
     __tablename__ = "coupon_usages"
+    __table_args__ = (UniqueConstraint("coupon_id", "order_id", name="uq_coupon_user_order"),)
 
-    id:        Mapped[UUID]      = mapped_column(primary_key=True, default=uuid4)
+    id:        Mapped[UUID]      = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
     coupon_id: Mapped[UUID]      = mapped_column(ForeignKey("coupons.id"))
     user_id:   Mapped[UUID]      = mapped_column(ForeignKey("users.id"))
     order_id:  Mapped[UUID]      = mapped_column(ForeignKey("orders.id"))

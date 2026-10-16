@@ -1406,7 +1406,7 @@
       "Body_create_banner_api_v1_admin_content_banners_post": {
         "properties": {
           "image": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Image",
             "type": "string"
           },
@@ -1451,7 +1451,7 @@
       "Body_upload_avatar_api_v1_customers_me_avatar_post": {
         "properties": {
           "avatar": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Avatar",
             "type": "string"
           }
@@ -1465,7 +1465,7 @@
       "Body_upload_logo_api_v1_seller_logo_post": {
         "properties": {
           "logo": {
-            "format": "binary",
+            "contentMediaType": "application/octet-stream",
             "title": "Logo",
             "type": "string"
           }
@@ -1480,7 +1480,7 @@
         "properties": {
           "images": {
             "items": {
-              "format": "binary",
+              "contentMediaType": "application/octet-stream",
               "type": "string"
             },
             "title": "Images",
@@ -1602,6 +1602,8 @@
             "title": "Reason"
           },
           "stock": {
+            "maximum": 999999.0,
+            "minimum": 0.0,
             "title": "Stock",
             "type": "integer"
           },
@@ -1625,6 +1627,8 @@
             "items": {
               "$ref": "#/components/schemas/BulkStockUpdateItem"
             },
+            "maxItems": 500,
+            "minItems": 1,
             "title": "Updates",
             "type": "array"
           }
@@ -1984,8 +1988,9 @@
             "type": "number"
           },
           "total_gmv": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Total Gmv",
-            "type": "integer"
+            "type": "string"
           }
         },
         "required": [
@@ -3186,6 +3191,7 @@
         "type": "object"
       },
       "InventoryHealthResponse": {
+        "description": "Active variants on non-deleted seller products.\n\nIn-stock includes low-stock variants. Low stock means positive available\nunits at or below that variant's reorder point; zero availability is counted\nseparately as out of stock. Available units exclude reservations.",
         "properties": {
           "in_stock": {
             "title": "In Stock",
@@ -4217,8 +4223,9 @@
             "type": "number"
           },
           "total": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Total",
-            "type": "integer"
+            "type": "string"
           },
           "verified_rate": {
             "anyOf": [
@@ -4604,8 +4611,9 @@
             "type": "integer"
           },
           "avg_order_value": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Avg Order Value",
-            "type": "integer"
+            "type": "string"
           },
           "cancellation_rate": {
             "title": "Cancellation Rate",
@@ -4616,8 +4624,9 @@
             "type": "number"
           },
           "commission_revenue": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Commission Revenue",
-            "type": "integer"
+            "type": "string"
           },
           "new_customers": {
             "title": "New Customers",
@@ -4628,12 +4637,14 @@
             "type": "string"
           },
           "slot_revenue": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Slot Revenue",
-            "type": "integer"
+            "type": "string"
           },
           "total_gmv": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Total Gmv",
-            "type": "integer"
+            "type": "string"
           },
           "total_orders": {
             "title": "Total Orders",
@@ -5468,6 +5479,21 @@
         "title": "ReorderImagesRequest",
         "type": "object"
       },
+      "ReplayNotificationRequest": {
+        "properties": {
+          "reason": {
+            "maxLength": 500,
+            "minLength": 10,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason"
+        ],
+        "title": "ReplayNotificationRequest",
+        "type": "object"
+      },
       "ResetPasswordRequest": {
         "additionalProperties": false,
         "properties": {
@@ -5732,20 +5758,23 @@
       "RevenueDayRow": {
         "properties": {
           "commission": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Commission",
-            "type": "integer"
+            "type": "string"
           },
           "date": {
             "title": "Date",
             "type": "string"
           },
           "gross": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Gross",
-            "type": "integer"
+            "type": "string"
           },
           "net": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Net",
-            "type": "integer"
+            "type": "string"
           },
           "orders": {
             "title": "Orders",
@@ -6102,24 +6131,28 @@
       "SellerAnalyticsOverview": {
         "properties": {
           "avg_order_value": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Avg Order Value",
-            "type": "integer"
+            "type": "string"
           },
           "commission_paid": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Commission Paid",
-            "type": "integer"
+            "type": "string"
           },
           "conversion_rate": {
             "title": "Conversion Rate",
             "type": "number"
           },
           "gross_revenue": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Gross Revenue",
-            "type": "integer"
+            "type": "string"
           },
           "net_earnings": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Net Earnings",
-            "type": "integer"
+            "type": "string"
           },
           "order_count": {
             "title": "Order Count",
@@ -7321,8 +7354,9 @@
             "type": "string"
           },
           "revenue": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Revenue",
-            "type": "integer"
+            "type": "string"
           },
           "units_sold": {
             "title": "Units Sold",
@@ -7378,12 +7412,14 @@
             "type": "string"
           },
           "commission": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Commission",
-            "type": "integer"
+            "type": "string"
           },
           "gmv": {
+            "description": "PKR major units as a decimal string, not integer paisa. Analytics emits two decimal places; averages use ROUND_HALF_UP.",
             "title": "Gmv",
-            "type": "integer"
+            "type": "string"
           },
           "logo_url": {
             "anyOf": [
@@ -7683,6 +7719,17 @@
       },
       "UpdatePreferencesRequest": {
         "properties": {
+          "email_new_arrivals": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email New Arrivals"
+          },
           "low_stock_alerts": {
             "anyOf": [
               {
@@ -7748,6 +7795,28 @@
               }
             ],
             "title": "Promotions Email"
+          },
+          "sms_order_updates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sms Order Updates"
+          },
+          "whatsapp_order_updates": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Whatsapp Order Updates"
           }
         },
         "title": "UpdatePreferencesRequest",
@@ -8366,6 +8435,13 @@
       },
       "ValidationError": {
         "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
           "loc": {
             "items": {
               "anyOf": [
@@ -8802,6 +8878,10 @@
       },
       "app__schemas__notification__NotificationPreferencesResponse": {
         "properties": {
+          "email_new_arrivals": {
+            "title": "Email New Arrivals",
+            "type": "boolean"
+          },
           "low_stock_alerts": {
             "title": "Low Stock Alerts",
             "type": "boolean"
@@ -8825,6 +8905,14 @@
           "promotions_email": {
             "title": "Promotions Email",
             "type": "boolean"
+          },
+          "sms_order_updates": {
+            "title": "Sms Order Updates",
+            "type": "boolean"
+          },
+          "whatsapp_order_updates": {
+            "title": "Whatsapp Order Updates",
+            "type": "boolean"
           }
         },
         "required": [
@@ -8833,7 +8921,10 @@
           "promotions_email",
           "payout_notifications",
           "new_review_notifications",
-          "low_stock_alerts"
+          "low_stock_alerts",
+          "email_new_arrivals",
+          "sms_order_updates",
+          "whatsapp_order_updates"
         ],
         "title": "NotificationPreferencesResponse",
         "type": "object"
@@ -10457,7 +10548,7 @@
     },
     "/api/v1/admin/inventory/bulk-update": {
       "post": {
-        "description": "Admin: Bulk-correct stock levels across any variants. Used after CSV\nimport or a multi-seller warehouse audit. Errors are collected and\nreturned rather than rolling back the whole batch.",
+        "description": "Admin: Bulk-correct stock levels across any variants. Used after CSV\nimport or a multi-seller warehouse audit. Accepts 1-500 unique variants\nwith absolute stock between 0 and 999,999. Missing variants, stock below\nreservations, and row constraint failures are returned per item; other\nvalid rows commit together. Fatal database/commit errors fail the batch\nwithout a success response. Repeating an absolute correction does not\nadd stock; updated counts matched rows, including unchanged quantities.",
         "operationId": "admin_bulk_update_inventory_api_v1_admin_inventory_bulk_update_post",
         "requestBody": {
           "content": {
@@ -10679,6 +10770,163 @@
           }
         ],
         "summary": "Get Email Log",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/admin/notifications/failed": {
+      "get": {
+        "operationId": "failed_notifications_api_v1_admin_notifications_failed_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "per_page",
+            "required": false,
+            "schema": {
+              "default": 25,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Per Page",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Failed Notifications Api V1 Admin Notifications Failed Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Failed Notifications",
+        "tags": [
+          "notifications"
+        ]
+      }
+    },
+    "/api/v1/admin/notifications/failed/{event_id}/replay": {
+      "post": {
+        "operationId": "replay_notification_api_v1_admin_notifications_failed__event_id__replay_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "event_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Event Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplayNotificationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "title": "Response Replay Notification Api V1 Admin Notifications Failed  Event Id  Replay Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Validation error"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "description": "Rate limited"
+          },
+          "500": {
+            "description": "Internal server error"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Replay Notification",
         "tags": [
           "notifications"
         ]
@@ -13262,10 +13510,7 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {
-                  "title": "Response Logout Api V1 Auth Logout Post",
-                  "type": "null"
-                }
+                "schema": {}
               }
             },
             "description": "Successful Response"
@@ -14543,7 +14788,7 @@
     },
     "/api/v1/customers/me": {
       "delete": {
-        "description": "Permanently delete the account. Requires password confirmation and the\nphrase 'DELETE MY ACCOUNT'. Active orders block deletion.",
+        "description": "Disable and anonymize the customer account; retain financial/dispute records.\nRequires password confirmation and 'DELETE MY ACCOUNT'. Active cases block\ndeletion. External cache/image cleanup is durable and may complete later.",
         "operationId": "delete_account_api_v1_customers_me_delete",
         "requestBody": {
           "content": {

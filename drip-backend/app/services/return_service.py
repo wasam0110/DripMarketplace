@@ -59,6 +59,8 @@ class ReturnService:
     async def request_return(
         self, user_id: UUID, payload: CreateReturnRequest
     ) -> ReturnDetailResponse:
+        from app.services.account_lifecycle import lock_active_user
+        await lock_active_user(self.db, user_id)
         # Verify seller_order belongs to user
         so_result = await self.db.execute(
             select(SellerOrder).where(SellerOrder.id == payload.seller_order_id).with_for_update()
@@ -166,6 +168,8 @@ class ReturnService:
     async def open_dispute(
         self, return_id: UUID, user_id: UUID, payload: OpenDisputeRequest
     ) -> DisputeDetailResponse:
+        from app.services.account_lifecycle import lock_active_user
+        await lock_active_user(self.db, user_id)
         return_ = await self.return_repo.get_by_id(return_id, user_id)
         if not return_:
             raise NotFoundError("Return not found")

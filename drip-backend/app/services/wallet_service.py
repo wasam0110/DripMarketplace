@@ -20,6 +20,7 @@ from app.schemas.wallet import (
     CommissionEntryResponse, CommissionSummary, CommissionBreakdownResponse,
     AdminWalletOverviewResponse,
 )
+from app.services.notification_outbox import queue_notification
 
 MIN_WITHDRAWAL = Decimal("500")
 
@@ -251,6 +252,13 @@ class WalletService:
             approved_by=admin_id,
             admin_note=note,
         )
+        await queue_notification(
+            self.db,
+            f"payout:{payout.id}:status:approved",
+            "send_payout_notification",
+            str(payout.id),
+            PayoutStatus.approved.value,
+        )
         await self.db.commit()
         payout.status = PayoutStatus.approved
         return PayoutResponse(
@@ -288,6 +296,13 @@ class WalletService:
         await self.payout_repo.update_status(
             payout_id, PayoutStatus.rejected, approved_by=admin_id, admin_note=note
         )
+        await queue_notification(
+            self.db,
+            f"payout:{payout.id}:status:rejected",
+            "send_payout_notification",
+            str(payout.id),
+            PayoutStatus.rejected.value,
+        )
         await self.db.commit()
 
         return PayoutResponse(
@@ -320,5 +335,12 @@ class WalletService:
         payout.completed_at = datetime.now(UTC)
         if note is not None:
             payout.admin_note = note
+        await queue_notification(
+            self.db,
+            f"payout:{payout.id}:status:completed",
+            "send_payout_notification",
+            str(payout.id),
+            PayoutStatus.completed.value,
+        )
         await self.db.commit()
         return PayoutResponse.model_validate(payout)

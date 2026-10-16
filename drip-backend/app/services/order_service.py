@@ -42,6 +42,7 @@ from app.schemas.order import (
 from app.services.cart_service import CartService
 from app.services.coupon_service import CouponService
 from app.services.order_access import authorized_order, create_guest_token
+from app.services.notification_outbox import queue_notification
 
 
 def _generate_order_number() -> str:
@@ -100,6 +101,14 @@ class OrderService:
         user_id: UUID,
         payload: CreateOrderRequest,
     ) -> CreateOrderResponse:
+        from app.models.user import User
+
+        user = await self.db.scalar(
+            select(User).where(User.id == user_id).with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if user is None or user.deleted_at is not None:
+            raise BusinessRuleError("This account cannot place orders")
         cart_svc = CartService(self.db, self.redis)
         raw_cart = await cart_svc.get_raw_items(user_id)
 
@@ -310,6 +319,12 @@ class OrderService:
         if coupon_id:
             self.db.add(CouponUsage(coupon_id=coupon_id, user_id=user_id, order_id=order.id))
             coupon.uses_count += 1
+        await queue_notification(
+            self.db,
+            f"order:{order.id}:placed",
+            "send_order_confirmation",
+            str(order.id),
+        )
         await self.db.commit()
 
         # Redis is a separate store; never clear the cart before the SQL commit.
@@ -429,6 +444,13 @@ class OrderService:
             changed_by=user_id,
             note=payload.reason,
         )
+        await queue_notification(
+            self.db,
+            f"order:{order.id}:status:cancelled",
+            "send_order_status_update",
+            str(order.id),
+            OrderStatus.cancelled.value,
+        )
         await self.db.commit()
         return {"message": "Order cancelled. Inventory has been released."}
 
@@ -517,6 +539,13 @@ class OrderService:
             else OrderStatus.processing
         )
         await self.order_repo.update_status(order.id, parent_status)
+        await queue_notification(
+            self.db,
+            f"order:{order.id}:status:{parent_status.value}",
+            "send_order_status_update",
+            str(order.id),
+            parent_status.value,
+        )
         if target == SellerOrderStatus.delivered:
             # Persist settlement with delivery; COD earnings wait for recorded collection.
             from app.models.payment import Payment, PaymentStatus

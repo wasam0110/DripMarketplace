@@ -1,6 +1,6 @@
 # WearHowZ endpoint inventory
 
-Generated from the application: 188 HTTP operations.
+Generated from the application: 190 HTTP operations.
 
 Dependency names show route-level access checks. Guest capability tokens, resource ownership, payment verification and business-state checks also run inside handlers/services; consult the OpenAPI schema and implementation.
 
@@ -30,6 +30,8 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | POST | `/api/v1/admin/inventory/bulk-update` | get_current_user_payload, require_admin | `app.api.v1.inventory.admin_bulk_update_inventory` |
 | POST | `/api/v1/admin/notifications/broadcast` | get_current_user_payload, require_admin | `app.api.v1.notifications.broadcast_notification` |
 | GET | `/api/v1/admin/notifications/email-log` | get_current_user_payload, require_admin | `app.api.v1.notifications.get_email_log` |
+| GET | `/api/v1/admin/notifications/failed` | get_current_user_payload, require_admin | `app.api.v1.notifications.failed_notifications` |
+| POST | `/api/v1/admin/notifications/failed/{event_id}/replay` | get_current_user_payload, require_admin | `app.api.v1.notifications.replay_notification` |
 | GET | `/api/v1/admin/orders` | get_current_user_payload, require_admin | `app.api.v1.admin.orders.list_all_orders` |
 | GET | `/api/v1/admin/payouts` | get_current_user_payload, require_admin | `app.api.v1.admin.payouts.list_all_payouts` |
 | POST | `/api/v1/admin/payouts/{payout_id}/approve` | get_current_user_payload, require_admin | `app.api.v1.admin.payouts.approve_payout` |
@@ -71,8 +73,8 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | POST | `/api/v1/auth/register` | Public / handler checks | `app.api.v1.auth.register` |
 | POST | `/api/v1/auth/resend-verification` | Public / handler checks | `app.api.v1.auth.resend_verification` |
 | POST | `/api/v1/auth/reset-password` | Public / handler checks | `app.api.v1.auth.reset_password` |
-| POST | `/api/v1/auth/setup-2fa` | get_current_user_payload, require_customer | `app.api.v1.auth.setup_2fa` |
-| POST | `/api/v1/auth/setup-2fa/verify` | get_current_user_payload, require_customer | `app.api.v1.auth.verify_2fa_setup` |
+| POST | `/api/v1/auth/setup-2fa` | get_current_user_payload, require_admin | `app.api.v1.auth.setup_2fa` |
+| POST | `/api/v1/auth/setup-2fa/verify` | get_current_user_payload, require_admin | `app.api.v1.auth.verify_2fa_setup` |
 | GET | `/api/v1/auth/verify-email` | Public / handler checks | `app.api.v1.auth.verify_email` |
 | GET | `/api/v1/brands` | Public / handler checks | `app.api.v1.storefront.brands` |
 | GET | `/api/v1/brands/{slug}` | Public / handler checks | `app.api.v1.storefront.brand_detail` |
@@ -153,18 +155,18 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | GET | `/api/v1/seller/analytics/overview` | get_current_user_payload, require_seller | `app.api.v1.analytics.seller.seller_overview` |
 | GET | `/api/v1/seller/analytics/revenue` | get_current_user_payload, require_seller | `app.api.v1.analytics.seller.seller_revenue_series` |
 | GET | `/api/v1/seller/analytics/top-products` | get_current_user_payload, require_seller | `app.api.v1.analytics.seller.seller_top_products` |
-| GET | `/api/v1/seller/bank-accounts` | get_current_user_payload, require_customer | `app.api.v1.sellers.list_bank_accounts` |
-| POST | `/api/v1/seller/bank-accounts` | get_current_user_payload, require_customer | `app.api.v1.sellers.add_bank_account` |
-| DELETE | `/api/v1/seller/bank-accounts/{account_id}` | get_current_user_payload, require_customer | `app.api.v1.sellers.delete_bank_account` |
-| GET | `/api/v1/seller/dashboard` | get_current_user_payload, require_customer | `app.api.v1.sellers.get_dashboard` |
+| GET | `/api/v1/seller/bank-accounts` | get_current_user_payload, require_seller_account | `app.api.v1.sellers.list_bank_accounts` |
+| POST | `/api/v1/seller/bank-accounts` | get_current_user_payload, require_seller_account | `app.api.v1.sellers.add_bank_account` |
+| DELETE | `/api/v1/seller/bank-accounts/{account_id}` | get_current_user_payload, require_seller_account | `app.api.v1.sellers.delete_bank_account` |
+| GET | `/api/v1/seller/dashboard` | get_current_user_payload, require_seller_account | `app.api.v1.sellers.get_dashboard` |
 | GET | `/api/v1/seller/inventory` | get_current_user_payload, require_seller | `app.api.v1.inventory.list_seller_inventory` |
 | GET | `/api/v1/seller/inventory/low-stock` | get_current_user_payload, require_seller | `app.api.v1.inventory.get_low_stock_alerts` |
 | GET | `/api/v1/seller/inventory/{variant_id}` | get_current_user_payload, require_seller | `app.api.v1.inventory.get_variant_stock` |
 | PUT | `/api/v1/seller/inventory/{variant_id}` | get_current_user_payload, require_seller | `app.api.v1.inventory.set_variant_stock` |
 | POST | `/api/v1/seller/inventory/{variant_id}/adjust` | get_current_user_payload, require_seller | `app.api.v1.inventory.adjust_variant_stock` |
-| POST | `/api/v1/seller/logo` | get_current_user_payload, require_customer | `app.api.v1.sellers.upload_logo` |
-| GET | `/api/v1/seller/me` | get_current_user_payload, require_customer | `app.api.v1.sellers.get_seller_profile` |
-| PATCH | `/api/v1/seller/me` | get_current_user_payload, require_customer | `app.api.v1.sellers.update_seller_profile` |
+| POST | `/api/v1/seller/logo` | get_current_user_payload, require_seller_account | `app.api.v1.sellers.upload_logo` |
+| GET | `/api/v1/seller/me` | get_current_user_payload, require_seller_account | `app.api.v1.sellers.get_seller_profile` |
+| PATCH | `/api/v1/seller/me` | get_current_user_payload, require_seller_account | `app.api.v1.sellers.update_seller_profile` |
 | GET | `/api/v1/seller/orders` | get_current_user_payload, require_seller | `app.api.v1.orders.list_seller_orders` |
 | GET | `/api/v1/seller/orders/{seller_order_id}` | get_current_user_payload, require_seller | `app.api.v1.orders.get_seller_order` |
 | PUT | `/api/v1/seller/orders/{seller_order_id}/status` | get_current_user_payload, require_seller | `app.api.v1.orders.update_seller_order_status` |
@@ -188,7 +190,7 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | POST | `/api/v1/seller/returns/{return_id}/approve` | get_current_user_payload, require_seller | `app.api.v1.returns.seller_approve_return` |
 | POST | `/api/v1/seller/returns/{return_id}/received` | get_current_user_payload, require_seller | `app.api.v1.returns.seller_mark_received` |
 | POST | `/api/v1/seller/returns/{return_id}/reject` | get_current_user_payload, require_seller | `app.api.v1.returns.seller_reject_return` |
-| POST | `/api/v1/seller/slots/purchase` | get_current_user_payload, require_customer | `app.api.v1.sellers.purchase_slots` |
+| POST | `/api/v1/seller/slots/purchase` | get_current_user_payload, require_seller_account | `app.api.v1.sellers.purchase_slots` |
 | GET | `/api/v1/seller/wallet` | get_current_user_payload, require_seller | `app.api.v1.wallet.get_wallet_summary` |
 | GET | `/api/v1/seller/wallet/commission-breakdown` | get_current_user_payload, require_seller | `app.api.v1.wallet.get_commission_breakdown` |
 | GET | `/api/v1/seller/wallet/payouts` | get_current_user_payload, require_seller | `app.api.v1.wallet.get_payout_history` |

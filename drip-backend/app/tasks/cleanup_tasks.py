@@ -4,7 +4,7 @@ app/tasks/cleanup_tasks.py — ARQ background cleanup tasks.
 Tasks:
   - cleanup_abandoned_carts       : remove Redis cart keys inactive for 30 days
   - cleanup_expired_sessions      : purge expired UserSession rows
-  - cleanup_soft_deleted_users    : hard-delete accounts soft-deleted > 90 days ago
+  - cleanup_soft_deleted_users    : compatibility job; physical deletion is disabled
   - cleanup_orphaned_images       : remove Supabase images with no DB reference
   - cleanup_expired_reset_tokens  : purge stale password-reset tokens from Redis
   - archive_old_notifications     : move read notifications > 90 days to archive
@@ -78,25 +78,13 @@ async def cleanup_expired_sessions(ctx: dict) -> None:
 
 async def cleanup_soft_deleted_users(ctx: dict) -> None:
     """
-    Hard-delete User rows that were soft-deleted more than 90 days ago.
-    Cascade deletes will remove addresses, sessions, and other child records.
-    Reviews and orders are preserved (user_id set to NULL via FK behaviour).
+    Keep historical identity keys until a reviewed retention policy is implemented.
+
+    Customer self-deletion removes profile credentials and saved addresses inline.
+    Blanket hard deletion can erase seller data or violate financial-history FKs.
+    Keep this registered name for already queued jobs, without destructive SQL.
     """
-    from sqlalchemy import delete
-    from app.core.database import AsyncSessionLocal
-    from app.models.user import User
-
-    cutoff = datetime.now(UTC) - timedelta(days=90)
-
-    async with AsyncSessionLocal() as db:
-        result = await db.execute(
-            delete(User).where(
-                User.deleted_at.isnot(None),
-                User.deleted_at < cutoff,
-            )
-        )
-        await db.commit()
-        logger.info("cleanup_soft_deleted_users", deleted=result.rowcount)
+    logger.info("cleanup_soft_deleted_users.disabled", reason_code="retention_policy_required")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

@@ -65,6 +65,7 @@ CMD uvicorn main:app \
     --workers 2 \
     --loop uvloop \
     --http httptools \
+    --no-proxy-headers \
     --access-log \
     --no-use-colors \
     --timeout-keep-alive 30

@@ -25,7 +25,8 @@ from typing import Any
 
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError, InvalidHashError
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError as JWTError
 import pyotp
 
 from app.core.config import settings
@@ -138,13 +139,12 @@ def decode_access_token(token: str) -> dict[str, Any]:
             algorithms=[settings.JWT_ALGORITHM],
             audience="drip-client",
             issuer="drip-api",
-            options={"verify_exp": True, "require_exp": True, "require_sub": True, "require_jti": True},
+            options={"require": ["exp", "sub", "jti", "iat"]},
         )
         return payload
+    except jwt.ExpiredSignatureError as exc:
+        raise TokenExpiredError() from exc
     except JWTError as exc:
-        msg = str(exc).lower()
-        if "expired" in msg or "exp" in msg:
-            raise TokenExpiredError() from exc
         raise TokenInvalidError(detail=str(exc)) from exc
 
 
@@ -210,6 +210,8 @@ def decode_email_verify_token(token: str) -> str:
             _load_public_key(),
             algorithms=[settings.JWT_ALGORITHM],
             audience="drip-email-verify",
+            issuer="drip-api",
+            options={"require": ["exp", "sub", "jti", "iat"]},
         )
         return payload["sub"]
     except JWTError as exc:
@@ -238,6 +240,8 @@ def decode_password_reset_token(token: str) -> str:
             _load_public_key(),
             algorithms=[settings.JWT_ALGORITHM],
             audience="drip-pwd-reset",
+            issuer="drip-api",
+            options={"require": ["exp", "sub", "jti", "iat"]},
         )
         return payload["sub"]
     except JWTError as exc:
