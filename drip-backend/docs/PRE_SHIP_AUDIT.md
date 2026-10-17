@@ -22,15 +22,17 @@ No live charges, real customer emails, production deletion, deployment, secret r
 
 ## Verified change notes
 
-Latest: [checkpoint 8](PRE_SHIP_CHECKPOINT_8.md), 16 October 2026 — **854 passed,
-1 skipped; 87.13% coverage** on native PostgreSQL/Redis. All eight money-bearing
-analytics routes preserve fractions, return decimal strings and round averages
-explicitly. Native fractional/empty/share and schema regressions cover the change.
+Latest: [checkpoint 11](PRE_SHIP_CHECKPOINT_11.md), 17 October 2026 — **977 passed,
+1 skipped; 87.55% coverage** with native PostgreSQL/Redis enabled. Catalogue/wishlist
+responses preserve paisa as two-decimal strings; whole-PKR entry/filter policy is
+unchanged. 35 new native/unit cases cover response types, variant/checkout agreement,
+cursor precision, seller edits and wishlist isolation. Checkpoint 10's slot/notification
+presentation and checkpoints 8/9's analytics/coupon precision remain passing.
 Bulk-stock transaction, seller isolation and inventory-health repairs remain in place.
 Earlier email privacy, durable cleanup and notification recovery remain in place.
 Migration head remains 020; contract remains 190 operations.
 Final retention/offboarding, exhaustive ownership/input coverage and other unverified
-checklist items remain open. [Checkpoint 7](PRE_SHIP_CHECKPOINT_7.md) and earlier
+checklist items remain open. [Checkpoint 10](PRE_SHIP_CHECKPOINT_10.md) and earlier
 reports remain historical evidence, not the latest verification.
 
 These are repair checkpoints, **not a completed A–Z review**. New code fixes
@@ -131,7 +133,7 @@ Proxy trust reference: [MDN X-Forwarded-For security guidance](https://developer
 | ID | Requirement | Status / evidence |
 |---|---|---|
 | 6.1 | **BLOCKER:** Prices, discounts and totals computed server-side only | Unverified — review and evidence pending. |
-| 6.2 | Money stored as integers in minor units with defined rounding | Project uses exact Decimal/PostgreSQL NUMERIC in PKR major units, not integer storage. Checkpoint 8 removes truncation from all eight money-bearing analytics routes, emits decimal strings and tests explicit two-place average rounding plus refund-adjusted conservation. Coupon/slot/notification conversions and wider F16 remain open; no financial-schema conversion was made to match generic checklist wording. |
+| 6.2 | Money stored as integers in minor units with defined rounding | Project uses exact Decimal/PostgreSQL NUMERIC in PKR major units, not integer storage. Checkpoints 8/9 repair analytics and coupon precision. Checkpoint 10 repairs slot response types and notification/email presentation. Checkpoint 11 repairs catalogue/wishlist price responses. Whole-PKR entry/settings and accounting are unchanged. Remaining legacy/untyped money contracts and wider F16 remain open; no financial-schema conversion was made to match generic checklist wording. |
 | 6.3 | **BLOCKER:** Webhooks verify the signature or hash and process each event exactly once | Unverified — review and evidence pending. |
 | 6.4 | Callback amount, currency and status checked against your own records | Locally verified — success callback requires authenticated status lookup; reconciliation requires explicit consistent amount/currency plus matching basket/transaction/order total. Native tests cover rejection, retry, replay and concurrency. Keep PayFast disabled pending merchant UAT/response mapping. |
 | 6.5 | Order and payment state machine defined; invalid transitions rejected | Unverified — review and evidence pending. |

@@ -4,13 +4,21 @@ The broader pre-ship checklist audit is **in progress**, not signed off. Track a
 162 requirements and current evidence in [PRE_SHIP_AUDIT.md](docs/PRE_SHIP_AUDIT.md).
 Earlier batch/test reports do not establish that every checklist requirement passes.
 
-Latest: [pre-ship checkpoint 8](docs/PRE_SHIP_CHECKPOINT_8.md), 16 October 2026 —
-854 full-suite tests passed, 1 skipped, 87.13% coverage. Migration head remains 020.
-All eight money-bearing analytics routes preserve Decimal fractions, emit decimal
-strings in PKR units and round averages explicitly. Integer-only clients must update;
-see the checkpoint's field mapping and unchanged reporting definitions.
+Latest: [pre-ship checkpoint 11](docs/PRE_SHIP_CHECKPOINT_11.md), 17 October 2026 —
+977 full-suite tests passed, 1 skipped, 87.55% coverage. Migration head remains 020.
+Catalogue/wishlist prices now preserve paisa as two-decimal JSON strings, including
+variant overrides. Clients must update these response types; whole-PKR price-entry
+and filter policies are unchanged. Guest quotes, carts and checkout agree in tests.
+Order/payout notices and legacy order emails preserve fractional PKR amounts.
+Five slot money response fields now use two-decimal JSON strings; counts and
+whole-PKR pricing policy are unchanged. Clients must update slot money types.
+Checkpoint 9's exact coupon minimums/discounts and bounded seller allocations remain
+verified. Coupon preview remains an estimate, not a reservation.
+Checkpoint 8's analytics decimal-string contracts remain in place; integer-only
+clients must update to the documented PKR representation.
 Bulk-stock transaction repairs, seller aggregate isolation and persisted reorder
-thresholds remain verified. Coupon/slot/notification precision and broader F16 remain open.
+thresholds remain verified. Canonical links, error envelopes, remaining legacy/untyped
+money contracts and broader F16 remain open.
 Earlier legacy email recipient checks, zero ARQ
 result retention, limited cleanup and durable recovery remain in place, with role-denial tests
 for all 154 protected operations and full migrated-schema parity.

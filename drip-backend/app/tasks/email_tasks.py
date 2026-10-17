@@ -11,6 +11,7 @@ from arq import Retry
 
 from app.core.config import settings
 from app.core.logging import get_logger
+from app.core.money import MoneyDisplayValue
 from app.integrations.resend_client import (
     send_cod_timeout_email,
     send_order_confirmation_email,
@@ -61,7 +62,7 @@ async def task_send_order_confirmation(
     email: str,
     name: str,
     order_number: str,
-    total: int,
+    total: MoneyDisplayValue,
     items: list[dict],
 ) -> None:
     async with checked_email_recipient(ctx, email, order_number=order_number) as current_name:

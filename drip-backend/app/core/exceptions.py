@@ -189,7 +189,7 @@ class InsufficientStockError(BusinessRuleError):
 
 class NoSlotsAvailableError(BusinessRuleError):
     default_code    = "NO_SLOTS_AVAILABLE"
-    default_message = "No product slots available. Purchase extra slots at PKR 50 each."
+    default_message = "No product slots available. Check current slot pricing to purchase more."
 
 
 class InvalidStatusTransitionError(BusinessRuleError):

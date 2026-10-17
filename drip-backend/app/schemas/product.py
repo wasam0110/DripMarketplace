@@ -8,6 +8,8 @@ import re
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from app.schemas.money import PKRResponseAmount
+
 
 # ── Variant ────────────────────────────────────────────────────────────────────
 
@@ -26,7 +28,7 @@ class VariantWithStockResponse(BaseModel):
     size_type:       str
     size_value:      str
     colour:          str
-    price:           int
+    price:           PKRResponseAmount
     stock:           int
     available_stock: int
     is_active:       bool
@@ -116,8 +118,8 @@ class ProductCardResponse(BaseModel):
     brand_color:   str
     name:          str
     slug:          str
-    price:         int
-    sale_price:    Optional[int]
+    price:         PKRResponseAmount
+    sale_price:    Optional[PKRResponseAmount]
     primary_image: Optional[str]
     colours:       list[str]
     alpha_sizes:   list[str]
@@ -159,7 +161,7 @@ class SellerProductRowResponse(BaseModel):
     name:         str
     slug:         str
     category:     Optional[str]
-    price:        int
+    price:        PKRResponseAmount
     total_stock:  int
     is_published: bool
     avg_rating:   float
@@ -190,7 +192,7 @@ class SearchSuggestion(BaseModel):
     id:            UUID
     name:          str
     primary_image: Optional[str]
-    price:         int
+    price:         PKRResponseAmount
     brand_name:    str
 
 

@@ -1071,7 +1071,7 @@ async def test_http_runtime_pricing_and_payment_due_snapshot(client, db, market)
     await service.update_settings({"extra_slot_price": 80}, market.admin.id)
     quote = await client.get("/api/v1/seller/register/slot-price?extra_slots=2")
     assert quote.status_code == 200, quote.text
-    assert quote.json()["total_cost"] == 6160
+    assert quote.json()["total_cost"] == "6160.00"
     assert loaded.value == "80"
     registered = await SellerService(db).register(
         SellerRegistrationRequest(

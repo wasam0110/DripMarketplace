@@ -12,6 +12,7 @@ import resend
 from app.core.config import settings
 from app.core.exceptions import ExternalServiceError
 from app.core.logging import get_logger
+from app.core.money import MoneyDisplayValue, format_pkr
 
 logger = get_logger(__name__)
 
@@ -153,12 +154,12 @@ async def send_order_confirmation_email(
     email: str,
     name: str,
     order_number: str,
-    total: int,
+    total: MoneyDisplayValue,
     items: list[dict],
 ) -> bool:
     items_html = "".join(
         f"<p style='margin:4px 0;color:#aaa;font-size:13px;'>"
-        f"{i['product_name']} × {i['quantity']} — PKR {i['subtotal']:,}</p>"
+        f"{i['product_name']} × {i['quantity']} — PKR {format_pkr(i['subtotal'])}</p>"
         for i in items
     )
     body = f"""
@@ -167,7 +168,7 @@ async def send_order_confirmation_email(
     <div class="code">{order_number}</div>
     <p style="color:#555;font-size:13px;">Save this order number for tracking.</p>
     {items_html}
-    <p style="margin-top:16px;"><strong style="color:#fff;">Total: PKR {total:,}</strong></p>
+    <p style="margin-top:16px;"><strong style="color:#fff;">Total: PKR {format_pkr(total)}</strong></p>
     <p>You'll receive a shipping notification when your order is on its way.</p>
     """
     return await send_email(

@@ -296,13 +296,24 @@ class OrderService:
                 subtotal=line.subtotal,
             )
 
-        # Allocate the platform coupon proportionally; the final share absorbs rounding.
+        # Allocate proportionally, bounding rounding so no seller receives a
+        # negative discount or a discount greater than its merchandise value.
         remaining_discount = discount
+        remaining_subtotal = subtotal
         for index, (seller_id, sub) in enumerate(calculation.seller_subtotals.items()):
+            remaining_subtotal -= sub
             share = (
                 remaining_discount
                 if index == len(calculation.seller_subtotals) - 1
                 else (discount * sub / subtotal).quantize(Decimal("0.01"))
+            )
+            # Leave enough capacity in later sellers for the residual, and never
+            # allocate more than the discount still available. These bounds are
+            # already whole paisa; ordinary proportional shares are unchanged.
+            share = max(
+                Decimal("0"),
+                remaining_discount - remaining_subtotal,
+                min(share, sub, remaining_discount),
             )
             remaining_discount -= share
             await self.so_repo.create(order_id=order.id, seller_id=seller_id, subtotal=sub - share)

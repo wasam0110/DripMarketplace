@@ -530,8 +530,8 @@ class CustomerService:
                     product_name=p.name,
                     product_slug=p.slug,
                     product_image=primary_image,
-                    price=int(p.price),
-                    sale_price=int(p.sale_price) if p.sale_price else None,
+                    price=p.price,
+                    sale_price=p.sale_price,
                     is_in_stock=p.has_stock,
                     added_at=p.created_at,
                 )

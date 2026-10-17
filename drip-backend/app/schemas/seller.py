@@ -3,10 +3,10 @@ from __future__ import annotations
 from decimal import Decimal
 from uuid import UUID
 from datetime import datetime
-from typing import Optional, Literal
+from typing import Annotated, Optional, Literal
 import re
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import BaseModel, EmailStr, Field, field_serializer, field_validator, model_validator
 
 
 # ── Registration ───────────────────────────────────────────────────────────────
@@ -48,14 +48,27 @@ class SellerRegistrationResponse(BaseModel):
 
 # ── Slot Pricing ───────────────────────────────────────────────────────────────
 
+SlotMoney = Annotated[
+    Decimal,
+    Field(ge=0, decimal_places=2, allow_inf_nan=False,
+          description="PKR major units, serialized as a two-decimal string; not integer paisa."),
+]
+
+
 class SlotPricingResponse(BaseModel):
-    registration_fee: int = 5000
+    registration_fee: SlotMoney = Decimal("5000.00")
     base_slots:       int = 50
     extra_slots:      int
-    extra_slot_price: int = 50
-    extra_cost:       int
-    total_cost:       int
+    extra_slot_price: SlotMoney = Decimal("50.00")
+    extra_cost:       SlotMoney
+    total_cost:       SlotMoney
     total_slots:      int
+
+    @field_serializer(
+        "registration_fee", "extra_slot_price", "extra_cost", "total_cost", when_used="json"
+    )
+    def serialize_money(self, value: Decimal) -> str:
+        return format(value, ".2f")
 
 
 class SlotPurchaseRequest(BaseModel):
@@ -67,7 +80,11 @@ class SlotPurchaseResponse(BaseModel):
     slots_purchased:     int
     new_total_slots:     int
     new_slots_available: int
-    amount_charged:      int
+    amount_charged:      SlotMoney
+
+    @field_serializer("amount_charged", when_used="json")
+    def serialize_money(self, value: Decimal) -> str:
+        return format(value, ".2f")
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────

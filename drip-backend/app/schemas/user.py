@@ -20,6 +20,7 @@ from uuid import UUID
 from pydantic import field_validator, model_validator
 
 from app.schemas.common import DRIPBaseModel, DRIPResponseModel
+from app.schemas.money import PKRResponseAmount
 
 _PHONE = re.compile(r"^(\+92|0092|0)?3[0-9]{9}$")
 
@@ -257,8 +258,8 @@ class WishlistItemResponse(DRIPResponseModel):
     product_name:  str
     product_slug:  str
     product_image: Optional[str]
-    price:         int
-    sale_price:    Optional[int]
+    price:         PKRResponseAmount
+    sale_price:    Optional[PKRResponseAmount]
     is_in_stock:   bool
     added_at:      datetime
 

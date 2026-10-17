@@ -156,7 +156,7 @@ class ProductService:
         if seller.slots_used >= seller.total_slots:  # type: ignore[union-attr]
             raise BusinessRuleError(
                 f"No slots available ({seller.slots_used}/{seller.total_slots}). "  # type: ignore[union-attr]
-                "Purchase extra slots at PKR 50 each."
+                "Check current slot pricing to purchase more."
             )
 
         await self.product_repo.set_published(product_id, True)
@@ -265,7 +265,7 @@ class ProductService:
                     id=p.id,
                     name=p.name,
                     primary_image=next((i.url for i in p.images if i.is_primary), None),
-                    price=int(p.effective_price),
+                    price=p.effective_price,
                     brand_name=p.seller.brand_name,
                 )
                 for p in products
@@ -294,7 +294,7 @@ class ProductService:
                     name=p.name,
                     slug=p.slug,
                     category=p.category.name if p.category else None,
-                    price=int(p.price),
+                    price=p.price,
                     total_stock=sum((v.inventory.stock if v.inventory else 0) for v in p.variants),
                     is_published=p.is_published,
                     avg_rating=float(p.avg_rating),
@@ -355,8 +355,8 @@ class ProductService:
             brand_color=p.seller.brand_color if p.seller else "#DFFF00",
             name=p.name,
             slug=p.slug,
-            price=int(p.price),
-            sale_price=int(p.sale_price) if p.sale_price else None,
+            price=p.price,
+            sale_price=p.sale_price,
             primary_image=primary_image,
             colours=colours,
             alpha_sizes=alpha,
@@ -376,7 +376,7 @@ class ProductService:
             size_type=v.size_type.value,
             size_value=v.size_value,
             colour=v.colour,
-            price=int(
+            price=(
                 v.price_override if v.price_override is not None else v.product.effective_price
             ),
             stock=inv.stock if inv else 0,

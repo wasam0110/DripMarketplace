@@ -1,8 +1,12 @@
 # WearHowZ backend setup and release checks
 
-Backend review candidate, refreshed 16 October 2026. Not approved for production; see
-[known limits](KNOWN_LIMITS.md) and [latest verification](docs/PRE_SHIP_CHECKPOINT_8.md).
+Backend review candidate, refreshed 17 October 2026. Not approved for production; see
+[known limits](KNOWN_LIMITS.md) and [latest verification](docs/PRE_SHIP_CHECKPOINT_11.md).
 Run commands from `drip-backend`. Never replace an existing local `.env`.
+
+Checkpoint 11: 977 tests passed, 1 skipped, 87.55% coverage on disposable native
+PostgreSQL/Redis. Catalogue/wishlist money responses now use two-decimal PKR strings;
+adapt client response types without changing the existing whole-rupee entry rules.
 
 Customer deletion now records retryable external cleanup. Review the
 [customer privacy runbook](docs/CUSTOMER_PRIVACY.md), deploy API/workers together and

@@ -1,6 +1,6 @@
 # Backend release limitations
 
-Updated 16 October 2026. Passing coverage is not production approval.
+Updated 17 October 2026. Passing coverage is not production approval.
 
 The user-supplied 162-item pre-ship checklist audit is still in progress; see
 [current tracking and verification](docs/PRE_SHIP_AUDIT.md). Proxy/cursor/startup and
@@ -75,9 +75,33 @@ worker-recovery and deployment gates.
   analytics routes. Their 16 money fields now return decimal strings in PKR units;
   integer-only clients must update. Refund-adjusted ledger reports and order snapshot
   reports still have different bases. Platform averages still divide qualifying GMV
-  by all period orders; city shares cover the returned subset. Coupon/slot and
-  notification money conversions, canonical links and error envelopes remain open
+  by all period orders; city shares cover the returned subset. Remaining legacy/untyped
+  money contracts, canonical links and error envelopes remain open
   under F16. See [the contract notes](docs/PRE_SHIP_CHECKPOINT_8.md).
+
+- **Slot/notification presentation:** checkpoint 10 makes five slot money fields
+  JSON decimal strings and preserves fractions in order/payout notices and legacy
+  order-email rendering. Slot settings still accept whole PKR; no pricing or wallet
+  accounting policy changed. Clients must update slot money types. Existing stored
+  notices, sent emails and old truncated queue values are not repaired/resubmitted.
+  Providers remain mocked in local tests. See [checkpoint 10](docs/PRE_SHIP_CHECKPOINT_10.md).
+
+- **Catalogue/wishlist prices:** checkpoint 11 removes integer truncation from
+  product cards/details, variants, suggestions, seller listings and wishlists.
+  Their seven underlying price/sale-price fields now return two-decimal PKR strings;
+  clients must update response types. Existing whole-rupee product/variant entry and
+  filter policies are unchanged. Product-level cards/suggestions do not override
+  selected-variant pricing; checkout still revalidates current prices and stock.
+  Remaining legacy/untyped money shapes are not certified by this change. See
+  [checkpoint 11](docs/PRE_SHIP_CHECKPOINT_11.md) for verification status and scope.
+
+- **Coupon money:** checkpoint 9 preserves fractional preview values/minimums,
+  rounds discounts explicitly and bounds multi-seller allocations. Preview remains
+  an estimate; checkout rechecks current prices and usage eligibility. Existing
+  historical seller allocations are not automatically repaired. Zero-total orders
+  with free shipping remain outside this verification; orders still require total
+  > 0. The legacy apply helper is not newly certified for concurrent usage. See
+  [checkpoint 9](docs/PRE_SHIP_CHECKPOINT_9.md) for tests and contract details.
 
 - Post-review repair batches 1 through 4 fix payout-transition integrity, atomic
   return-refund linkage, wallet audit balances, seller-specific refund allocation,

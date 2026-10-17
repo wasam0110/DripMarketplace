@@ -237,15 +237,24 @@ class CancelOrderRequest(BaseModel):
 
 class ValidateCouponRequest(BaseModel):
     code:     str = Field(min_length=1, max_length=30)
-    subtotal: Decimal = Field(ge=1)
+    subtotal: Decimal = Field(
+        ge=1, max_digits=12, decimal_places=2, allow_inf_nan=False,
+        description="Preview subtotal in PKR major units; checkout recalculates current cart prices.",
+    )
 
 
 class CouponValidationResponse(BaseModel):
     code:            str
     discount_type:   str
-    discount_value:  Decimal
-    discount_amount: Decimal
-    new_subtotal:    Decimal
+    discount_value:  Decimal = Field(
+        description="Percentage rate or fixed PKR amount, as a decimal string."
+    )
+    discount_amount: Decimal = Field(
+        description="Discount in PKR, rounded half-up to two decimal places."
+    )
+    new_subtotal:    Decimal = Field(
+        description="PKR subtotal after discount, before shipping; decimal string."
+    )
 
 
 # ── Seller order management ───────────────────────────────────────────────────

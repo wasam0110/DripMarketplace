@@ -5,8 +5,10 @@ Review dates: 11–12 October 2026. Scope: `drip-backend` only. This is a review
 ## Bottom line
 
 Historical baseline below. Subsequent repairs and current remaining boundaries are
-tracked in [the pre-ship audit](PRE_SHIP_AUDIT.md); checkpoint 8 partially repairs F16
-with exact Decimal analytics and documented response-type changes. Checkpoint 7's
+tracked in [the pre-ship audit](PRE_SHIP_AUDIT.md); checkpoints 8–11 partially repair
+F16 with exact Decimal analytics/coupons, bounded seller allocations and slot/notification
+presentation plus catalogue/wishlist price precision. F16 remains open for canonical
+links, error contracts and remaining legacy/untyped money shapes. Checkpoint 7's
 bulk-stock integrity and checkpoint 6's seller isolation/reorder repairs remain in place.
 
 The backend has substantial working functionality and useful regression tests, but it is **not complete except for production configuration**. Financial workflow, notification, account-lifecycle and validation gaps remain in application code. The highest-priority issues are listed below with source locations, consequences and proposed verification.
@@ -242,9 +244,18 @@ Recommended repair: declare the runtime dependency if supported, and test the en
 Checkpoint 8 partially repairs this finding: all eight money-bearing analytics
 routes now preserve Decimal fractions and emit PKR decimal strings, with explicit
 two-place average rounding. Native fractional/empty/share cases and schema tests
-cover the change. Coupon/slot/notification precision, canonical links and error
-envelopes remain open. See [checkpoint 8](PRE_SHIP_CHECKPOINT_8.md) for compatibility
-changes and unchanged reporting bases; the historical description below is the baseline.
+cover the change. Checkpoint 9 preserves coupon preview/checkout fractions, compares
+exact minimums, rejects invalid preview amounts and bounds multi-seller rounding
+residuals. Checkpoint 10 fixes slot response types and notification/email presentation,
+preserving whole-PKR slot settings and existing delivery/privacy behavior. Checkpoint 11
+removes catalogue/wishlist price truncation and documents decimal-string responses;
+whole-rupee product-entry/filter policy remains unchanged. Canonical links, error
+envelopes and remaining legacy/untyped money contracts remain open. See
+[checkpoint 8](PRE_SHIP_CHECKPOINT_8.md) for analytics compatibility/reporting bases,
+[checkpoint 9](PRE_SHIP_CHECKPOINT_9.md) for coupon verification and
+[checkpoint 10](PRE_SHIP_CHECKPOINT_10.md) for slot/notification contracts and limits,
+and [checkpoint 11](PRE_SHIP_CHECKPOINT_11.md) for catalogue/wishlist verification;
+the historical description below is the baseline.
 
 Sources: `app/integrations/resend_client.py:121` and `:138`; `app/core/config.py`; `app/schemas/analytics.py`; `app/services/analytics_service.py`; `main.py` exception handlers.
 

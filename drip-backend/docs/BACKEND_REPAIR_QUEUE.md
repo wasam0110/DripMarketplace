@@ -1,10 +1,17 @@
 # Backend repair queue before frontend implementation
 
-Current status, 16 October 2026: [pre-ship checkpoint 8](PRE_SHIP_CHECKPOINT_8.md)
+Current status, 17 October 2026: [pre-ship checkpoint 11](PRE_SHIP_CHECKPOINT_11.md)
 supersedes the baseline below. Cross-account resource tests and approved limited
 customer cleanup supplement notification recovery, legacy preference import,
 190 route policies and complete migrated-schema parity. Migration head: 020.
-Full suite (16 October): 854 passed, 1 skipped, 87.13% coverage. Checkpoint 8 preserves
+Full suite (17 October): 977 passed, 1 skipped, 87.55% coverage. Checkpoint 11 fixes
+catalogue/wishlist price truncation, documents seven underlying decimal-string
+fields and adds 35 native/unit cases. Price-entry/filter policy stays whole PKR;
+variant, cart, guest quote and checkout amounts agree in regression tests. Checkpoint 10 fixes
+slot/notification money presentation, publishes five slot decimal-string fields and
+adds 49 native/unit cases while retaining pricing/accounting/privacy policy. Checkpoint 9 repairs
+coupon preview/checkout precision, exact minimums and multi-seller rounding residuals;
+39 new native/unit cases cover the changes. Checkpoint 8 preserves
 fractional analytics money and publishes decimal-string response contracts with
 rounding/empty-data/share regressions. F16 remains partially open. Checkpoint 7 fixes
 admin bulk-stock false success after row errors, validates batches and tests rollback
@@ -15,8 +22,10 @@ F08 has fail-closed local monetary verification (merchant acceptance still gated
 F13 is implemented. F11 now has durable customer cleanup and deletion/case/refresh
 race safeguards, but final policy, pending/old queue payloads, cross-system erasure and managed
 offboarding remain open. Exhaustive ownership, static/type and broader review remain.
-Recommended next: coupon precision and minimum-spend/checkout consistency, then
-remaining slot/notification money conversions and F16 configuration/error contracts.
+Recommended next: F16 canonical public-link/callback configuration, then error
+contracts. Remaining legacy/untyped money shapes still need review.
+Historical coupon allocations and zero-total orders
+with free shipping are not certified by checkpoint 9; see its explicit limits.
 
 Updated 13 October 2026. Backend only. This queue comes from the completed static source/test review, not from the older completion claims. Repair batches 1 through 4 are implemented; later batches remain pending. See [detailed findings](BACKEND_DEEP_REVIEW.md), [batch-1 report](BACKEND_B1_REPORT.md), [batch-2 report](BACKEND_B2_REPORT.md), [batch-3 report](BACKEND_B3_REPORT.md), [batch-4 report](BACKEND_B4_REPORT.md) and [system walkthrough](BACKEND_WALKTHROUGH.md).
 

@@ -2339,6 +2339,7 @@
             "type": "string"
           },
           "discount_amount": {
+            "description": "Discount in PKR, rounded half-up to two decimal places.",
             "title": "Discount Amount",
             "type": "string"
           },
@@ -2347,10 +2348,12 @@
             "type": "string"
           },
           "discount_value": {
+            "description": "Percentage rate or fixed PKR amount, as a decimal string.",
             "title": "Discount Value",
             "type": "string"
           },
           "new_subtotal": {
+            "description": "PKR subtotal after discount, before shipping; decimal string.",
             "title": "New Subtotal",
             "type": "string"
           }
@@ -4772,8 +4775,9 @@
             "type": "array"
           },
           "price": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Price",
-            "type": "integer"
+            "type": "string"
           },
           "primary_image": {
             "anyOf": [
@@ -4793,7 +4797,8 @@
           "sale_price": {
             "anyOf": [
               {
-                "type": "integer"
+                "description": "PKR major units as a two-decimal string; not integer paisa.",
+                "type": "string"
               },
               {
                 "type": "null"
@@ -4940,8 +4945,9 @@
             "type": "array"
           },
           "price": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Price",
-            "type": "integer"
+            "type": "string"
           },
           "primary_image": {
             "anyOf": [
@@ -4961,7 +4967,8 @@
           "sale_price": {
             "anyOf": [
               {
-                "type": "integer"
+                "description": "PKR major units as a two-decimal string; not integer paisa.",
+                "type": "string"
               },
               {
                 "type": "null"
@@ -6079,8 +6086,9 @@
             "type": "string"
           },
           "price": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Price",
-            "type": "integer"
+            "type": "string"
           },
           "primary_image": {
             "anyOf": [
@@ -6404,8 +6412,9 @@
             "type": "string"
           },
           "price": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Price",
-            "type": "integer"
+            "type": "string"
           },
           "review_count": {
             "title": "Review Count",
@@ -7138,26 +7147,28 @@
             "type": "integer"
           },
           "extra_cost": {
+            "description": "PKR major units, serialized as a two-decimal string; not integer paisa.",
             "title": "Extra Cost",
-            "type": "integer"
+            "type": "string"
           },
           "extra_slot_price": {
-            "default": 50,
+            "description": "PKR major units, serialized as a two-decimal string; not integer paisa.",
             "title": "Extra Slot Price",
-            "type": "integer"
+            "type": "string"
           },
           "extra_slots": {
             "title": "Extra Slots",
             "type": "integer"
           },
           "registration_fee": {
-            "default": 5000,
+            "description": "PKR major units, serialized as a two-decimal string; not integer paisa.",
             "title": "Registration Fee",
-            "type": "integer"
+            "type": "string"
           },
           "total_cost": {
+            "description": "PKR major units, serialized as a two-decimal string; not integer paisa.",
             "title": "Total Cost",
-            "type": "integer"
+            "type": "string"
           },
           "total_slots": {
             "title": "Total Slots",
@@ -7197,8 +7208,9 @@
       "SlotPurchaseResponse": {
         "properties": {
           "amount_charged": {
+            "description": "PKR major units, serialized as a two-decimal string; not integer paisa.",
             "title": "Amount Charged",
-            "type": "integer"
+            "type": "string"
           },
           "new_slots_available": {
             "title": "New Slots Available",
@@ -8423,6 +8435,7 @@
                 "type": "string"
               }
             ],
+            "description": "Preview subtotal in PKR major units; checkout recalculates current cart prices.",
             "title": "Subtotal"
           }
         },
@@ -8591,8 +8604,9 @@
             "type": "boolean"
           },
           "price": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Price",
-            "type": "integer"
+            "type": "string"
           },
           "size_type": {
             "title": "Size Type",
@@ -8743,8 +8757,9 @@
             "type": "boolean"
           },
           "price": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Price",
-            "type": "integer"
+            "type": "string"
           },
           "product_id": {
             "format": "uuid",
@@ -8773,7 +8788,8 @@
           "sale_price": {
             "anyOf": [
               {
-                "type": "integer"
+                "description": "PKR major units as a two-decimal string; not integer paisa.",
+                "type": "string"
               },
               {
                 "type": "null"

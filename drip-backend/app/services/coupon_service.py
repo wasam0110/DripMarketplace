@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
 from datetime import datetime, timezone
 from typing import Optional
@@ -23,13 +23,13 @@ class CouponService:
         user_id: Optional[UUID] = None,
     ) -> CouponValidationResponse:
         coupon = await self._get_valid_coupon(payload.code, payload.subtotal, user_id)
-        discount_amount = self._calc_discount(coupon, Decimal(payload.subtotal))
+        discount_amount = self._calc_discount(coupon, payload.subtotal)
         return CouponValidationResponse(
             code            = coupon.code,
             discount_type   = coupon.discount_type.value,
-            discount_value  = int(coupon.discount_value),
-            discount_amount = int(discount_amount),
-            new_subtotal    = max(0, payload.subtotal - int(discount_amount)),
+            discount_value  = coupon.discount_value,
+            discount_amount = discount_amount,
+            new_subtotal    = (payload.subtotal - discount_amount).quantize(Decimal("0.01")),
         )
 
     async def apply_to_order(
@@ -40,7 +40,7 @@ class CouponService:
         order_id: UUID,
     ) -> Decimal:
         """Validate, calculate discount, record usage, increment uses_count."""
-        coupon = await self._get_valid_coupon(code, int(subtotal), user_id)
+        coupon = await self._get_valid_coupon(code, subtotal, user_id)
         discount = self._calc_discount(coupon, subtotal)
 
         # Record usage
@@ -60,7 +60,7 @@ class CouponService:
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     async def _get_valid_coupon(
-        self, code: str, subtotal: int, user_id: Optional[UUID], *, lock: bool = False
+        self, code: str, subtotal: Decimal, user_id: Optional[UUID], *, lock: bool = False
     ) -> Coupon:
         query = select(Coupon).where(Coupon.code == code.upper())
         if lock:
@@ -80,9 +80,9 @@ class CouponService:
             raise BusinessRuleError("This coupon has expired")
         if coupon.max_uses and coupon.uses_count >= coupon.max_uses:
             raise BusinessRuleError("This coupon has reached its usage limit")
-        if subtotal < int(coupon.min_order_amount):
+        if subtotal < coupon.min_order_amount:
             raise BusinessRuleError(
-                f"Minimum order amount for this coupon is PKR {int(coupon.min_order_amount):,}"
+                f"Minimum order amount for this coupon is PKR {coupon.min_order_amount:,.2f}"
             )
 
         if user_id:
@@ -101,6 +101,11 @@ class CouponService:
 
     @staticmethod
     def _calc_discount(coupon: Coupon, subtotal: Decimal) -> Decimal:
+        # Round the discount once, in PKR major units, before seller allocation.
+        # Explicit half-up matches the ledger money policy and avoids dependence
+        # on the caller's Decimal rounding context.
         if coupon.discount_type == DiscountType.percentage:
-            return min(subtotal, (subtotal * coupon.discount_value / 100).quantize(Decimal("0.01")))
-        return min(coupon.discount_value, subtotal)
+            discount = subtotal * coupon.discount_value / 100
+        else:
+            discount = coupon.discount_value
+        return min(discount, subtotal).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)

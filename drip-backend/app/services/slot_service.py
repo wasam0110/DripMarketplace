@@ -5,6 +5,7 @@ from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.money import format_pkr
 from app.core.exceptions import (
     NotFoundError, PermissionDeniedError, InsufficientBalanceError, BusinessRuleError
 )
@@ -82,7 +83,7 @@ class SlotService:
             slots_purchased     = payload.quantity,
             new_total_slots     = updated.total_slots,
             new_slots_available = updated.slots_available,
-            amount_charged      = int(amount),
+            amount_charged      = amount,
         )
     # ── Guard used by Product service (Block 4) ────────────────────────────────
 
@@ -93,7 +94,7 @@ class SlotService:
         if seller.slots_used >= seller.total_slots:
             raise PermissionDeniedError(
                 f"No slots available ({seller.slots_used}/{seller.total_slots}). "
-                "Purchase extra slots at PKR 50 each."
+                "Check current slot pricing to purchase more."
             )
 
     # ── Internal ───────────────────────────────────────────────────────────────
@@ -104,7 +105,7 @@ class SlotService:
             raise NotFoundError("Seller wallet not found")
         if wallet.available_balance < amount:
             raise InsufficientBalanceError(
-                f"Need PKR {int(amount):,}, have PKR {int(wallet.available_balance):,}"
+                f"Need PKR {format_pkr(amount)}, have PKR {format_pkr(wallet.available_balance)}"
             )
         await self.wallet_repo.debit_available(seller_id, amount)
         from uuid import uuid4

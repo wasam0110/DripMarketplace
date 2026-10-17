@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.exceptions import ExternalServiceError
+from app.core.money import format_pkr
 from app.models.notification import Notification
 from app.models.user import User, UserRole
 from app.repositories.notification_repo import NotificationRepository, EmailLogRepository
@@ -209,7 +210,7 @@ class NotificationService:
                 user_id=order.user_id,
                 type=NotifType.ORDER_PLACED,
                 title=f"Order #{order.order_number} placed",
-                body=f"Your order of PKR {int(order.total):,} has been received.",
+                body=f"Your order of PKR {format_pkr(order.total)} has been received.",
                 action_url=f"/orders/{order.id}",
                 event_key=f"{event_key}:in_app",
             )
@@ -224,8 +225,8 @@ class NotificationService:
         if recipient:
             items_html = "".join(
                 f"<tr><td>{escape(i.product_name)} &mdash; {escape(i.variant_label)}</td>"
-                f"<td style='text-align:right'>PKR {int(i.unit_price):,} × {i.quantity}</td>"
-                f"<td style='text-align:right'>PKR {int(i.subtotal):,}</td></tr>"
+                f"<td style='text-align:right'>PKR {format_pkr(i.unit_price)} × {i.quantity}</td>"
+                f"<td style='text-align:right'>PKR {format_pkr(i.subtotal)}</td></tr>"
                 for i in order.items
             )
             tracking_url = f"{settings.FRONTEND_URL}/orders/{order.id}"
@@ -245,8 +246,8 @@ class NotificationService:
               <thead><tr><th>Item</th><th>Price</th><th>Subtotal</th></tr></thead>
               <tbody>{items_html}</tbody>
             </table>
-            <p><strong>Shipping fee:</strong> PKR {int(order.shipping_fee):,}</p>
-            <p><strong>Total:</strong> PKR {int(order.total):,}</p>
+            <p><strong>Shipping fee:</strong> PKR {format_pkr(order.shipping_fee)}</p>
+            <p><strong>Total:</strong> PKR {format_pkr(order.total)}</p>
             <p>Payment method: {payment_method}</p>
             <p><a href="{escape(tracking_url, quote=True)}">Track your order &rarr;</a></p>
             """
@@ -356,11 +357,11 @@ class NotificationService:
         messages = {
             "approved": (
                 "Payout approved ✓",
-                f"Your withdrawal of PKR {int(payout.amount):,} has been approved.",
+                f"Your withdrawal of PKR {format_pkr(payout.amount)} has been approved.",
             ),
             "completed": (
                 "Payout sent 💰",
-                f"PKR {int(payout.amount):,} has been sent to {payout.payment_detail}.",
+                f"PKR {format_pkr(payout.amount)} has been sent to {payout.payment_detail}.",
             ),
             "rejected": (
                 "Payout rejected",

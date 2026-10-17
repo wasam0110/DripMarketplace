@@ -70,16 +70,16 @@ class TestSlotPriceEndpoint:
         r = client.get("/seller/register/slot-price")
         assert r.status_code == 200
         d = r.json()
-        assert d["registration_fee"] == 5000
+        assert d["registration_fee"] == "5000.00"
         assert d["total_slots"]      == 50
-        assert d["total_cost"]       == 5000
+        assert d["total_cost"]       == "5000.00"
 
     def test_twenty_extra(self, client):
         r = client.get("/seller/register/slot-price?extra_slots=20")
         assert r.status_code == 200
         d = r.json()
-        assert d["extra_cost"]  == 1000
-        assert d["total_cost"]  == 6000
+        assert d["extra_cost"]  == "1000.00"
+        assert d["total_cost"]  == "6000.00"
         assert d["total_slots"] == 70
 
     def test_negative_rejected(self, client):
