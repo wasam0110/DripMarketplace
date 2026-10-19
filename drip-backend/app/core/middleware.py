@@ -4,8 +4,9 @@ app/core/middleware.py
 Middleware stack (applied in order in main.py):
   1. SecurityHeadersMiddleware  — adds HTTP security headers to every response
   2. RequestIDMiddleware        — stamps each request with a unique ID
-  3. LoggingMiddleware          — structured request/response logging
-  4. RateLimitMiddleware        — fixed-window rate limiting via Redis
+  3. ErrorBoundaryMiddleware    — safe pre-response failures inside outer headers
+  4. LoggingMiddleware          — structured request/response logging
+  5. RateLimitMiddleware        — fixed-window rate limiting via Redis
 """
 
 from __future__ import annotations
@@ -16,15 +17,44 @@ from collections.abc import Callable
 
 import structlog
 from fastapi import Request, Response
-from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
-from starlette.types import ASGIApp
+from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from app.core.config import settings
 from app.core.client_ip import client_ip
+from app.core.error_responses import error_response, unexpected_error_response
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+
+class ErrorBoundaryMiddleware:
+    """Catch pre-response failures inside request-ID, security and CORS wrappers."""
+
+    def __init__(self, app: ASGIApp) -> None:
+        self.app = app
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        response_started = False
+
+        async def tracked_send(message: Message) -> None:
+            nonlocal response_started
+            if message["type"] == "http.response.start":
+                response_started = True
+            await send(message)
+
+        try:
+            await self.app(scope, receive, tracked_send)
+        except Exception as exc:
+            # A streaming/background failure cannot replace an already-started response.
+            # Cancellation (BaseException) also deliberately propagates unchanged.
+            if response_started:
+                raise
+            response = unexpected_error_response(Request(scope), exc)
+            await response(scope, receive, send)
 
 
 # ── 1. Security Headers ────────────────────────────────────────────────────────
@@ -168,15 +198,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 limit=limit,
                 window=window,
             )
-            return JSONResponse(
+            return error_response(
+                request,
                 status_code=429,
-                content={
-                    "error": {
-                        "code":    "RATE_LIMITED",
-                        "message": "Too many requests. Please wait and try again.",
-                        "request_id": getattr(request.state, "request_id", None),
-                    }
-                },
+                code="RATE_LIMITED",
+                message="Too many requests. Please wait and try again.",
                 headers={
                     "Retry-After":            str(window),
                     "X-RateLimit-Limit":      str(limit),

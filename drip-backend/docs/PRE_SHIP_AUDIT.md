@@ -22,17 +22,27 @@ No live charges, real customer emails, production deletion, deployment, secret r
 
 ## Verified change notes
 
-Latest: [checkpoint 11](PRE_SHIP_CHECKPOINT_11.md), 17 October 2026 — **977 passed,
-1 skipped; 87.55% coverage** with native PostgreSQL/Redis enabled. Catalogue/wishlist
-responses preserve paisa as two-decimal strings; whole-PKR entry/filter policy is
-unchanged. 35 new native/unit cases cover response types, variant/checkout agreement,
-cursor precision, seller edits and wishlist isolation. Checkpoint 10's slot/notification
-presentation and checkpoints 8/9's analytics/coupon precision remain passing.
+Latest: [checkpoint 18](PRE_SHIP_CHECKPOINT_18.md), 19 October 2026, replaces permissive
+product smoke tests with real-database HTTP cases and authenticated validation.
+Verification uses all-unit and targeted native catalogue/ownership/permission checks;
+no application/API change. Checkpoint 17's shared catalogue/media limits, checkpoint 16's
+withdrawal configuration and checkpoint 15's typed admin product reads remain.
+Latest full-suite baseline remains checkpoint 14: **1,104 passed, 1 skipped; 87.96%
+coverage** with native PostgreSQL/Redis enabled (18 October run), not rerun here.
+Seller-order read schemas now match live payloads and document exact PKR strings;
+29 new cases cover contracts, two-brand read isolation and pagination. Shared HTTP error
+envelopes, preserved error headers and generic unexpected failures have 46 new
+regression cases. OpenAPI reflects ErrorResponse, with explicit health/preflight/
+streaming boundaries. Checkpoint 12's generated app
+links use canonical frontend/API origins independently of CORS. Origin validation,
+production HTTPS and /api/v1 prefix restrictions are documented; 52 net new cases
+cover configuration, email/notification links and provider-mocked callback/form URLs.
+Checkpoints 8–11's money precision/presentation repairs remain passing.
 Bulk-stock transaction, seller isolation and inventory-health repairs remain in place.
 Earlier email privacy, durable cleanup and notification recovery remain in place.
 Migration head remains 020; contract remains 190 operations.
 Final retention/offboarding, exhaustive ownership/input coverage and other unverified
-checklist items remain open. [Checkpoint 10](PRE_SHIP_CHECKPOINT_10.md) and earlier
+checklist items remain open. [Checkpoint 13](PRE_SHIP_CHECKPOINT_13.md) and earlier
 reports remain historical evidence, not the latest verification.
 
 These are repair checkpoints, **not a completed A–Z review**. New code fixes
@@ -84,13 +94,13 @@ Proxy trust reference: [MDN X-Forwarded-For security guidance](https://developer
 | ID | Requirement | Status / evidence |
 |---|---|---|
 | 3.1 | **BLOCKER:** All input validated on the server with schemas: types, ranges, lengths, enums | Partial — checkpoint 7 adds native bulk-stock evidence for unique IDs, 1-500 rows, stock 0-999999, malformed/fractional input and forbidden fields. Invalid HTTP/service batches perform no writes. This does not certify all input schemas. |
-| 3.2 | Consistent error format; no stack traces or internals in responses | Unverified — review and evidence pending. |
+| 3.2 | Consistent error format; no stack traces or internals in responses | Partial — checkpoint 13 unifies domain, validation, direct HTTP/router and pre-response unexpected errors, with no-store and preserved status/header contracts. 46 new cases cover unit/native boundaries. Health readiness, CORS preflight, bodyless statuses and outer server/transport failures are documented exceptions. Exhaustive domain-message/input review remains open. |
 | 3.3 | Correct status codes (401, 403, 404); no 500s on bad input | Partial — Cursor error handling repaired; other routes still need negative-input coverage. |
 | 3.4 | Pagination, filtering and sorting limits enforced server-side | Partial — Cursor size/type validation repaired; review all endpoint bounds. |
 | 3.5 | Request body size limits and timeouts set | Unverified — review and evidence pending. |
 | 3.6 | Idempotency keys on create and payment endpoints that clients may retry | Unverified — review and evidence pending. |
 | 3.7 | API versioned, with a deprecation approach | Unverified — review and evidence pending. |
-| 3.8 | OpenAPI or equivalent docs generated and accurate | Unverified — review and evidence pending. |
+| 3.8 | OpenAPI or equivalent docs generated and accurate | Partial — offline export and inventory retain 190 operations. Checkpoint 13 asserts common error schemas, replaces the default 422 shape with ErrorResponse and preserves degraded health's HealthResponse. Checkpoints 14/15 add matching seller-order and admin-product schemas with exact money strings and native read checks. Universal endpoint/schema parity is not signed off. |
 | 3.9 | API fuzzed or schema-tested against the spec | Unverified — review and evidence pending. |
 | 3.10 | File uploads: type, size and content checks, private storage, random names | Unverified — review and evidence pending. |
 | 3.11 | Open redirect and SSRF checked on any endpoint that takes a URL | Unverified — review and evidence pending. |
@@ -133,7 +143,7 @@ Proxy trust reference: [MDN X-Forwarded-For security guidance](https://developer
 | ID | Requirement | Status / evidence |
 |---|---|---|
 | 6.1 | **BLOCKER:** Prices, discounts and totals computed server-side only | Unverified — review and evidence pending. |
-| 6.2 | Money stored as integers in minor units with defined rounding | Project uses exact Decimal/PostgreSQL NUMERIC in PKR major units, not integer storage. Checkpoints 8/9 repair analytics and coupon precision. Checkpoint 10 repairs slot response types and notification/email presentation. Checkpoint 11 repairs catalogue/wishlist price responses. Whole-PKR entry/settings and accounting are unchanged. Remaining legacy/untyped money contracts and wider F16 remain open; no financial-schema conversion was made to match generic checklist wording. |
+| 6.2 | Money stored as integers in minor units with defined rounding | Project uses exact Decimal/PostgreSQL NUMERIC in PKR major units, not integer storage. Checkpoints 8/9 repair analytics and coupon precision. Checkpoint 10 repairs slot response types and notification/email presentation. Checkpoint 11 repairs catalogue/wishlist price responses. Checkpoints 14/15 type seller-order and admin-product reads with exact PKR strings. Whole-PKR entry/settings and accounting are unchanged. Wider F16 remains open; no financial-schema conversion was made to match generic checklist wording. |
 | 6.3 | **BLOCKER:** Webhooks verify the signature or hash and process each event exactly once | Unverified — review and evidence pending. |
 | 6.4 | Callback amount, currency and status checked against your own records | Locally verified — success callback requires authenticated status lookup; reconciliation requires explicit consistent amount/currency plus matching basket/transaction/order total. Native tests cover rejection, retry, replay and concurrency. Keep PayFast disabled pending merchant UAT/response mapping. |
 | 6.5 | Order and payment state machine defined; invalid transitions rejected | Unverified — review and evidence pending. |
@@ -175,7 +185,7 @@ Proxy trust reference: [MDN X-Forwarded-For security guidance](https://developer
 | ID | Requirement | Status / evidence |
 |---|---|---|
 | 9.1 | **BLOCKER:** No secrets in git history, images, logs or client responses | Unverified — review and evidence pending. |
-| 9.2 | CORS limited to real origins; no wildcard with credentials | Unverified — review and evidence pending. |
+| 9.2 | CORS limited to real origins; no wildcard with credentials | Partially verified — checkpoint 12 normalizes explicit HTTP(S) origins and rejects wildcard/null/path entries for credentialed CORS. Empty lists remain valid but deny cross-origin browser access. Actual deployed origin ownership/allowlist and browser acceptance remain unverified. |
 | 9.3 | HTTPS enforced; security headers set on responses | Unverified — review and evidence pending. |
 | 9.4 | Rate limiting on expensive or sensitive endpoints | Partial — Proxy spoofing and per-resource bucket bypass repaired; expensive endpoint limits and outage behavior remain. |
 | 9.5 | Dependencies scanned for known vulnerabilities; lockfile committed | Partial — upgraded installed environment reports zero known vulnerabilities in `audit/preship2-dependency-audit-2026-10-14.json`; python-jose/ecdsa replaced by PyJWT. Complete transitive lock and clean Linux build verification remain. |
@@ -194,10 +204,10 @@ Proxy trust reference: [MDN X-Forwarded-For security guidance](https://developer
 | 10.1 | Every dependency exists on the registry and is the intended package | Unverified — review and evidence pending. |
 | 10.2 | No stubs: mock data, fake delays, hardcoded users, TODO endpoints | Unverified — review and evidence pending. |
 | 10.3 | No empty except or catch blocks swallowing errors | Unverified — review and evidence pending. |
-| 10.4 | No duplicate or conflicting helpers such as two auth utilities or two money helpers | Unverified — review and evidence pending. |
+| 10.4 | No duplicate or conflicting helpers such as two auth utilities or two money helpers | Partial — canonical URL, money-response and error helpers are documented in checkpoints 8–15. Checkpoint 16 aligns withdrawal limits with startup settings; checkpoint 17 shares fixed catalogue/media constants across enforcement points. Broader helper/contract parity remains open. |
 | 10.5 | No auth or validation that exists only in the frontend | Unverified — review and evidence pending. |
 | 10.6 | Dead code, unused routes and unused dependencies removed | Unverified — review and evidence pending. |
-| 10.7 | Hardcoded URLs, keys and localhost references removed | Unverified — review and evidence pending. |
+| 10.7 | Hardcoded URLs, keys and localhost references removed | Partially repaired — checkpoint 12 centralizes generated app links on validated FRONTEND_URL/API_BASE_URL instead of the CORS list. Local development defaults and fixed provider endpoints are intentional. This does not certify every literal, historical queued link, deployment secret/configuration or live route. |
 | 10.8 | You can explain what each critical file does | External — configuration, runtime evidence or owner sign-off required. |
 
 ## 11. Testing
@@ -205,8 +215,8 @@ Proxy trust reference: [MDN X-Forwarded-For security guidance](https://developer
 | ID | Requirement | Status / evidence |
 |---|---|---|
 | 11.1 | **BLOCKER:** Auth matrix tests per protected route: anonymous, other user, owner, admin | Partial — all protected operations have identity/role-denial tests. Checkpoints 4 and 6 add real cross-account resource/nested-ID/list/wallet/aggregate/filter cases and owner success checks. Exhaustive per-operation/input coverage remains open. The obsolete security module remains skipped; active native permission/ownership tests are not. |
-| 11.2 | Integration tests run against a real database, not mocks | Unverified — review and evidence pending. |
-| 11.3 | Tests assert intended behavior, not just current output | Unverified — review and evidence pending. |
+| 11.2 | Integration tests run against a real database, not mocks | Partial — checkpoint 18 replaces the product module's mocked database with disposable native PostgreSQL fixtures. Earlier native catalogue/ownership checks remain. Other legacy mocked smoke modules still require review; provider mocks are distinct from database execution. |
+| 11.3 | Tests assert intended behavior, not just current output | Partial — checkpoint 18 removes product assertions accepting 500/401-as-validation and adds exact statuses, field errors, authenticated positive controls and rejected-write snapshots. Other smoke/security modules and broader test-quality review remain open. |
 | 11.4 | Property or invariant tests on money, balances and permissions | Unverified — review and evidence pending. |
 | 11.5 | Concurrency tests: double submit, races, duplicate webhooks | Unverified — review and evidence pending. |
 | 11.6 | Webhook tests: valid, tampered, replayed and out-of-order events | Unverified — review and evidence pending. |
@@ -233,7 +243,7 @@ Proxy trust reference: [MDN X-Forwarded-For security guidance](https://developer
 | ID | Requirement | Status / evidence |
 |---|---|---|
 | 13.1 | Health and readiness endpoints reflect app and dependency state | Locally verified — `/health` returns 503 on either bounded DB/Redis probe failure, 200 when healthy; HTTP regression tests cover all four combinations and close the DB generator. Separate process-only liveness is not provided. |
-| 13.2 | Global error handler returns safe errors and logs the details | Unverified — review and evidence pending. |
+| 13.2 | Global error handler returns safe errors and logs the details | Partial — checkpoint 13 adds a pre-response boundary inside request-ID/security/CORS wrappers, preserving generic 500 bodies and the existing privacy-aware exception event. Streaming-after-start and cancellation propagate. Focused log-redaction checks pass; actual monitoring delivery and exhaustive domain-message privacy remain unverified. |
 | 13.3 | Graceful shutdown finishes in-flight requests and jobs | Partial — connection cleanup tested on startup/application/shutdown failures; real in-flight request/job draining and deployment behavior remain unverified. |
 | 13.4 | Timeouts on every external call and database query | Unverified — review and evidence pending. |
 | 13.5 | **BLOCKER:** Backups enabled and a restore actually tested | External — configuration, runtime evidence or owner sign-off required. |

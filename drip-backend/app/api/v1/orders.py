@@ -20,6 +20,7 @@ from app.schemas.order import (
     UpdateSellerOrderRequest,
     ValidateCouponRequest,
 )
+from app.schemas.seller import PaginatedSellerOrders, SellerOrderDetailResponse
 from app.services.coupon_service import CouponService
 from app.services.order_service import OrderService
 
@@ -133,7 +134,7 @@ async def validate_coupon(
 # ── Seller Order Management ────────────────────────────────────────────────────
 
 
-@router.get("/seller/orders")
+@router.get("/seller/orders", response_model=PaginatedSellerOrders)
 async def list_seller_orders(
     db: DB,
     current_seller: CurrentSeller,
@@ -149,7 +150,7 @@ async def list_seller_orders(
     )
 
 
-@router.get("/seller/orders/{seller_order_id}")
+@router.get("/seller/orders/{seller_order_id}", response_model=SellerOrderDetailResponse)
 async def get_seller_order(
     seller_order_id: UUID,
     db: DB,

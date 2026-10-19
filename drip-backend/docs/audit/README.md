@@ -1,10 +1,14 @@
 # Backend definition index
 
 Historical index, not a current-source hash manifest. Subsequent pre-ship changes
-are described in [checkpoint 11](../PRE_SHIP_CHECKPOINT_11.md); its 17 October 2026
-test XML and coverage JSON are retained in this directory. Do not interpret the
+are described in [checkpoint 18](../PRE_SHIP_CHECKPOINT_18.md), dated 19 October;
+its product/unit/native XML files record scoped validation (the legacy-baseline XML
+records the old permissive tests, not stronger evidence), without
+a new coverage measurement.
+Checkpoint 14's full-suite XML/coverage JSON retain the 18 October run filenames.
+Do not interpret the
 older source ranges or hashes below as verification of the current working tree.
-Checkpoint 11: 977 passed, 1 skipped, 87.55% coverage.
+Latest full-suite baseline: checkpoint 14, 1,104 passed, 1 skipped, 87.96% coverage.
 
 Validated 13 October 2026: the original review index covers all 163 pre-repair Python files and 1,953 class/function definitions. Backend repair batches changed indexed files and added regression/migration source; the [batch-1](b1-changes.md), [batch-2](b2-changes.md) and [batch-3](b3-changes.md) supplements supersede the affected entries. Hashes in each supplement describe that batch's verified snapshot.
 

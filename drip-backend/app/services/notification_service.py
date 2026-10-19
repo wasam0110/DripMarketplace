@@ -9,9 +9,9 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.config import settings
 from app.core.exceptions import ExternalServiceError
 from app.core.money import format_pkr
+from app.core.public_urls import frontend_url
 from app.models.notification import Notification
 from app.models.user import User, UserRole
 from app.repositories.notification_repo import NotificationRepository, EmailLogRepository
@@ -229,7 +229,7 @@ class NotificationService:
                 f"<td style='text-align:right'>PKR {format_pkr(i.subtotal)}</td></tr>"
                 for i in order.items
             )
-            tracking_url = f"{settings.FRONTEND_URL}/orders/{order.id}"
+            tracking_url = frontend_url(f"/orders/{order.id}")
             if order.user_id is None:
                 from app.services.order_access import create_guest_token
 
@@ -310,7 +310,7 @@ class NotificationService:
                 event_key=f"{event_key}:in_app",
             )
         if recipient and email_enabled:
-            tracking_url = f"{settings.FRONTEND_URL}/orders/{order.id}"
+            tracking_url = frontend_url(f"/orders/{order.id}")
             if order.user_id is None:
                 from app.services.order_access import create_guest_token
 

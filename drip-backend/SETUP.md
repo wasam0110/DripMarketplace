@@ -1,12 +1,44 @@
 # WearHowZ backend setup and release checks
 
-Backend review candidate, refreshed 17 October 2026. Not approved for production; see
-[known limits](KNOWN_LIMITS.md) and [latest verification](docs/PRE_SHIP_CHECKPOINT_11.md).
+Backend review candidate, refreshed 19 October 2026. Not approved for production; see
+[known limits](KNOWN_LIMITS.md) and [latest verification](docs/PRE_SHIP_CHECKPOINT_18.md).
 Run commands from `drip-backend`. Never replace an existing local `.env`.
 
-Checkpoint 11: 977 tests passed, 1 skipped, 87.55% coverage on disposable native
-PostgreSQL/Redis. Catalogue/wishlist money responses now use two-decimal PKR strings;
+Checkpoint 18 replaces permissive product smoke tests with native HTTP checks.
+`tests/integration/test_product_api.py` now requires disposable TEST_DATABASE_URL;
+without it, the shared fixture skips rather than claiming mocked database coverage.
+The obsolete security module and other legacy smoke tests remain separate work.
+Checkpoint 17 centralizes fixed catalogue/media limits without changing their values
+or exported contracts. Checkpoint 16 aligns withdrawal limits with startup configuration.
+Checkpoint 15 types admin product reads; consume price as a two-decimal PKR string.
+Verification is all unit tests plus scoped native PostgreSQL regression tests.
+Latest full-suite baseline remains checkpoint 14: 1,104 passed, 1 skipped, 87.96%
+coverage on disposable native PostgreSQL/Redis; no fresh full-suite coverage claim.
+Seller-order list/detail schemas preserve the current payload;
+subtotal and item unit_price/subtotal are exact two-decimal PKR strings.
+Direct HTTP/router failures now use `error.code`/`error.message`
+instead of top-level `detail`; update clients and observe the documented health,
+preflight and streaming exceptions. Canonical public links are independent of CORS; review the URL
+configuration rules below before deployment. Catalogue/wishlist responses retain
+checkpoint 11's two-decimal PKR strings;
 adapt client response types without changing the existing whole-rupee entry rules.
+
+Withdrawal limits are environment/startup settings, not `system_settings` overrides:
+`MIN_WITHDRAWAL_AMOUNT` defaults to 500 and `MAX_WITHDRAWAL_AMOUNT` to 200000.
+Bounds are inclusive whole-PKR integers satisfying 1 <= minimum <= maximum <=
+9999999999 (the NUMERIC(12,2) storage ceiling for an integer bound). Requested amounts
+still allow two decimal places. Invalid bounds fail startup. Restart API and workers
+together after an approved change; hot-mutating settings is unsupported. OpenAPI
+reflects the configured bounds at process startup, so re-export it for a custom
+deployment. Default exports retain the existing 500/200000 bounds. No production
+limits were changed by this repair.
+
+Catalogue/media constants in `app/core/catalogue_policy.py` are fixed code policy,
+not environment or admin settings: whole-PKR product-entry bounds 100–500000,
+six images per product and a 5 * 1024 * 1024-byte upload cap. Existing errors label
+that cap "5 MB". Catalogue min_price may still be zero. Changing price bounds
+requires reviewing persisted constraints and creating a migration, not editing
+historical migrations. The current consolidation makes no database changes.
 
 Customer deletion now records retryable external cleanup. Review the
 [customer privacy runbook](docs/CUSTOMER_PRIVACY.md), deploy API/workers together and
@@ -34,7 +66,20 @@ database/Redis URLs and RS256 private/public keys. Do not commit keys or credent
 The database driver URL is `postgresql+asyncpg://...`. Keep `PAYFAST_ENABLED=false`.
 Do not reuse the historical sample database password; its owner must rotate it if active.
 
-Configure `FRONTEND_URL`, allowed origins and Google callback URLs consistently.
+Configure `FRONTEND_URL` as the canonical customer-site origin and `API_BASE_URL`
+as the public backend origin. Use root HTTP(S) origins without credentials, paths,
+queries or fragments; a trailing slash is normalized. Both require HTTPS in
+production, even with PayFast disabled. `ALLOWED_ORIGINS` is only the browser CORS
+allowlist: include the actual customer/admin/seller browser origins, not callback
+paths. Entries are normalized/deduplicated; wildcards are rejected for this
+credentialed API. An empty list denies cross-origin browser access but does not
+disable email links. Local defaults permit ports 3000 and 5173; the canonical
+frontend default remains 3000. `API_PREFIX` must remain `/api/v1` because auth
+cookie scopes and callback routes depend on it. Existing subpath deployments and
+custom API prefixes are not supported by this checkpoint.
+Register Google's callback as `API_BASE_URL/api/v1/auth/google/callback` (one slash).
+These settings do not infer public URLs from Host/forwarding headers and do not
+change provider-issued endpoint URLs. See [checkpoint 12](docs/PRE_SHIP_CHECKPOINT_12.md).
 For reverse-proxy deployments, configure `TRUSTED_PROXY_IPS` with only the actual
 trusted proxy addresses/CIDRs (JSON list, default `[]`). Run Uvicorn with
 `--no-proxy-headers`, as the Docker command now does, so application validation

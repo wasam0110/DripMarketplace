@@ -16,6 +16,7 @@ from jwt import PyJWTError as JWTError
 from fastapi.responses import RedirectResponse
 
 from app.core.config import settings
+from app.core.public_urls import api_url, frontend_url
 from app.core.exceptions import AuthenticationError, BusinessRuleError, ExternalServiceError
 from app.core.redis import get_redis
 from app.core.security import generate_refresh_token, hash_refresh_token, get_cookie_params
@@ -55,7 +56,7 @@ async def start_google_login(response):
         + urlencode(
             {
                 "client_id": settings.GOOGLE_CLIENT_ID,
-                "redirect_uri": settings.API_BASE_URL + CALLBACK_PATH,
+                "redirect_uri": api_url(CALLBACK_PATH),
                 "response_type": "code",
                 "scope": "openid email profile",
                 "state": state,
@@ -94,7 +95,7 @@ async def finish_google_login(request, db):
                     "code": code,
                     "client_id": settings.GOOGLE_CLIENT_ID,
                     "client_secret": settings.GOOGLE_CLIENT_SECRET,
-                    "redirect_uri": settings.API_BASE_URL + CALLBACK_PATH,
+                    "redirect_uri": api_url(CALLBACK_PATH),
                     "grant_type": "authorization_code",
                     "code_verifier": flow["verifier"],
                 },
@@ -153,7 +154,7 @@ async def finish_google_login(request, db):
     )
     await db.commit()
     # No bearer tokens in URLs. The frontend obtains one through POST /auth/refresh.
-    response = RedirectResponse(settings.FRONTEND_URL + "/auth/callback", status_code=303)
+    response = RedirectResponse(frontend_url("/auth/callback"), status_code=303)
     response.set_cookie(value=refresh, **get_cookie_params())
     response.delete_cookie(STATE_COOKIE, path=CALLBACK_PATH)
     response.headers["Cache-Control"] = "no-store"

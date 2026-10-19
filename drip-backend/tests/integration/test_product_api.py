@@ -1,135 +1,224 @@
+"""Native product HTTP regressions: real rows/auth and exact application outcomes.
+
+Uses the shared disposable TEST_DATABASE_URL fixture, never a mocked database.
 """
-Integration tests — Block 4: Product API
-Run: pytest tests/integration/test_product_api.py -v --no-cov
-"""
+
+from decimal import Decimal
+from uuid import UUID, uuid4
+
 import pytest
-from uuid import uuid4
-from unittest.mock import MagicMock, AsyncMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse
+from sqlalchemy import select
+from test_marketplace_regressions import market as marketplace_fixture
+from test_resource_ownership import headers
 
-from app.api.v1.products import router as product_router
-from app.core.database import get_db
-from app.core.exceptions import DRIPException
-import app.models.user     # noqa: F401
-import app.models.seller   # noqa: F401
-import app.models.product  # noqa: F401
+from app.models.product import Product, ProductImage, ProductInventory, ProductVariant
 
-@pytest.fixture
-def client():
-    import app.models.user    # noqa: F401
-    import app.models.seller  # noqa: F401
-    import app.models.product # noqa: F401
-
-    from fastapi.responses import JSONResponse
-    from app.core.database import get_db
-    from app.core.exceptions import DRIPException
-
-    test_app = FastAPI()
-    test_app.include_router(product_router)
-
-    @test_app.exception_handler(DRIPException)
-    async def drip_handler(request, exc):
-        return JSONResponse(status_code=exc.http_status, content={"detail": exc.message})
-
-    async def mock_db():
-        result = MagicMock()
-        result.scalars.return_value.all.return_value             = []
-        result.scalar_one_or_none.return_value                   = None
-        result.scalar_one.return_value                           = 0
-
-        session          = MagicMock()
-        session.execute  = AsyncMock(return_value=result)
-        session.commit   = AsyncMock()
-        session.rollback = AsyncMock()
-        session.flush    = AsyncMock()
-        yield session
-
-    test_app.dependency_overrides[get_db] = mock_db
-
-    with TestClient(test_app, raise_server_exceptions=False) as c:
-        yield c
+pytestmark = pytest.mark.integration
+market = marketplace_fixture
+BASE = "/api/v1"
+VALID_PRODUCT = {
+    "name": "Synthetic product",
+    "description": "A synthetic product for boundary verification",
+    "price": 100,
+}
 
 
-class TestPublicEndpoints:
-    def test_catalogue_ok(self, client):
-        r = client.get("/products")
-        assert r.status_code in (200, 401, 422, 500)
-
-    def test_catalogue_invalid_sort(self, client):
-        r = client.get("/products?sort=popular")
-        assert r.status_code == 422
-
-    def test_catalogue_price_range(self, client):
-        r = client.get("/products?min_price=500&max_price=5000")
-        assert r.status_code in (200, 500)
-
-    def test_get_product_not_found(self, client):
-        r = client.get(f"/products/{uuid4()}")
-        assert r.status_code in (404, 500)
-
-    def test_search_too_short(self, client):
-        r = client.get("/products/search/suggestions?q=a")
-        assert r.status_code == 422
-
-    def test_search_valid(self, client):
-        r = client.get("/products/search/suggestions?q=drip")
-        assert r.status_code in (200, 500)
-
-    def test_variants_endpoint(self, client):
-        r = client.get(f"/products/{uuid4()}/variants")
-        assert r.status_code in (200, 404, 500)
+async def snapshot(db):
+    return [
+        sorted(
+            tuple(map(str, row))
+            for row in (await db.execute(select(*model.__table__.columns))).all()
+        )
+        for model in (Product, ProductImage, ProductVariant, ProductInventory)
+    ]
 
 
-class TestSellerEndpoints:
-    def test_list_seller_products_no_auth(self, client):
-        r = client.get("/seller/products")
-        assert r.status_code in (401, 422)
-
-    def test_create_product_no_auth(self, client):
-        r = client.post("/seller/products", json={})
-        assert r.status_code in (401, 422)
-
-    def test_create_product_invalid_price(self, client):
-        r = client.post("/seller/products", json={
-            "name": "Test Product",
-            "description": "Test description that is long enough",
-            "price": 50,  # below minimum
-        })
-        assert r.status_code in (401, 422) 
-
-    def test_create_product_missing_fields(self, client):
-        r = client.post("/seller/products", json={"name": "Test"})
-        assert r.status_code in (401, 422) 
-
-    def test_publish_no_auth(self, client):
-        r = client.post(f"/seller/products/{uuid4()}/publish")
-        assert r.status_code in (401, 422)
-
-    def test_unpublish_no_auth(self, client):
-        r = client.post(f"/seller/products/{uuid4()}/unpublish")
-        assert r.status_code in (401, 422)
-
-    def test_delete_no_auth(self, client):
-        r = client.delete(f"/seller/products/{uuid4()}")
-        assert r.status_code in (401, 422)
-
-    def test_upload_images_no_auth(self, client):
-        r = client.post(f"/seller/products/{uuid4()}/images",
-                        files={"images": ("test.jpg", b"", "image/jpeg")})
-        assert r.status_code in (401, 422)
-
-    def test_invalid_status_filter(self, client):
-        r = client.get("/seller/products?status=archived")
-        assert r.status_code in (401, 422) 
+def assert_error(response, status, code, fields=()):
+    assert response.status_code == status, response.text
+    error = response.json()["error"]
+    assert error["code"] == code
+    assert error["message"]
+    assert set(fields) <= set(error.get("fields", {}))
 
 
-class TestAdminEndpoints:
-    def test_admin_list_no_auth(self, client):
-        r = client.get("/admin/products")
-        assert r.status_code in (401, 422, 501)
+async def test_empty_catalogue_returns_documented_page(client):
+    response = await client.get(BASE + "/products")
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "data": [],
+        "pagination": {"next_cursor": None, "has_next": False, "limit": 20},
+    }
 
-    def test_admin_hide_no_auth(self, client):
-        r = client.post(f"/admin/products/{uuid4()}/hide")
-        assert r.status_code in (401, 422, 501)
+
+async def test_catalogue_returns_seeded_public_product(client, market):
+    response = await client.get(BASE + "/products")
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert [row["id"] for row in body["data"]] == [str(market.product.id)]
+    assert body["data"][0]["price"] == "1500.00"
+    assert body["data"][0]["sale_price"] == "1200.00"
+    assert body["pagination"] == {"next_cursor": None, "has_next": False, "limit": 20}
+
+
+async def test_catalogue_invalid_sort_is_validation_not_server_error(client, db, market):
+    before = await snapshot(db)
+    response = await client.get(BASE + "/products", params={"sort": "popular"})
+    assert_error(response, 422, "VALIDATION_ERROR", ["query → sort"])
+    assert await snapshot(db) == before
+
+
+@pytest.mark.parametrize(
+    "low,high,included", [(500, 5000, True), (1200, 1200, True), (1300, 5000, False)]
+)
+async def test_catalogue_price_range_filters_effective_price(client, market, low, high, included):
+    response = await client.get(BASE + "/products", params={"min_price": low, "max_price": high})
+    assert response.status_code == 200, response.text
+    assert [row["id"] for row in response.json()["data"]] == (
+        [str(market.product.id)] if included else []
+    )
+
+
+@pytest.mark.parametrize("suffix", ["", "/variants"])
+async def test_missing_product_returns_not_found(client, suffix):
+    response = await client.get(f"{BASE}/products/{uuid4()}{suffix}")
+    assert_error(response, 404, "NOT_FOUND")
+
+
+async def test_search_too_short_is_validation_error(client):
+    response = await client.get(BASE + "/products/search/suggestions", params={"q": "a"})
+    assert_error(response, 422, "VALIDATION_ERROR", ["query → q"])
+
+
+@pytest.mark.parametrize(
+    "query,product_match,brand_match",
+    [("linen", True, False), ("Test Brand", False, True), ("absent", False, False)],
+)
+async def test_search_returns_expected_suggestions(
+    client, market, query, product_match, brand_match
+):
+    response = await client.get(BASE + "/products/search/suggestions", params={"q": query})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert set(body) == {"products", "brands"}
+    assert [row["id"] for row in body["products"]] == (
+        [str(market.product.id)] if product_match else []
+    )
+    assert [row["id"] for row in body["brands"]] == ([str(market.seller.id)] if brand_match else [])
+    if product_match:
+        assert body["products"][0]["price"] == "1200.00"
+
+
+async def test_variants_return_real_price_and_stock(client, market):
+    response = await client.get(f"{BASE}/products/{market.product.id}/variants")
+    assert response.status_code == 200, response.text
+    assert response.json() == [
+        {
+            "id": str(market.variant.id),
+            "sku": "TEST-M",
+            "size_type": "alpha",
+            "size_value": "M",
+            "colour": "Ivory",
+            "price": "1200.00",
+            "stock": 8,
+            "available_stock": 8,
+            "is_active": True,
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/seller/products"),
+        ("POST", "/seller/products"),
+        ("POST", "/seller/products/{id}/publish"),
+        ("POST", "/seller/products/{id}/unpublish"),
+        ("DELETE", "/seller/products/{id}"),
+        ("POST", "/seller/products/{id}/images"),
+        ("GET", "/admin/products"),
+        ("POST", "/admin/products/{id}/hide"),
+    ],
+)
+async def test_protected_product_routes_require_auth_without_mutation(
+    client, db, market, method, path
+):
+    before = await snapshot(db)
+    kwargs = {}
+    if path.endswith("/images"):
+        client.headers.pop("Content-Type", None)
+        kwargs["files"] = {"images": ("test.jpg", b"\xff\xd8\xff", "image/jpeg")}
+    elif method == "POST":
+        kwargs["json"] = VALID_PRODUCT if path == "/seller/products" else {}
+    response = await client.request(method, BASE + path.format(id=market.product.id), **kwargs)
+    assert_error(response, 401, "UNAUTHORIZED")
+    assert await snapshot(db) == before
+
+
+@pytest.mark.parametrize(
+    "payload,fields",
+    [
+        ({**VALID_PRODUCT, "price": 50}, {"price"}),
+        ({"name": "Test"}, {"description", "price"}),
+    ],
+)
+async def test_authenticated_product_validation_rejects_named_fields(
+    client, db, market, payload, fields
+):
+    auth = headers(market.seller_user)
+    control = await client.get(BASE + "/seller/products", headers=auth)
+    assert control.status_code == 200, control.text
+    before = await snapshot(db)
+    response = await client.post(BASE + "/seller/products", headers=auth, json=payload)
+    assert_error(response, 422, "VALIDATION_ERROR", fields)
+    assert await snapshot(db) == before
+
+
+async def test_valid_authenticated_product_is_persisted(client, db, market):
+    response = await client.post(
+        BASE + "/seller/products", headers=headers(market.seller_user), json=VALID_PRODUCT
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    stored = await db.get(Product, UUID(body["id"]))
+    assert stored.seller_id == market.seller.id
+    assert stored.name == VALID_PRODUCT["name"]
+    assert stored.price == Decimal("100.00")
+    assert body["price"] == "100.00"
+    assert not stored.is_published
+
+
+async def test_authenticated_invalid_status_filter_is_validation_error(client, db, market):
+    before = await snapshot(db)
+    response = await client.get(
+        BASE + "/seller/products",
+        headers=headers(market.seller_user),
+        params={"status": "archived"},
+    )
+    assert_error(response, 422, "VALIDATION_ERROR", ["query → status"])
+    assert await snapshot(db) == before
+
+
+@pytest.mark.parametrize("status,included", [("all", True), ("published", True), ("draft", False)])
+async def test_authenticated_status_filter_returns_correct_products(
+    client, market, status, included
+):
+    response = await client.get(
+        BASE + "/seller/products", headers=headers(market.seller_user), params={"status": status}
+    )
+    assert response.status_code == 200, response.text
+    assert [row["id"] for row in response.json()["data"]] == (
+        [str(market.product.id)] if included else []
+    )
+
+
+async def test_admin_can_list_and_hide_product(client, db, market):
+    auth = headers(market.admin)
+    listing = await client.get(BASE + "/admin/products", headers=auth)
+    assert listing.status_code == 200, listing.text
+    assert [row["id"] for row in listing.json()["data"]] == [str(market.product.id)]
+    hidden = await client.post(f"{BASE}/admin/products/{market.product.id}/hide", headers=auth)
+    assert hidden.status_code == 200, hidden.text
+    await db.refresh(market.product)
+    assert market.product.admin_hidden is True
+    public = await client.get(f"{BASE}/products/{market.product.id}")
+    assert_error(public, 404, "NOT_FOUND")

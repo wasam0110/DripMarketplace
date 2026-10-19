@@ -66,7 +66,7 @@ async def test_email_delivery_retries_failures(monkeypatch, task, provider, args
         assert exc.value.defer_score == 60_000
     if task == "seller_approved":
         sender.assert_awaited_once_with(
-            args[0], args[1], f"{email_tasks.settings.FRONTEND_URL}/seller/dashboard"
+            args[0], args[1], email_tasks.frontend_url("/seller/dashboard")
         )
     else:
         sender.assert_awaited_once_with(*args)

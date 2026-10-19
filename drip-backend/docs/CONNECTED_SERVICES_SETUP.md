@@ -8,6 +8,11 @@ Create a Google OAuth web client and configure both `GOOGLE_CLIENT_ID` and
 `https://YOUR_API_HOST/api/v1/auth/google/callback`
 
 Set `API_BASE_URL` to the public backend origin and `FRONTEND_URL` to the public site.
+Both are root HTTP(S) origins without credentials, subpaths, queries or fragments;
+a trailing slash is normalized, and HTTPS is required in production. Keep
+`API_PREFIX=/api/v1`. The same canonical callback URI is sent during authorization
+and token exchange; the final browser redirect is `FRONTEND_URL/auth/callback`.
+`ALLOWED_ORIGINS` controls browser CORS only, not where links or redirects point.
 The backend uses state, nonce, PKCE, a one-use Redis record, signed-ID-token validation,
 and an HttpOnly refresh cookie. Complete one real new-account login, one returning login,
 one cancelled login, and one replay attempt before launch.
@@ -29,8 +34,14 @@ malformed, or timestamp-less objects and does not scan the invoice bucket.
 ## Resend
 
 Verify the sending domain in Resend, then set `RESEND_API_KEY`, `FROM_EMAIL`, and
-`FROM_NAME`. `FROM_EMAIL` cannot remain on `example.com` in production. Send one real
-test message to an address you control:
+`FROM_NAME`. `FROM_EMAIL` cannot remain on `example.com` in production.
+
+Verification/reset, order tracking and seller links use `FRONTEND_URL`, independently
+of CORS list order. Confirm the deployed frontend serves the documented routes;
+local tests cannot verify the actual customer site or email delivery.
+
+During separately authorized staging acceptance, send one real test message to an
+address you control:
 
 ```powershell
 .venv/Scripts/python.exe scripts/verify_connected_services.py --email-to you@example.net

@@ -8,6 +8,8 @@ import re
 
 from pydantic import BaseModel, EmailStr, Field, field_serializer, field_validator, model_validator
 
+from app.schemas.money import PKRResponseAmount
+
 
 # ── Registration ───────────────────────────────────────────────────────────────
 
@@ -153,45 +155,48 @@ class SellerDashboardResponse(BaseModel):
     status_breakdown:  OrderStatusBreakdown
 
 
-# ── Orders (shapes only — logic wired in Block 5) ─────────────────────────────
+# ── Seller fulfilment reads (the existing live payload) ────────────────────────
 
 class SellerOrderRow(BaseModel):
     id:             UUID
+    order_id:       UUID
     order_number:   str
     status:         str
-    subtotal:       int
-    net_amount:     int
-    payment_method: str
-    cod_verified:   bool
-    item_count:     int
+    subtotal:       PKRResponseAmount
+    tracking_number: Optional[str]
+    courier_name:    Optional[str]
+    shipped_at:      Optional[datetime]
+    delivered_at:    Optional[datetime]
     created_at:     datetime
 
     model_config = {"from_attributes": True}
 
+    @field_serializer("shipped_at", "delivered_at", "created_at", when_used="json")
+    def serialize_order_time(self, value: datetime | None) -> str | None:
+        # Keep the existing service's ISO offset spelling (including +00:00, not Z).
+        return value.isoformat() if value is not None else None
+
 
 class ShippingAddressSchema(BaseModel):
+    recipient_name: str
+    phone:    str
     street:   str
     city:     str
     province: str
+    note:     Optional[str]
 
 
 class OrderItemSchema(BaseModel):
     product_name:      str
     variant_label:     str
-    unit_price:        int
+    unit_price:        PKRResponseAmount
     quantity:          int
-    subtotal:          int
+    subtotal:          PKRResponseAmount
 
 
 class SellerOrderDetailResponse(SellerOrderRow):
-    customer_name:     str
-    customer_phone:    str
     shipping_address:  ShippingAddressSchema
     items:             list[OrderItemSchema]
-    tracking_number:   Optional[str]
-    courier_name:      Optional[str]
-    commission_rate:   float
-    commission_amount: int
 
 
 class UpdateOrderStatusRequest(BaseModel):

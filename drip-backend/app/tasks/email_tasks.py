@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from arq import Retry
 
-from app.core.config import settings
+from app.core.public_urls import frontend_url
 from app.core.logging import get_logger
 from app.core.money import MoneyDisplayValue
 from app.integrations.resend_client import (
@@ -123,7 +123,7 @@ async def task_send_seller_approved(
         if current_name is None:
             return
         ok = await send_seller_approved_email(
-            email, brand_name, f"{settings.FRONTEND_URL}/seller/dashboard"
+            email, brand_name, frontend_url("/seller/dashboard")
         )
         if not ok:
             logger.error("task.seller_approved_email_failed")

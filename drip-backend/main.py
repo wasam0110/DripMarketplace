@@ -24,20 +24,25 @@ from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException
+from starlette.responses import Response
 
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import close_db, init_db
-from app.core.exceptions import DRIPException, RateLimitError, ServerError
+from app.core.exceptions import DRIPException, RateLimitError
+from app.core.error_responses import error_response, http_error_response, unexpected_error_response
 from app.core.logging import configure_logging, get_logger
 from app.core.log_privacy import scrub_sentry_event
 from app.core.middleware import (
+    ErrorBoundaryMiddleware,
     LoggingMiddleware,
     RateLimitMiddleware,
     RequestIDMiddleware,
     SecurityHeadersMiddleware,
 )
 from app.core.redis import close_redis, init_redis
+from app.schemas.common import ErrorResponse
 
 logger = get_logger(__name__)
 
@@ -106,18 +111,20 @@ def create_application() -> FastAPI:
         lifespan=lifespan,
         # Global response codes shown in docs
         responses={
-            400: {"description": "Validation error"},
-            401: {"description": "Unauthorized"},
-            403: {"description": "Forbidden"},
-            404: {"description": "Not found"},
-            429: {"description": "Rate limited"},
-            500: {"description": "Internal server error"},
+            status: {"description": description, "model": ErrorResponse}
+            for status, description in {
+                400: "Bad request", 401: "Unauthorized", 403: "Forbidden",
+                404: "Not found", 405: "Method not allowed", 409: "Conflict",
+                413: "Payload too large", 415: "Unsupported media type",
+                422: "Validation or business rule error", 429: "Rate limited",
+                500: "Internal server error", 502: "Upstream service error",
+                503: "Service unavailable", 504: "Gateway timeout",
+            }.items()
         },
     )
 
     # ── Middleware (applied in reverse registration order) ─────────────────────
-    # Note: Starlette applies middleware in LIFO order, so the first registered
-    # is the outermost wrapper (last to run before the route handler).
+    # Starlette uses LIFO order: the last registered wrapper runs first.
 
     # 4. Rate limiting (innermost — runs just before the handler)
     app.add_middleware(RateLimitMiddleware)
@@ -125,10 +132,13 @@ def create_application() -> FastAPI:
     # 3. Request logging
     app.add_middleware(LoggingMiddleware)
 
+    # Convert unexpected route/inner-middleware failures before outer headers run.
+    app.add_middleware(ErrorBoundaryMiddleware)
+
     # 2. Request ID stamping
     app.add_middleware(RequestIDMiddleware)
 
-    # 1. Security headers (outermost — always sets headers even on errors)
+    # Security headers wrap normal and error-boundary responses; CORS is outside them.
     app.add_middleware(SecurityHeadersMiddleware)
 
     # CORS (must be added separately via add_middleware for correct ordering)
@@ -153,11 +163,14 @@ def create_application() -> FastAPI:
 def _register_exception_handlers(app: FastAPI) -> None:
     """Register global exception handlers that produce consistent error JSON."""
 
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException) -> Response:
+        return http_error_response(request, exc)
+
     @app.exception_handler(DRIPException)
     async def drip_exception_handler(
         request: Request, exc: DRIPException
     ) -> JSONResponse:
-        request_id = getattr(request.state, "request_id", None)
         if exc.http_status >= 500:
             logger.error(
                 "drip.exception",
@@ -168,9 +181,12 @@ def _register_exception_handlers(app: FastAPI) -> None:
         headers: dict[str, str] = {}
         if isinstance(exc, RateLimitError):
             headers["Retry-After"] = str(exc.retry_after)
-        return JSONResponse(
+        return error_response(
+            request,
             status_code=exc.http_status,
-            content=exc.to_response(request_id),
+            code=exc.code,
+            message=exc.message,
+            fields=exc.fields,
             headers=headers,
         )
 
@@ -179,22 +195,17 @@ def _register_exception_handlers(app: FastAPI) -> None:
         request: Request, exc: RequestValidationError
     ) -> JSONResponse:
         """Convert Pydantic validation errors to DRIP error format."""
-        request_id = getattr(request.state, "request_id", None)
         fields: dict[str, str] = {}
         for error in exc.errors():
             loc = " → ".join(str(l) for l in error["loc"] if l != "body")
             fields[loc or "request"] = error["msg"]
 
-        return JSONResponse(
+        return error_response(
+            request,
             status_code=422,
-            content={
-                "error": {
-                    "code":       "VALIDATION_ERROR",
-                    "message":    "Request validation failed. Please check the highlighted fields.",
-                    "fields":     fields,
-                    "request_id": request_id,
-                }
-            },
+            code="VALIDATION_ERROR",
+            message="Request validation failed. Please check the highlighted fields.",
+            fields=fields,
         )
 
     @app.exception_handler(Exception)
@@ -205,19 +216,7 @@ def _register_exception_handlers(app: FastAPI) -> None:
         Catch-all for unexpected exceptions.
         Logs the full error but returns only a generic message to the client.
         """
-        request_id = getattr(request.state, "request_id", None)
-        logger.exception(
-            "drip.unhandled_exception",
-            path=request.url.path,
-            method=request.method,
-            request_id=request_id,
-            exc_info=exc,
-        )
-        server_error = ServerError()
-        return JSONResponse(
-            status_code=500,
-            content=server_error.to_response(request_id),
-        )
+        return unexpected_error_response(request, exc)
 
 
 # ── Module entry point ────────────────────────────────────────────────────────

@@ -12,6 +12,7 @@ from app.models.analytics import AnalyticsEvent
 from sqlalchemy.orm import selectinload
 from app.models.product import ProductVariant, ProductImage, Category
 from app.models.seller import Seller
+from app.core.catalogue_policy import MAX_IMAGES_PER_PRODUCT
 
 from app.core.exceptions import (
     NotFoundError,
@@ -42,9 +43,6 @@ from app.schemas.product import (
     SearchSuggestion,
     BrandSuggestion,
 )
-
-MAX_IMAGES_PER_PRODUCT = 6
-
 
 def _slugify(text: str) -> str:
     text = text.lower().strip().encode("ascii", errors="ignore").decode()

@@ -7,12 +7,14 @@ In v2 move templates to a dedicated templates/ folder with Jinja2.
 
 from __future__ import annotations
 import asyncio
+from html import escape
 import resend
 
 from app.core.config import settings
 from app.core.exceptions import ExternalServiceError
 from app.core.logging import get_logger
 from app.core.money import MoneyDisplayValue, format_pkr
+from app.core.public_urls import frontend_url
 
 logger = get_logger(__name__)
 
@@ -119,7 +121,7 @@ def _base_template(title: str, body: str) -> str:
 
 
 async def send_verification_email(email: str, first_name: str, token: str) -> bool:
-    verify_url = f"{settings.ALLOWED_ORIGINS[0]}/verify-email?token={token}"
+    verify_url = escape(frontend_url("/verify-email", token=token), quote=True)
     body = f"""
     <h1>Verify your email</h1>
     <p>Hi {first_name}, welcome to WearHowZ! Click the button below to verify your email address.</p>
@@ -136,7 +138,7 @@ async def send_verification_email(email: str, first_name: str, token: str) -> bo
 
 
 async def send_password_reset_email(email: str, first_name: str, token: str) -> bool:
-    reset_url = f"{settings.ALLOWED_ORIGINS[0]}/reset-password?token={token}"
+    reset_url = escape(frontend_url("/reset-password", token=token), quote=True)
     body = f"""
     <h1>Reset your password</h1>
     <p>Hi {first_name}, we received a request to reset your WearHowZ password.</p>
@@ -207,7 +209,7 @@ async def send_cod_timeout_email(email: str, name: str, order_number: str) -> bo
     <p>Hi {name}, your Cash on Delivery order <strong style="color:#fff">{order_number}</strong>
     was automatically cancelled because it wasn't verified within 30 minutes.</p>
     <p>If this was a mistake, please place your order again at
-    <a href="{settings.FRONTEND_URL}" style="color:#DFFF00">wearhowz.pk</a></p>
+    <a href="{escape(frontend_url(), quote=True)}" style="color:#DFFF00">WearHowZ</a></p>
     """
     return await send_email(
         to=email,

@@ -7,6 +7,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
+
 
 class WalletSummaryResponse(BaseModel):
     available_balance: Decimal
@@ -36,7 +38,12 @@ class PaginatedTransactions(BaseModel):
 
 
 class WithdrawalRequest(BaseModel):
-    amount:          Decimal = Field(ge=500, le=200_000, max_digits=12, decimal_places=2)
+    amount: Decimal = Field(
+        ge=settings.MIN_WITHDRAWAL_AMOUNT,
+        le=settings.MAX_WITHDRAWAL_AMOUNT,
+        max_digits=12,
+        decimal_places=2,
+    )
     bank_account_id: UUID
     note:            Optional[str] = Field(default=None, max_length=300)
 

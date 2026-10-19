@@ -64,5 +64,12 @@ For production, use HTTPS for both `FRONTEND_URL` and `API_BASE_URL`, set
 test, and only then enable the gateway. Never put the secured key in browser code or
 commit it to Git.
 
+These app settings are root origins (no credentials, subpaths, query or fragment);
+one trailing slash is normalized. Hosted form URLs retain the existing routes:
+`FRONTEND_URL/order/success/{order_id}`, `FRONTEND_URL/checkout?payment=failed`, and
+`API_BASE_URL/api/v1/payments/callback/payfast`. Keep `API_PREFIX=/api/v1`.
+`ALLOWED_ORIGINS` is not used to build these links. This does not modify or verify
+PayFast's merchant-specific `PAYFAST_API_BASE_URL` or hosted endpoint overrides.
+
 Local mocked tests prove protocol construction and state safety; they do not certify a
 merchant account or make a real charge.

@@ -13,6 +13,8 @@ from typing import Literal
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.public_urls import normalize_origin
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -26,11 +28,12 @@ class Settings(BaseSettings):
     ENVIRONMENT: Literal["development", "staging", "production", "test"] = "development"
     APP_NAME: str = "WearHowZ API"
     APP_VERSION: str = "1.0.0"
-    API_PREFIX: str = "/api/v1"
+    # Auth cookie scopes and provider callbacks currently require this prefix.
+    API_PREFIX: Literal["/api/v1"] = "/api/v1"
     DEBUG: bool = False
 
     # ── CORS ──────────────────────────────────────────────────────────────────
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:5173"]
+    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
     # Only socket peers in these networks may supply forwarding headers.
     TRUSTED_PROXY_IPS: list[str] = []
 
@@ -73,7 +76,7 @@ class Settings(BaseSettings):
     # ── WhatsApp ──────────────────────────────────────────────────────────────
     DRIP_WHATSAPP_NUMBER: str = "923208306241"
 
-    # ── Business rules (override via system_settings table at runtime) ────────
+    # ── Business defaults (only explicitly supported keys have DB overrides) ─
     COMMISSION_RATE: float = 0.15
     REGISTRATION_FEE: int = 5000
     BASE_SLOTS: int = 50
@@ -83,6 +86,7 @@ class Settings(BaseSettings):
     COD_TIMEOUT_MINUTES: int = 30
     PAYMENT_TIMEOUT_MINUTES: int = 30
     WALLET_HOLD_DAYS: int = 3
+    # Startup-only PKR limits; restart API/workers together after changing them.
     MIN_WITHDRAWAL_AMOUNT: int = 500
     MAX_WITHDRAWAL_AMOUNT: int = 200_000
     MAX_COD_ORDER_AMOUNT: int = 25_000
@@ -91,6 +95,16 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
 
     # ── Validators ────────────────────────────────────────────────────────────
+    @model_validator(mode="after")
+    def validate_withdrawal_limits(self) -> "Settings":
+        # Wallet/payout NUMERIC(12, 2) allows ten whole-number digits.
+        if not 1 <= self.MIN_WITHDRAWAL_AMOUNT <= self.MAX_WITHDRAWAL_AMOUNT <= 9_999_999_999:
+            raise ValueError(
+                "withdrawal limits must satisfy 1 <= MIN_WITHDRAWAL_AMOUNT "
+                "<= MAX_WITHDRAWAL_AMOUNT <= 9999999999"
+            )
+        return self
+
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
@@ -118,6 +132,16 @@ class Settings(BaseSettings):
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
 
+    @field_validator("FRONTEND_URL", "API_BASE_URL")
+    @classmethod
+    def validate_public_origin(cls, value: str) -> str:
+        return normalize_origin(value)
+
+    @field_validator("ALLOWED_ORIGINS")
+    @classmethod
+    def validate_cors_origins(cls, values: list[str]) -> list[str]:
+        return list(dict.fromkeys(normalize_origin(value) for value in values))
+
     @model_validator(mode="after")
     def validate_production_secrets(self) -> "Settings":
         """In production, critical secrets must be set."""
@@ -132,6 +156,9 @@ class Settings(BaseSettings):
             missing = [k for k in required if not getattr(self, k, "")]
             if missing:
                 raise ValueError(f"Production environment is missing required secrets: {missing}")
+            for name in ("FRONTEND_URL", "API_BASE_URL"):
+                if not getattr(self, name).startswith("https://"):
+                    raise ValueError(f"{name} must use HTTPS in production")
         if self.PAYFAST_ENABLED:
             payfast_required = [
                 "PAYFAST_MERCHANT_ID",
@@ -145,9 +172,6 @@ class Settings(BaseSettings):
             if self.ENVIRONMENT == "production":
                 if self.PAYFAST_SANDBOX:
                     raise ValueError("PAYFAST_SANDBOX must be false in production")
-                for name in ("FRONTEND_URL", "API_BASE_URL"):
-                    if not getattr(self, name).startswith("https://"):
-                        raise ValueError(f"{name} must use HTTPS when PayFast is enabled")
         if bool(self.GOOGLE_CLIENT_ID) != bool(self.GOOGLE_CLIENT_SECRET):
             raise ValueError("Google OAuth requires both GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET")
         if self.ENVIRONMENT == "production" and self.FROM_EMAIL.endswith("@example.com"):

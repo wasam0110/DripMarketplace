@@ -9,6 +9,7 @@ import re
 from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas.money import PKRResponseAmount
+from app.core.catalogue_policy import MIN_PRODUCT_PRICE, MAX_PRODUCT_PRICE, MAX_IMAGES_PER_PRODUCT
 
 
 # ── Variant ────────────────────────────────────────────────────────────────────
@@ -18,7 +19,7 @@ class CreateVariantRequest(BaseModel):
     size_value:     str     = Field(min_length=1, max_length=10)
     colour:         str     = Field(min_length=1, max_length=50)
     stock:          int     = Field(ge=0)
-    price_override: Optional[int] = Field(default=None, ge=100, le=500_000)
+    price_override: Optional[int] = Field(default=None, ge=MIN_PRODUCT_PRICE, le=MAX_PRODUCT_PRICE)
     sku:            Optional[str] = Field(default=None, max_length=100)
 
 
@@ -41,8 +42,8 @@ class VariantWithStockResponse(BaseModel):
 class CreateProductRequest(BaseModel):
     name:             str           = Field(min_length=2, max_length=200)
     description:      str           = Field(min_length=10, max_length=5000)
-    price:            int           = Field(ge=100, le=500_000)
-    sale_price:       Optional[int] = Field(default=None, ge=100, le=500_000)
+    price:            int           = Field(ge=MIN_PRODUCT_PRICE, le=MAX_PRODUCT_PRICE)
+    sale_price:       Optional[int] = Field(default=None, ge=MIN_PRODUCT_PRICE, le=MAX_PRODUCT_PRICE)
     category_id:      Optional[UUID] = None
     is_published:     bool          = False
     meta_title:       Optional[str] = Field(default=None, max_length=200)
@@ -59,8 +60,8 @@ class CreateProductRequest(BaseModel):
 class UpdateProductRequest(BaseModel):
     name:             Optional[str] = Field(default=None, min_length=2, max_length=200)
     description:      Optional[str] = Field(default=None, min_length=10, max_length=5000)
-    price:            Optional[int] = Field(default=None, ge=100, le=500_000)
-    sale_price:       Optional[int] = Field(default=None, ge=100, le=500_000)
+    price:            Optional[int] = Field(default=None, ge=MIN_PRODUCT_PRICE, le=MAX_PRODUCT_PRICE)
+    sale_price:       Optional[int] = Field(default=None, ge=MIN_PRODUCT_PRICE, le=MAX_PRODUCT_PRICE)
     category_id:      Optional[UUID] = None
     meta_title:       Optional[str] = Field(default=None, max_length=200)
     meta_description: Optional[str] = Field(default=None, max_length=500)
@@ -182,6 +183,27 @@ class SellerProductsPage(BaseModel):
     slot_info: SlotInfoResponse
 
 
+class AdminProductRowResponse(BaseModel):
+    id: UUID
+    seller_id: UUID
+    name: str
+    price: PKRResponseAmount
+    slug: str
+    is_published: bool
+    admin_hidden: bool
+
+
+class AdminProductsPagination(BaseModel):
+    page: int
+    per_page: int
+    total: int
+
+
+class AdminProductsPage(BaseModel):
+    data: list[AdminProductRowResponse]
+    pagination: AdminProductsPagination
+
+
 class UploadImagesResponse(BaseModel):
     images: list[ProductImageResponse]
 
@@ -211,9 +233,9 @@ class UpdateVariantRequest(BaseModel):
     size_type: str | None = Field(default=None, pattern="^(alpha|numeric|one_size)$")
     size_value: str | None = Field(default=None, min_length=1, max_length=10)
     colour: str | None = Field(default=None, min_length=1, max_length=50)
-    price_override: int | None = Field(default=None, ge=100, le=500_000)
+    price_override: int | None = Field(default=None, ge=MIN_PRODUCT_PRICE, le=MAX_PRODUCT_PRICE)
     is_active: bool | None = None
 
 
 class ReorderImagesRequest(BaseModel):
-    image_ids: list[UUID] = Field(min_length=1, max_length=6)
+    image_ids: list[UUID] = Field(min_length=1, max_length=MAX_IMAGES_PER_PRODUCT)

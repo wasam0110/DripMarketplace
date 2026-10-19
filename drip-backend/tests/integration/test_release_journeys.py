@@ -678,7 +678,8 @@ async def test_browser_auth_cookie_refresh_reset_and_logout(client, db, monkeypa
     assert reset.status_code == 200, reset.text
 
 
-async def test_google_signed_identity_callback_and_replay(db, isolated_redis, monkeypatch):
+@pytest.mark.parametrize("trailing_slash", ["", "/"])
+async def test_google_signed_identity_callback_and_replay(db, isolated_redis, monkeypatch, trailing_slash):
     import json
     from unittest.mock import MagicMock
     from urllib.parse import parse_qs, urlparse
@@ -693,8 +694,13 @@ async def test_google_signed_identity_callback_and_replay(db, isolated_redis, mo
 
     monkeypatch.setattr(settings, "GOOGLE_CLIENT_ID", "test-client")
     monkeypatch.setattr(settings, "GOOGLE_CLIENT_SECRET", "test-secret")
+    monkeypatch.setattr(settings, "API_BASE_URL", "https://api.example.test" + trailing_slash)
+    monkeypatch.setattr(settings, "FRONTEND_URL", "https://shop.example.test" + trailing_slash)
     for _attempt in range(2):
         started = await google.start_google_login(Response())
+        assert parse_qs(urlparse(started["authorization_url"]).query)["redirect_uri"] == [
+            "https://api.example.test/api/v1/auth/google/callback"
+        ]
         state = parse_qs(urlparse(started["authorization_url"]).query)["state"][0]
         flow = json.loads(await isolated_redis.get("google-state:" + state))
         claims = {
@@ -735,6 +741,10 @@ async def test_google_signed_identity_callback_and_replay(db, isolated_redis, mo
             }
         )
         response = await google.finish_google_login(req, db)
+        assert transport.post.await_args.kwargs["data"]["redirect_uri"] == (
+            "https://api.example.test/api/v1/auth/google/callback"
+        )
+        assert response.headers["location"] == "https://shop.example.test/auth/callback"
         assert response.status_code == 303
         assert "access_token" not in response.headers["location"]
         assert response.headers["cache-control"] == "no-store"

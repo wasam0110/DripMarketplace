@@ -1,10 +1,29 @@
 # Backend repair queue before frontend implementation
 
-Current status, 17 October 2026: [pre-ship checkpoint 11](PRE_SHIP_CHECKPOINT_11.md)
+Current status, 19 October 2026: [pre-ship checkpoint 18](PRE_SHIP_CHECKPOINT_18.md)
 supersedes the baseline below. Cross-account resource tests and approved limited
 customer cleanup supplement notification recovery, legacy preference import,
 190 route policies and complete migrated-schema parity. Migration head: 020.
-Full suite (17 October): 977 passed, 1 skipped, 87.55% coverage. Checkpoint 11 fixes
+Latest full-suite baseline (checkpoint 14, 18 October run): 1,104 passed, 1 skipped,
+87.96% coverage. Checkpoint 18 uses all-unit and targeted native validation, not a
+new full-suite coverage measurement. It replaces 18 permissive product smoke tests
+with 29 real-database HTTP cases, without application changes. Checkpoint 17's
+product price/image-count/upload-byte limits
+now share fixed constants without policy or API-contract changes. Checkpoint 16's
+withdrawal schema/service limits share
+validated startup settings; defaults and payout accounting are unchanged.
+Checkpoint 15 types admin product rows with exact PKR
+price strings while preserving filters, pagination and admin-only access.
+Checkpoint 14 adds typed seller-order list/detail reads matching the existing payload,
+with exact PKR strings and 29 new unit/native cases. Ownership, pagination, timestamps
+and accounting behavior are preserved. Checkpoint 13
+adds 46 regression cases for shared HTTP error bodies, preserved headers, safe
+unexpected failures and documented protocol boundaries. OpenAPI now uses the actual
+error schema. Checkpoint 12
+centralizes generated app links, separates their origins from CORS and validates
+root origins, production HTTPS and the supported API prefix. 52 net new cases cover
+email links, configuration, native notifications and mocked provider callback/form
+URLs; no live acceptance is claimed. Checkpoint 11 fixes
 catalogue/wishlist price truncation, documents seven underlying decimal-string
 fields and adds 35 native/unit cases. Price-entry/filter policy stays whole PKR;
 variant, cart, guest quote and checkout amounts agree in regression tests. Checkpoint 10 fixes
@@ -22,8 +41,15 @@ F08 has fail-closed local monetary verification (merchant acceptance still gated
 F13 is implemented. F11 now has durable customer cleanup and deletion/case/refresh
 race safeguards, but final policy, pending/old queue payloads, cross-system erasure and managed
 offboarding remain open. Exhaustive ownership, static/type and broader review remain.
-Recommended next: F16 canonical public-link/callback configuration, then error
-contracts. Remaining legacy/untyped money shapes still need review.
+Checkpoint 13 implements shared application error responses and pre-response
+unexpected-error headers, with documented protocol/streaming boundaries; see its
+[contract and verification notes](PRE_SHIP_CHECKPOINT_13.md).
+Recommended next: repair the unconditionally skipped legacy security module under
+F17. Product smoke assertions are repaired; other legacy API smoke files still need
+exact authenticated assertions. F16 needs broader contract/helper parity review; consolidating known
+limits does not establish universal consistency or new upload-race guarantees.
+Current wallet/payout schemas already use Decimal; dormant seller
+analytics integer placeholders are not live response contracts.
 Historical coupon allocations and zero-total orders
 with free shipping are not certified by checkpoint 9; see its explicit limits.
 
@@ -84,7 +110,7 @@ Acceptance: spoofed/untrusted/trusted forwarding cases; existing accounts/orders
 - **F13:** Persist inventory reorder thresholds or reject/remove the unsupported input.
 - **F14 repaired:** suspension uses seller visibility rather than overwriting product moderation. Reinstatement preserves independently hidden products, with native regression coverage. Legacy ambiguous hidden flags require manual review rather than automatic unhiding.
 - **F15 code repaired:** Sentry runtime dependency is declared and configuration tested without sending events; resource cleanup covers partial startup/application/shutdown failure. Real Sentry alert delivery remains external.
-- **F16:** Consolidate canonical frontend/callback/link configuration, money precision, error envelopes and duplicated limits.
+- **F16 partially repaired:** checkpoints 8–17 cover documented money, canonical-link, shared-error, seller/admin read contracts, withdrawal configuration and fixed catalogue/media limits. Broader contract/helper parity remains open; observe each checkpoint's compatibility boundaries.
 - Check compatibility aliases and public review visibility consistently. Preserve JWT/cookie/Redis compatibility identifiers unless an explicit migration is intended.
 
 Acceptance: negative request tests, read-after-write checks, moderation-history preservation and production-like startup with optional features enabled using test doubles.
@@ -98,7 +124,7 @@ Keep `PAYFAST_ENABLED=false` until the required checks pass. Adding keys is not 
 
 ## 8. Test quality and final backend handoff
 
-- Replace smoke assertions that accept 500/501 or conflate authentication failures with validation failures; test the actual rule with authorized fixtures.
+- Checkpoint 18 repairs product smoke assertions; replace remaining legacy API assertions that accept 500/501 or conflate authentication with validation, using authorized fixtures.
 - Repair the unconditionally skipped legacy security module; retain the stronger active ownership/security cases.
 - Correct stale Locust routes/filters, unverified/unapproved default accounts and missing advertised checkout activity before relying on load results.
 - Avoid global settings leakage in provider tests and broad exception assertions that can mask unrelated failures.

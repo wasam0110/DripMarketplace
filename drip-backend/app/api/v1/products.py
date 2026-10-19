@@ -7,12 +7,14 @@ from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException, 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, CurrentUser, CurrentSeller, CurrentAdmin
+from app.core.catalogue_policy import MAX_PRODUCT_PRICE, MAX_IMAGES_PER_PRODUCT
 from app.schemas.product import (
     CreateProductRequest,
     UpdateProductRequest,
     ProductDetailResponse,
     CataloguePage,
     SellerProductsPage,
+    AdminProductsPage,
     UploadImagesResponse,
     VariantWithStockResponse,
     SearchSuggestionsResponse,
@@ -41,7 +43,7 @@ async def list_products(
     size_numeric: Optional[List[str]] = Query(default=None),
     colour: Optional[List[str]] = Query(default=None),
     min_price: Optional[int] = Query(default=None, ge=0),
-    max_price: Optional[int] = Query(default=None, le=500_000),
+    max_price: Optional[int] = Query(default=None, le=MAX_PRODUCT_PRICE),
     on_sale: Optional[bool] = Query(default=None),
     is_new: Optional[bool] = Query(default=None),
     q: Optional[str] = Query(default=None, max_length=200),
@@ -193,14 +195,16 @@ async def upload_product_images(
     current_seller: CurrentSeller,
     images: List[UploadFile] = File(...),
 ) -> UploadImagesResponse:
-    if len(images) > 6:
-        raise HTTPException(status_code=422, detail="Maximum 6 images per upload")
+    if len(images) > MAX_IMAGES_PER_PRODUCT:
+        raise HTTPException(
+            status_code=422, detail=f"Maximum {MAX_IMAGES_PER_PRODUCT} images per upload"
+        )
 
     seller_id = UUID(current_seller["seller_id"])
     service = ProductService(db)
     product = await service._require_owned(seller_id, product_id)
-    if len(product.images) + len(images) > 6:
-        raise HTTPException(422, "A product supports at most 6 images")
+    if len(product.images) + len(images) > MAX_IMAGES_PER_PRODUCT:
+        raise HTTPException(422, f"A product supports at most {MAX_IMAGES_PER_PRODUCT} images")
     image_svc = ImageService()
     urls: list[str] = []
 
@@ -219,7 +223,7 @@ async def upload_product_images(
 # ══════════════════════════════════════════════════════════════════════════════
 
 
-@router.get("/admin/products")
+@router.get("/admin/products", response_model=AdminProductsPage)
 async def admin_list_products(
     db: DB,
     current_admin: CurrentAdmin,

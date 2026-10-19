@@ -6,11 +6,13 @@ from typing import Optional
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from app.core.config import settings
+from app.core.catalogue_policy import MAX_IMAGE_BYTES
 
 from app.core.exceptions import BusinessRuleError
 from app.integrations.supabase_storage import SupabaseStorage
 
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+# Compatibility alias for callers importing the old service-level name.
+MAX_FILE_SIZE = MAX_IMAGE_BYTES
 ALLOWED_MAGIC = {
     b"\xff\xd8\xff": "image/jpeg",
     b"\x89PNG": "image/png",

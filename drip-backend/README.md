@@ -4,8 +4,19 @@ The broader pre-ship checklist audit is **in progress**, not signed off. Track a
 162 requirements and current evidence in [PRE_SHIP_AUDIT.md](docs/PRE_SHIP_AUDIT.md).
 Earlier batch/test reports do not establish that every checklist requirement passes.
 
-Latest: [pre-ship checkpoint 11](docs/PRE_SHIP_CHECKPOINT_11.md), 17 October 2026 —
-977 full-suite tests passed, 1 skipped, 87.55% coverage. Migration head remains 020.
+Latest: [pre-ship checkpoint 18](docs/PRE_SHIP_CHECKPOINT_18.md), 19 October 2026:
+legacy product smoke tests now use native database fixtures and exact HTTP outcomes,
+including authenticated validation. No application behavior or API contract changed.
+Latest full-suite baseline remains checkpoint 14: 1,104 passed, 1 skipped, 87.96%
+coverage; not rerun for checkpoint 18. Migration head remains 020.
+Seller-order list/detail responses now have schemas matching their actual payload,
+with exact two-decimal PKR strings, preserved timestamps and seller-scoped items.
+Admin product prices use exact two-decimal PKR strings. Withdrawal limits share
+validated startup settings; defaults remain PKR 500–200,000. Broader contract review
+and test-quality gaps remain open.
+Generated app links now use canonical frontend/API origins, independently of CORS.
+Origins are validated and normalized; production requires HTTPS, and API_PREFIX must
+remain /api/v1. Existing callback routes, OAuth safeguards and provider gates remain.
 Catalogue/wishlist prices now preserve paisa as two-decimal JSON strings, including
 variant overrides. Clients must update these response types; whole-PKR price-entry
 and filter policies are unchanged. Guest quotes, carts and checkout agree in tests.
@@ -17,8 +28,13 @@ verified. Coupon preview remains an estimate, not a reservation.
 Checkpoint 8's analytics decimal-string contracts remain in place; integer-only
 clients must update to the documented PKR representation.
 Bulk-stock transaction repairs, seller aggregate isolation and persisted reorder
-thresholds remain verified. Canonical links, error envelopes, remaining legacy/untyped
+thresholds remain verified. Duplicated limits, remaining legacy/untyped
 money contracts and broader F16 remain open.
+Checkpoint 13 unifies application errors as `error.code`/`error.message`, replacing
+direct HTTP/router `detail` bodies. Existing domain codes and HTTP statuses remain;
+unexpected pre-response failures retain request-ID/security/CORS headers. See its
+[contract and verification notes](docs/PRE_SHIP_CHECKPOINT_13.md) for explicit
+health, preflight, streaming and server-generated-response boundaries.
 Earlier legacy email recipient checks, zero ARQ
 result retention, limited cleanup and durable recovery remain in place, with role-denial tests
 for all 154 protected operations and full migrated-schema parity.

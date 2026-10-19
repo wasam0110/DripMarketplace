@@ -23,6 +23,7 @@ router = APIRouter(tags=["health"])
 @router.get(
     "/health",
     response_model=HealthResponse,
+    responses={503: {"model": HealthResponse, "description": "Dependencies degraded"}},
     summary="Platform health check",
     include_in_schema=settings.is_development,
 )

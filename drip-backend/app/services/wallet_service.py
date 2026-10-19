@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.exceptions import BusinessRuleError, NotFoundError, PermissionDeniedError
 from app.models.wallet import WalletTxType, Payout, PayoutStatus
 from app.models.seller import SellerWallet, SellerBankAccount
@@ -21,9 +22,6 @@ from app.schemas.wallet import (
     AdminWalletOverviewResponse,
 )
 from app.services.notification_outbox import queue_notification
-
-MIN_WITHDRAWAL = Decimal("500")
-
 
 class WalletService:
     def __init__(self, db: AsyncSession) -> None:
@@ -88,8 +86,14 @@ class WalletService:
             raise BusinessRuleError(
                 f"Insufficient balance. Available: PKR {wallet.available_balance:,}"
             )
-        if amount < MIN_WITHDRAWAL:
-            raise BusinessRuleError(f"Minimum withdrawal is PKR {int(MIN_WITHDRAWAL):,}")
+        if amount < settings.MIN_WITHDRAWAL_AMOUNT:
+            raise BusinessRuleError(
+                f"Minimum withdrawal is PKR {settings.MIN_WITHDRAWAL_AMOUNT:,}"
+            )
+        if amount > settings.MAX_WITHDRAWAL_AMOUNT:
+            raise BusinessRuleError(
+                f"Maximum withdrawal is PKR {settings.MAX_WITHDRAWAL_AMOUNT:,}"
+            )
 
         # Fetch bank account
         result = await self.db.execute(

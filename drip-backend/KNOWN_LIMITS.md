@@ -1,6 +1,6 @@
 # Backend release limitations
 
-Updated 17 October 2026. Passing coverage is not production approval.
+Updated 19 October 2026. Passing coverage is not production approval.
 
 The user-supplied 162-item pre-ship checklist audit is still in progress; see
 [current tracking and verification](docs/PRE_SHIP_AUDIT.md). Proxy/cursor/startup and
@@ -8,6 +8,14 @@ seller-moderation repairs do not close the remaining payment, privacy, dependenc
 worker-recovery and deployment gates.
 
 ## Release blockers
+
+- **Legacy test quality:** checkpoint 18 replaces product smoke tests accepting
+  500 or conflating 401/422 with 29 native cases using exact statuses, error fields,
+  real seller authentication, positive controls and rejected-write snapshots.
+  No application behavior changed. These tests require disposable PostgreSQL;
+  skipping them without TEST_DATABASE_URL is not validation. Other legacy API
+  smoke files and the unconditionally skipped security module remain open. See
+  [checkpoint 18](docs/PRE_SHIP_CHECKPOINT_18.md).
 
 - **Dependency reproducibility:** checkpoint 2 upgrades affected dependencies and
   replaces python-jose/ecdsa with pinned PyJWT RS256 verification. The new installed-
@@ -76,7 +84,7 @@ worker-recovery and deployment gates.
   integer-only clients must update. Refund-adjusted ledger reports and order snapshot
   reports still have different bases. Platform averages still divide qualifying GMV
   by all period orders; city shares cover the returned subset. Remaining legacy/untyped
-  money contracts, canonical links and error envelopes remain open
+  money contracts remain open
   under F16. See [the contract notes](docs/PRE_SHIP_CHECKPOINT_8.md).
 
 - **Slot/notification presentation:** checkpoint 10 makes five slot money fields
@@ -94,6 +102,54 @@ worker-recovery and deployment gates.
   selected-variant pricing; checkout still revalidates current prices and stock.
   Remaining legacy/untyped money shapes are not certified by this change. See
   [checkpoint 11](docs/PRE_SHIP_CHECKPOINT_11.md) for verification status and scope.
+
+- **Canonical public links:** checkpoint 12 separates customer link destinations
+  from browser CORS origins and normalizes auth, tracking, seller, Google and PayFast
+  app URLs. Existing routes are retained. Root origins, HTTPS in production and
+  `/api/v1` are now validated; subpath hosting/custom API prefixes are unsupported.
+  Existing sent emails and stored notification HTML are not rewritten. Domain
+  ownership, DNS/TLS, deployed frontend routes and merchant/Google-console settings
+  still require acceptance; this does not validate all legacy caller-supplied URLs
+  or all email-template escaping. See [checkpoint 12](docs/PRE_SHIP_CHECKPOINT_12.md).
+
+- **Error-response compatibility:** checkpoint 13 replaces direct HTTP/router
+  `detail` responses with the existing `error` envelope. Clients must read
+  `error.message`/`error.code`; domain codes and statuses are retained. Common errors
+  now use no-store, and pre-response unexpected failures keep outer headers.
+  Readiness health, CORS preflight, bodyless HTTP statuses, proxy/outer-middleware
+  failures and post-start streaming/background errors have documented boundaries.
+  This is not a universal input/message-privacy or live monitoring sign-off. See
+  [checkpoint 13](docs/PRE_SHIP_CHECKPOINT_13.md) for contract and verification status.
+
+- **Seller-order read contracts:** checkpoint 14 replaces untyped list/detail
+  responses with schemas matching the existing payload. Seller subtotal and item
+  unit_price/subtotal are exact two-decimal PKR strings; timestamps, nullable address
+  fallback and pagination fields are preserved. No ledger or fulfilment rule changed.
+  Old placeholder fields are not newly promised. Dormant legacy analytics classes
+  are not evidence of a live truncation bug. See [checkpoint 14](docs/PRE_SHIP_CHECKPOINT_14.md).
+
+- **Admin product contract:** checkpoint 15 types the existing seven row fields
+  and page/per_page/total pagination. Price is the base product price serialized as
+  a two-decimal PKR string, not sale/variant/checkout pricing. Admin-only access,
+  seller/hidden filters, drafts and hidden visibility, soft-delete exclusion and
+  ordering are unchanged. Clients must consume the documented string type.
+  This is scoped validation, not a fresh full-suite or universal schema sign-off;
+  broader contract parity remains open. See [checkpoint 15](docs/PRE_SHIP_CHECKPOINT_15.md).
+
+- **Withdrawal limit configuration:** checkpoint 16 removes the hardcoded schema
+  bounds and service minimum in favor of validated startup settings, and adds the
+  service maximum guard. Defaults remain inclusive PKR 500–200,000, with two-decimal
+  withdrawal amounts. This is not a new runtime admin setting or changed payout
+  accounting policy. Restart API/workers together for configuration changes.
+  See [checkpoint 16](docs/PRE_SHIP_CHECKPOINT_16.md).
+
+- **Catalogue/media limits:** checkpoint 17 shares fixed price/image-count/upload-byte
+  constants across existing enforcement points. Current values, whole-PKR request
+  policy, sale-price rules, zero catalogue minimum filter and API contracts are
+  unchanged. Database price constraints remain independently enforced and tested;
+  changing policy requires migration review. This does not newly certify upload
+  concurrency, image-decoder resource safety or external-storage cleanup. See
+  [checkpoint 17](docs/PRE_SHIP_CHECKPOINT_17.md).
 
 - **Coupon money:** checkpoint 9 preserves fractional preview values/minimums,
   rounds discounts explicitly and bounds multi-seller allocations. Preview remains

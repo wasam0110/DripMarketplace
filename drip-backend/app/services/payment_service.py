@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.public_urls import api_url, frontend_url
 from app.core.exceptions import BusinessRuleError, ExternalServiceError, NotFoundError
 from app.integrations.payfast import PayFastClient, PayFastProtocolError
 from app.models.order import OrderStatus, PaymentMethod, SellerOrderStatus
@@ -117,9 +118,9 @@ class PaymentService:
                 basket_id=str(order.id),
                 amount=order.total,
                 description=f"WearHowZ order {order.order_number}",
-                success_url=f"{settings.FRONTEND_URL}/order/success/{order.id}",
-                failure_url=f"{settings.FRONTEND_URL}/checkout?payment=failed",
-                checkout_url=f"{settings.API_BASE_URL}/api/v1/payments/callback/payfast",
+                success_url=frontend_url(f"/order/success/{order.id}"),
+                failure_url=frontend_url("/checkout", payment="failed"),
+                checkout_url=api_url("/api/v1/payments/callback/payfast"),
                 customer_email=customer_email,
                 customer_mobile=customer_mobile,
                 order_date=(order.created_at or datetime.now(UTC)).date(),

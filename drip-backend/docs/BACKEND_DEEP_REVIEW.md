@@ -5,10 +5,15 @@ Review dates: 11–12 October 2026. Scope: `drip-backend` only. This is a review
 ## Bottom line
 
 Historical baseline below. Subsequent repairs and current remaining boundaries are
-tracked in [the pre-ship audit](PRE_SHIP_AUDIT.md); checkpoints 8–11 partially repair
+tracked in [the pre-ship audit](PRE_SHIP_AUDIT.md); checkpoints 8–17 partially repair
 F16 with exact Decimal analytics/coupons, bounded seller allocations and slot/notification
-presentation plus catalogue/wishlist price precision. F16 remains open for canonical
-links, error contracts and remaining legacy/untyped money shapes. Checkpoint 7's
+presentation plus catalogue/wishlist price precision and canonical public-link
+configuration, shared HTTP error contracts and typed seller-order/admin-product reads.
+Checkpoint 16 aligns withdrawal limits with validated startup configuration.
+Checkpoint 17 centralizes fixed catalogue/media limits without policy changes.
+F16 remains open for broader helper and response-contract parity review.
+Dormant integer-only seller analytics placeholders are not live
+route contracts. Checkpoint 7's
 bulk-stock integrity and checkpoint 6's seller isolation/reorder repairs remain in place.
 
 The backend has substantial working functionality and useful regression tests, but it is **not complete except for production configuration**. Financial workflow, notification, account-lifecycle and validation gaps remain in application code. The highest-priority issues are listed below with source locations, consequences and proposed verification.
@@ -249,12 +254,24 @@ exact minimums, rejects invalid preview amounts and bounds multi-seller rounding
 residuals. Checkpoint 10 fixes slot response types and notification/email presentation,
 preserving whole-PKR slot settings and existing delivery/privacy behavior. Checkpoint 11
 removes catalogue/wishlist price truncation and documents decimal-string responses;
-whole-rupee product-entry/filter policy remains unchanged. Canonical links, error
-envelopes and remaining legacy/untyped money contracts remain open. See
+whole-rupee product-entry/filter policy remains unchanged. Checkpoint 12 separates
+CORS from canonical link destinations and validates app origins/callback configuration.
+Checkpoint 13 unifies application error envelopes and preserves headers on
+pre-response unexpected failures, with explicit protocol/streaming boundaries.
+Checkpoint 14 wires matching seller-order list/detail schemas with exact PKR strings
+while preserving the service payload and ownership behavior. Checkpoint 15 types
+admin product reads and base prices. Checkpoints 16/17 address the identified withdrawal
+and catalogue/media limit duplication; broader contract/helper parity remains open. See
 [checkpoint 8](PRE_SHIP_CHECKPOINT_8.md) for analytics compatibility/reporting bases,
 [checkpoint 9](PRE_SHIP_CHECKPOINT_9.md) for coupon verification and
 [checkpoint 10](PRE_SHIP_CHECKPOINT_10.md) for slot/notification contracts and limits,
-and [checkpoint 11](PRE_SHIP_CHECKPOINT_11.md) for catalogue/wishlist verification;
+[checkpoint 11](PRE_SHIP_CHECKPOINT_11.md) for catalogue/wishlist verification,
+and [checkpoint 12](PRE_SHIP_CHECKPOINT_12.md) for public-link/configuration limits.
+See [checkpoint 13](PRE_SHIP_CHECKPOINT_13.md) for error compatibility and verification;
+see [checkpoint 14](PRE_SHIP_CHECKPOINT_14.md) for seller-order read contracts;
+see [checkpoint 15](PRE_SHIP_CHECKPOINT_15.md) for admin product reads and scoped validation;
+see [checkpoint 16](PRE_SHIP_CHECKPOINT_16.md) for withdrawal-limit configuration parity;
+see [checkpoint 17](PRE_SHIP_CHECKPOINT_17.md) for fixed catalogue/media policy consolidation;
 the historical description below is the baseline.
 
 Sources: `app/integrations/resend_client.py:121` and `:138`; `app/core/config.py`; `app/schemas/analytics.py`; `app/services/analytics_service.py`; `main.py` exception handlers.
@@ -264,6 +281,12 @@ Verification/reset links use `ALLOWED_ORIGINS[0]` whereas other links use `FRONT
 Recommended repair: one canonical public URL source, one documented money representation, and a documented/consistent error contract. Compatibility names such as JWT audience or refresh-cookie names should not be renamed casually.
 
 ### F17 — Test-quality and tooling gaps weaken completion evidence
+
+Current supplement: [checkpoint 18](PRE_SHIP_CHECKPOINT_18.md) replaces the product
+module's 18 mocked smoke cases with 29 native HTTP cases, exact outcomes and
+authenticated validation. No application code changes. Other legacy smoke files,
+the unconditional security skip and broader tooling gaps remain open. The following
+description records the historical review baseline, not the repaired product tests.
 
 Source: `tests/integration/test_product_api.py`, other legacy API smoke modules, `tests/security/test_auth.py`, `tests/load/locustfile.py`, and `tests/unit/test_connected_services.py`.
 

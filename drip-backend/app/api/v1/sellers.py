@@ -15,10 +15,6 @@ from app.schemas.seller import (
     SellerProfileUpdateRequest,
     LogoUploadResponse,
     SellerDashboardResponse,
-    PaginatedSellerOrders,
-    PagePagination,
-    SellerOrderDetailResponse,
-    UpdateOrderStatusRequest,
     BankAccountResponse,
     CreateBankAccountRequest,
 )

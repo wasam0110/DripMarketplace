@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, R
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, CurrentAdmin
+from app.core.catalogue_policy import MAX_IMAGE_BYTES
 from app.schemas.admin import BannerResponse
 from app.services.admin_service import AdminService
 
@@ -38,8 +39,8 @@ async def create_banner(
             status_code=422, detail=f"position must be one of: {', '.join(VALID_POSITIONS)}"
         )
 
-    contents = await image.read(5 * 1024 * 1024 + 1)
-    if len(contents) > 5 * 1024 * 1024:
+    contents = await image.read(MAX_IMAGE_BYTES + 1)
+    if len(contents) > MAX_IMAGE_BYTES:
         raise HTTPException(status_code=413, detail="Banner image must be under 5 MB")
 
     # Upload to Supabase (reuse image service)
