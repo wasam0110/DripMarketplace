@@ -1,10 +1,11 @@
 # Backend definition index
 
 Historical index, not a current-source hash manifest. Subsequent pre-ship changes
-are described in [checkpoint 18](../PRE_SHIP_CHECKPOINT_18.md), dated 19 October;
-its product/unit/native XML files record scoped validation (the legacy-baseline XML
-records the old permissive tests, not stronger evidence), without
-a new coverage measurement.
+are described in [checkpoint 20](../PRE_SHIP_CHECKPOINT_20.md), dated 19 October.
+Its `tests` XML records final scoped verification. The `legacy-baseline` file records
+the old permissive tests; `payment-tests` records the initial run with a fixture
+enum mistake, described in the report. No new coverage measurement is claimed.
+Earlier baseline/development/final files retain their documented historical meaning.
 Checkpoint 14's full-suite XML/coverage JSON retain the 18 October run filenames.
 Do not interpret the
 older source ranges or hashes below as verification of the current working tree.

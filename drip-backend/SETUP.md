@@ -1,17 +1,28 @@
 # WearHowZ backend setup and release checks
 
 Backend review candidate, refreshed 19 October 2026. Not approved for production; see
-[known limits](KNOWN_LIMITS.md) and [latest verification](docs/PRE_SHIP_CHECKPOINT_18.md).
+[known limits](KNOWN_LIMITS.md) and [latest verification](docs/PRE_SHIP_CHECKPOINT_20.md).
 Run commands from `drip-backend`. Never replace an existing local `.env`.
 
+Checkpoint 20 replaces payment smoke tests with 43 native cases. Like the product
+tests, `tests/integration/test_payment_api.py` now requires disposable TEST_DATABASE_URL.
+It blocks provider transport and mocks COD worker scheduling. Guest access uses
+valid signed order capabilities; admin validation cases use actual admin accounts.
+Checkpoint 19 replaces the unconditional security-module skip with 47 cases using
+native PostgreSQL, fakeredis, generated test keys and synthetic provider settings.
+It collects independently; execution uses the shared TEST_DATABASE_URL prerequisite.
+Its queue is mocked and PayFast transport is blocked. No deployment accounts or
+live provider credentials are required. Run it with the same disposable database
+rules below: `.\.venv\Scripts\python.exe -m pytest tests/security/test_auth.py --no-cov`.
 Checkpoint 18 replaces permissive product smoke tests with native HTTP checks.
 `tests/integration/test_product_api.py` now requires disposable TEST_DATABASE_URL;
 without it, the shared fixture skips rather than claiming mocked database coverage.
-The obsolete security module and other legacy smoke tests remain separate work.
+Other legacy API smoke files remain under review.
 Checkpoint 17 centralizes fixed catalogue/media limits without changing their values
 or exported contracts. Checkpoint 16 aligns withdrawal limits with startup configuration.
 Checkpoint 15 types admin product reads; consume price as a two-decimal PKR string.
-Verification is all unit tests plus scoped native PostgreSQL regression tests.
+Latest verification covers payment HTTP, refund accounting, retired methods,
+callbacks/reconciliation and selected payment unit tests. See the report for commands.
 Latest full-suite baseline remains checkpoint 14: 1,104 passed, 1 skipped, 87.96%
 coverage on disposable native PostgreSQL/Redis; no fresh full-suite coverage claim.
 Seller-order list/detail schemas preserve the current payload;

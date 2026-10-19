@@ -97,10 +97,11 @@ class Settings(BaseSettings):
     # ── Validators ────────────────────────────────────────────────────────────
     @model_validator(mode="after")
     def validate_withdrawal_limits(self) -> "Settings":
+        # ck_payouts_amount_min fixes the database payout floor at PKR 500.
         # Wallet/payout NUMERIC(12, 2) allows ten whole-number digits.
-        if not 1 <= self.MIN_WITHDRAWAL_AMOUNT <= self.MAX_WITHDRAWAL_AMOUNT <= 9_999_999_999:
+        if not 500 <= self.MIN_WITHDRAWAL_AMOUNT <= self.MAX_WITHDRAWAL_AMOUNT <= 9_999_999_999:
             raise ValueError(
-                "withdrawal limits must satisfy 1 <= MIN_WITHDRAWAL_AMOUNT "
+                "withdrawal limits must satisfy 500 <= MIN_WITHDRAWAL_AMOUNT "
                 "<= MAX_WITHDRAWAL_AMOUNT <= 9999999999"
             )
         return self

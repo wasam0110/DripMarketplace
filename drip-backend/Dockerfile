@@ -59,13 +59,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # ── Production server command ─────────────────────────────────────────────────
 # 2 workers per CPU core is a common starting point for I/O-bound FastAPI apps.
 # Railway sets $PORT; fall back to 8000.
-CMD uvicorn main:app \
-    --host 0.0.0.0 \
-    --port ${PORT:-8000} \
-    --workers 2 \
-    --loop uvloop \
-    --http httptools \
-    --no-proxy-headers \
-    --access-log \
-    --no-use-colors \
-    --timeout-keep-alive 30
+CMD ["sh", "-c", "exec uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 2 --loop uvloop --http httptools --no-proxy-headers --access-log --no-use-colors --timeout-keep-alive 30"]

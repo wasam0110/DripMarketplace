@@ -9,12 +9,15 @@ worker-recovery and deployment gates.
 
 ## Release blockers
 
-- **Legacy test quality:** checkpoint 18 replaces product smoke tests accepting
+- **Legacy test quality:** checkpoint 20 replaces 11 payment smoke cases with 43
+  native HTTP cases, validating guest/account access, admin permissions, exact
+  fractional amounts and pending-refund behavior. Checkpoint 18 replaces product smoke tests accepting
   500 or conflating 401/422 with 29 native cases using exact statuses, error fields,
   real seller authentication, positive controls and rejected-write snapshots.
   No application behavior changed. These tests require disposable PostgreSQL;
   skipping them without TEST_DATABASE_URL is not validation. Other legacy API
-  smoke files and the unconditionally skipped security module remain open. See
+  smoke files remain open. See
+  [checkpoint 20](docs/PRE_SHIP_CHECKPOINT_20.md) and
   [checkpoint 18](docs/PRE_SHIP_CHECKPOINT_18.md).
 
 - **Dependency reproducibility:** checkpoint 2 upgrades affected dependencies and
@@ -212,9 +215,11 @@ worker-recovery and deployment gates.
   future frontend can send the existing `X-Guest-Token` API header. The frontend must
   avoid logging the token, apply a restrictive referrer policy and remove it from the
   visible URL after capture. Forged and cross-order capabilities are rejected.
-- The inherited `tests/security/test_auth.py` is module-skipped and obsolete.
-  Other active tests cover authorization and callback protections, but this is not
-  a comprehensive penetration test. The skipped module is reported, not counted
+- Checkpoint 19 replaces the inherited security module with 47 active cases using
+  generated tokens, real account rows, throttle thresholds and callback rejection.
+  Execution requires the shared disposable database fixture; collection has no
+  unconditional skip. This does not establish comprehensive penetration testing.
+  The one security skip in checkpoint 14's full-suite result is historical, not counted
   as passing security coverage.
 - PayFast forwarding headers are accepted only from configured trusted proxies. The
   actual proxy and PayFast callback IP/CIDR lists remain deployment-specific and must be

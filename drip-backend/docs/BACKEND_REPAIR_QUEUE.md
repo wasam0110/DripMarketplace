@@ -1,12 +1,17 @@
 # Backend repair queue before frontend implementation
 
-Current status, 19 October 2026: [pre-ship checkpoint 18](PRE_SHIP_CHECKPOINT_18.md)
+Current status, 19 October 2026: [pre-ship checkpoint 20](PRE_SHIP_CHECKPOINT_20.md)
 supersedes the baseline below. Cross-account resource tests and approved limited
 customer cleanup supplement notification recovery, legacy preference import,
 190 route policies and complete migrated-schema parity. Migration head: 020.
 Latest full-suite baseline (checkpoint 14, 18 October run): 1,104 passed, 1 skipped,
-87.96% coverage. Checkpoint 18 uses all-unit and targeted native validation, not a
-new full-suite coverage measurement. It replaces 18 permissive product smoke tests
+87.96% coverage. Its single security skip describes that historical run.
+Checkpoint 20 replaces 11 payment smoke cases with 43 native HTTP cases and runs
+focused financial, callback/reconciliation and payment-unit regressions. Application
+code and API contracts are unchanged; no fresh full-suite coverage measurement.
+Checkpoint 19 replaces the skipped security module with 47 cases and uses focused
+security/auth/ownership/permission/unit regressions without a new full-suite coverage
+measurement. Checkpoint 18 replaces 18 permissive product smoke tests
 with 29 real-database HTTP cases, without application changes. Checkpoint 17's
 product price/image-count/upload-byte limits
 now share fixed constants without policy or API-contract changes. Checkpoint 16's
@@ -44,8 +49,8 @@ offboarding remain open. Exhaustive ownership, static/type and broader review re
 Checkpoint 13 implements shared application error responses and pre-response
 unexpected-error headers, with documented protocol/streaming boundaries; see its
 [contract and verification notes](PRE_SHIP_CHECKPOINT_13.md).
-Recommended next: repair the unconditionally skipped legacy security module under
-F17. Product smoke assertions are repaired; other legacy API smoke files still need
+Recommended next: legacy wallet API smoke assertions under F17. The product/payment
+smoke and legacy security modules are repaired; other legacy API smoke files still need
 exact authenticated assertions. F16 needs broader contract/helper parity review; consolidating known
 limits does not establish universal consistency or new upload-race guarantees.
 Current wallet/payout schemas already use Decimal; dormant seller
@@ -124,8 +129,8 @@ Keep `PAYFAST_ENABLED=false` until the required checks pass. Adding keys is not 
 
 ## 8. Test quality and final backend handoff
 
-- Checkpoint 18 repairs product smoke assertions; replace remaining legacy API assertions that accept 500/501 or conflate authentication with validation, using authorized fixtures.
-- Repair the unconditionally skipped legacy security module; retain the stronger active ownership/security cases.
+- Checkpoints 18/20 repair product/payment smoke assertions; replace remaining legacy API assertions that accept 500/501 or conflate authentication with validation, using authorized fixtures.
+- Checkpoint 19 replaces the unconditionally skipped security module; retain those active cases alongside the native ownership/permission suites.
 - Correct stale Locust routes/filters, unverified/unapproved default accounts and missing advertised checkout activity before relying on load results.
 - Avoid global settings leakage in provider tests and broad exception assertions that can mask unrelated failures.
 - Compare migrated schema constraints/defaults/indexes with model metadata, not just column reads.

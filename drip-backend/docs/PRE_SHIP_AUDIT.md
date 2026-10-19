@@ -22,10 +22,12 @@ No live charges, real customer emails, production deletion, deployment, secret r
 
 ## Verified change notes
 
-Latest: [checkpoint 18](PRE_SHIP_CHECKPOINT_18.md), 19 October 2026, replaces permissive
-product smoke tests with real-database HTTP cases and authenticated validation.
-Verification uses all-unit and targeted native catalogue/ownership/permission checks;
-no application/API change. Checkpoint 17's shared catalogue/media limits, checkpoint 16's
+Latest: [checkpoint 20](PRE_SHIP_CHECKPOINT_20.md), 19 October 2026, replaces 11 payment
+smoke cases with 43 native HTTP cases using exact access, validation and financial
+state assertions. Verification covers payments, refunds, callbacks/reconciliation
+and selected unit checks; no application/API change. Checkpoint 19's active security
+suite, checkpoint 18's native product tests, checkpoint 17's shared
+catalogue/media limits, checkpoint 16's
 withdrawal configuration and checkpoint 15's typed admin product reads remain.
 Latest full-suite baseline remains checkpoint 14: **1,104 passed, 1 skipped; 87.96%
 coverage** with native PostgreSQL/Redis enabled (18 October run), not rerun here.
@@ -214,12 +216,12 @@ Proxy trust reference: [MDN X-Forwarded-For security guidance](https://developer
 
 | ID | Requirement | Status / evidence |
 |---|---|---|
-| 11.1 | **BLOCKER:** Auth matrix tests per protected route: anonymous, other user, owner, admin | Partial — all protected operations have identity/role-denial tests. Checkpoints 4 and 6 add real cross-account resource/nested-ID/list/wallet/aggregate/filter cases and owner success checks. Exhaustive per-operation/input coverage remains open. The obsolete security module remains skipped; active native permission/ownership tests are not. |
-| 11.2 | Integration tests run against a real database, not mocks | Partial — checkpoint 18 replaces the product module's mocked database with disposable native PostgreSQL fixtures. Earlier native catalogue/ownership checks remain. Other legacy mocked smoke modules still require review; provider mocks are distinct from database execution. |
-| 11.3 | Tests assert intended behavior, not just current output | Partial — checkpoint 18 removes product assertions accepting 500/401-as-validation and adds exact statuses, field errors, authenticated positive controls and rejected-write snapshots. Other smoke/security modules and broader test-quality review remain open. |
+| 11.1 | **BLOCKER:** Auth matrix tests per protected route: anonymous, other user, owner, admin | Partial — all protected operations have identity/role-denial tests. Checkpoints 4 and 6 add cross-account resource/nested-ID/list/wallet/aggregate/filter cases and owner controls. Checkpoint 19 activates 47 security cases covering token/session/role/ownership and callback boundaries. Exhaustive per-operation/input coverage remains open. |
+| 11.2 | Integration tests run against a real database, not mocks | Partial — checkpoints 18/20 replace product/payment mocked databases with disposable native PostgreSQL fixtures; checkpoint 19 activates native security cases. Other legacy smoke modules still need review. Provider/queue mocks are separate from database execution. |
+| 11.3 | Tests assert intended behavior, not just current output | Partial — checkpoints 18/19 repair product/security checks. Checkpoint 20 uses exact payment access/validation assertions, fractional amounts, pending-refund idempotency and rejected-write snapshots. Other legacy smoke files and broader test-quality review remain open. |
 | 11.4 | Property or invariant tests on money, balances and permissions | Unverified — review and evidence pending. |
 | 11.5 | Concurrency tests: double submit, races, duplicate webhooks | Unverified — review and evidence pending. |
-| 11.6 | Webhook tests: valid, tampered, replayed and out-of-order events | Unverified — review and evidence pending. |
+| 11.6 | Webhook tests: valid, tampered, replayed and out-of-order events | Partial — checkpoint 19 checks missing/tampered callback fields, amount/currency mismatch, IP/size gates and valid failed-payment controls through real handlers. Replay/out-of-order and complete provider acceptance require separate evidence; no universal webhook sign-off. |
 | 11.7 | Migration tests from an empty database and from the previous release | Unverified — review and evidence pending. |
 | 11.8 | Failure-injection tests: timeouts, database drop, provider errors | Unverified — review and evidence pending. |
 | 11.9 | Mutation testing or bug seeding shows the tests catch real faults | Unverified — review and evidence pending. |

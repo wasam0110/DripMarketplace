@@ -21,7 +21,17 @@ pytestmark = pytest.mark.unit
 
 @pytest.mark.parametrize(
     "minimum,maximum",
-    [(0, 1000), (-1, 1000), (1000, 999), (500, 0), (500, -1), (500, 10_000_000_000)],
+    [
+        (0, 1000),
+        (-1, 1000),
+        (1, 1000),
+        (100, 250000),
+        (499, 1000),
+        (1000, 999),
+        (500, 0),
+        (500, -1),
+        (500, 10_000_000_000),
+    ],
 )
 def test_invalid_withdrawal_configuration_fails_startup(minimum, maximum):
     values = settings.model_dump()
@@ -30,7 +40,9 @@ def test_invalid_withdrawal_configuration_fails_startup(minimum, maximum):
         Settings(_env_file=None, **values)
 
 
-@pytest.mark.parametrize("minimum,maximum", [(500, 200000), (750, 1000), (100, 250000), (750, 750)])
+@pytest.mark.parametrize(
+    "minimum,maximum", [(500, 200000), (750, 1000), (500, 250000), (750, 750), (500, 500)]
+)
 def test_fresh_process_schema_and_openapi_follow_startup_limits(minimum, maximum):
     # Conftest supplies synthetic settings and ENVIRONMENT=test (no .env reads).
     env = {

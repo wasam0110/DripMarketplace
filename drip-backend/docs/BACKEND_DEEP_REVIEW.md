@@ -282,11 +282,17 @@ Recommended repair: one canonical public URL source, one documented money repres
 
 ### F17 — Test-quality and tooling gaps weaken completion evidence
 
-Current supplement: [checkpoint 18](PRE_SHIP_CHECKPOINT_18.md) replaces the product
+Current supplements: [checkpoint 20](PRE_SHIP_CHECKPOINT_20.md) replaces 11 legacy
+payment smoke cases with 43 native HTTP cases using exact authorization, validation,
+amount and refund-state assertions. No application behavior changed.
+[Checkpoint 19](PRE_SHIP_CHECKPOINT_19.md) replaces the
+unconditionally skipped security module with 47 cases that collect independently
+and execute using the shared disposable database prerequisite.
+[Checkpoint 18](PRE_SHIP_CHECKPOINT_18.md) replaces the product
 module's 18 mocked smoke cases with 29 native HTTP cases, exact outcomes and
 authenticated validation. No application code changes. Other legacy smoke files,
-the unconditional security skip and broader tooling gaps remain open. The following
-description records the historical review baseline, not the repaired product tests.
+load/dependency/static/type issues and broader tooling gaps remain open. The following
+description records the historical baseline, not the repaired product/payment/security tests.
 
 Source: `tests/integration/test_product_api.py`, other legacy API smoke modules, `tests/security/test_auth.py`, `tests/load/locustfile.py`, and `tests/unit/test_connected_services.py`.
 
@@ -303,7 +309,7 @@ Recommended repair: precise authenticated assertions, boundary-level regression 
 - The development Redis configuration uses `allkeys-lru`, while Redis carries security state, carts and worker jobs. Do not reuse this eviction policy for critical session-revocation or durable queue guarantees without designing failure behaviour.
 - Request logging redaction is not a universal guarantee that arbitrary nested provider payloads or personal data are scrubbed. Review actual production logging and retention separately; no local secrets were printed in this audit.
 - Lock ordering and ORM identity-map freshness deserve native tests across mixed operations, not only duplicates of the same operation. In particular, examine multi-variant checkout order and return/fulfilment lock order. These are investigation targets, not reproduced deadlock claims.
-- The historical security module has an unconditional module-level skip, not an environment-sensitive opt-in (`tests/security/test_auth.py:26`). Some assertions would also accept success where a security rejection was expected. Other active security/regression tests exist; the skip does not mean there is no security testing at all.
+- At the historical baseline, the security module had an unconditional skip and permissive assertions. Checkpoint 19 replaces it with explicit fixture-based security cases. Native ownership/permission suites remain separate evidence; broader security coverage remains under review.
 - Model-created tables and Alembic-created tables are not identical evidence. For example, migration 009 adds the refund-to-return foreign key, but the model's `return_id` declaration lacks it. The migration test reads all model columns but does not compare every constraint/index/default.
 
 ## Documentation and historical evidence

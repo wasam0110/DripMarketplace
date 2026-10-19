@@ -4,11 +4,12 @@ The broader pre-ship checklist audit is **in progress**, not signed off. Track a
 162 requirements and current evidence in [PRE_SHIP_AUDIT.md](docs/PRE_SHIP_AUDIT.md).
 Earlier batch/test reports do not establish that every checklist requirement passes.
 
-Latest: [pre-ship checkpoint 18](docs/PRE_SHIP_CHECKPOINT_18.md), 19 October 2026:
-legacy product smoke tests now use native database fixtures and exact HTTP outcomes,
-including authenticated validation. No application behavior or API contract changed.
+Latest: [pre-ship checkpoint 20](docs/PRE_SHIP_CHECKPOINT_20.md), 19 October 2026:
+11 legacy payment smoke tests are replaced by 43 native HTTP cases covering guest/
+account access, COD retry, admin validation and pending-refund idempotency.
 Latest full-suite baseline remains checkpoint 14: 1,104 passed, 1 skipped, 87.96%
-coverage; not rerun for checkpoint 18. Migration head remains 020.
+coverage; not rerun for checkpoint 20. Its one security-module skip is historical;
+the current module's execution requires TEST_DATABASE_URL. Migration head remains 020.
 Seller-order list/detail responses now have schemas matching their actual payload,
 with exact two-decimal PKR strings, preserved timestamps and seller-scoped items.
 Admin product prices use exact two-decimal PKR strings. Withdrawal limits share

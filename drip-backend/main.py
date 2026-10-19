@@ -17,8 +17,8 @@ Shutdown sequence:
 
 from __future__ import annotations
 
+from collections.abc import AsyncIterator
 from contextlib import AsyncExitStack, asynccontextmanager
-from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -30,10 +30,10 @@ from starlette.responses import Response
 from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import close_db, init_db
-from app.core.exceptions import DRIPException, RateLimitError
 from app.core.error_responses import error_response, http_error_response, unexpected_error_response
-from app.core.logging import configure_logging, get_logger
+from app.core.exceptions import DRIPException, RateLimitError
 from app.core.log_privacy import scrub_sentry_event
+from app.core.logging import configure_logging, get_logger
 from app.core.middleware import (
     ErrorBoundaryMiddleware,
     LoggingMiddleware,
@@ -50,7 +50,7 @@ logger = get_logger(__name__)
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     """Manage startup and shutdown of shared resources."""
     # ── Startup ───────────────────────────────────────────────────────────────
     configure_logging()
@@ -197,7 +197,10 @@ def _register_exception_handlers(app: FastAPI) -> None:
         """Convert Pydantic validation errors to DRIP error format."""
         fields: dict[str, str] = {}
         for error in exc.errors():
-            loc = " → ".join(str(l) for l in error["loc"] if l != "body")
+            location = error["loc"]
+            if location and location[0] == "body":
+                location = location[1:]
+            loc = " → ".join(str(part) for part in location)
             fields[loc or "request"] = error["msg"]
 
         return error_response(

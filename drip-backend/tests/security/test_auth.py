@@ -1,307 +1,523 @@
-"""
-tests/security/test_auth.py
-────────────────────────────
-Security-focused tests for:
-  - Rate limiting on auth endpoints
-  - JWT tamper protection
-  - Cross-seller resource isolation
-  - Role-based access control
-  - Payment callback HMAC verification
+"""Security HTTP checks using disposable PostgreSQL and the shared fakeredis fixture.
+
+Collection is unconditional. The shared database fixture skips execution only when
+TEST_DATABASE_URL is absent; no deployment accounts or provider credentials are used.
 """
 
-from __future__ import annotations
-
-import asyncio
-import hashlib
-import hmac
-import time
-from typing import AsyncGenerator
+import base64
+import json
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+from types import SimpleNamespace
+from unittest.mock import AsyncMock
 from uuid import uuid4
 
 import pytest
-import pytest_asyncio
-from httpx import AsyncClient
-import pytest
-from httpx import AsyncClient
-from main import app
+from sqlalchemy import func, select
 
-pytest.skip("Security tests require integration environment", allow_module_level=True)
+from app.core.config import settings
+from app.core.security import create_access_token, revoke_token
+from app.integrations.payfast import PayFastClient
+from app.models.order import Order
+from app.models.payment import Payment, PaymentCallback, PaymentStatus
+from app.models.product import Product, ProductImage, ProductInventory, ProductVariant, SizeType
+from app.models.seller import Seller, SellerStatus, SellerWallet
+from app.models.user import User, UserRole
+from app.schemas.order import CreateGuestOrderRequest
+from app.services.order_service import OrderService
+
+pytestmark = [pytest.mark.security, pytest.mark.integration]
+ADDRESS = {
+    "recipient_name": "Synthetic Customer",
+    "phone": "03001234567",
+    "street": "12 Synthetic Street",
+    "city": "Lahore",
+    "province": "Punjab",
+}
+
+
+@pytest.fixture(autouse=True)
+def offline_services(monkeypatch):
+    pool = AsyncMock()
+    monkeypatch.setattr("arq.create_pool", AsyncMock(return_value=pool))
+    transport = AsyncMock(side_effect=AssertionError("Provider transport must stay offline"))
+    monkeypatch.setattr(PayFastClient, "_post_form", transport)
+    monkeypatch.setattr(PayFastClient, "_get", transport)
+    return SimpleNamespace(pool=pool, transport=transport)
+
+
 @pytest.fixture
-async def client():
-    from httpx import AsyncClient, ASGITransport
-    async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test"
-    ) as c:
-        yield c
-pytestmark = pytest.mark.asyncio
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# RATE LIMITING
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestRateLimiting:
-    async def test_login_rate_limit(self, client: AsyncClient):
-        """6th failed login within the window must return 429."""
-        payload = {"email": "notexist@example.com", "password": "WrongPass1"}
-        for _ in range(5):
-            await client.post("/api/v1/auth/login", json=payload)
-        resp = await client.post("/api/v1/auth/login", json=payload)
-        assert resp.status_code == 429, "Expected 429 after 5 failed logins"
-        data = resp.json()
-        assert data["error"]["code"] == "RATE_LIMITED"
-        assert int(resp.headers.get("Retry-After", 0)) > 0
-
-    async def test_register_rate_limit(self, client: AsyncClient):
-        """Rapid registration attempts should be rate-limited."""
-        for i in range(10):
-            await client.post(
-                "/api/v1/auth/register",
-                json={
-                    "first_name": "Test",
-                    "last_name": "User",
-                    "email": f"ratelimit{i}_{uuid4().hex[:6]}@example.com",
-                    "password": "SecurePass1",
-                },
-            )
-        # The exact threshold depends on config; we just assert a 429 eventually
-        responses = [
-            await client.post(
-                "/api/v1/auth/register",
-                json={
-                    "first_name": "Test",
-                    "last_name": "User",
-                    "email": f"rl_extra_{uuid4().hex}@example.com",
-                    "password": "SecurePass1",
-                },
-            )
-            for _ in range(5)
+async def accounts(db):
+    users = {
+        name: User(
+            email=f"security-{name}@example.com",
+            password_hash="synthetic-only",
+            role=role,
+            has_verified_email=True,
+        )
+        for name, role in [
+            ("buyer", UserRole.customer),
+            ("seller", UserRole.seller),
+            ("other", UserRole.seller),
+            ("admin", UserRole.admin),
         ]
-        status_codes = {r.status_code for r in responses}
-        assert 429 in status_codes or all(c in {200, 201, 422} for c in status_codes), \
-            "Unexpected status codes during registration stress test"
-
-    async def test_password_reset_rate_limit(self, client: AsyncClient):
-        """Repeated forgot-password requests for same email should be throttled."""
-        payload = {"email": "victim@example.com"}
-        for _ in range(3):
-            await client.post("/api/v1/auth/forgot-password", json=payload)
-        resp = await client.post("/api/v1/auth/forgot-password", json=payload)
-        # Should be 429 or still 200/204 if threshold is higher — either is fine
-        assert resp.status_code in {200, 204, 429}
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# JWT TAMPER PROTECTION
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestJWTSecurity:
-    async def test_tampered_token_rejected(self, client: AsyncClient):
-        """Altering the payload of a valid token must return 401."""
-        import base64, json
-
-        resp = await client.post(
-            "/api/v1/auth/login",
-            json={"email": "test@drip.pk", "password": "TestPass1"},
+    }
+    db.add_all(users.values())
+    await db.flush()
+    owner = Seller(
+        user_id=users["seller"].id,
+        brand_name="Security Brand",
+        slug="security-brand",
+        status=SellerStatus.active,
+        total_slots=50,
+    )
+    other = Seller(
+        user_id=users["other"].id,
+        brand_name="Other Brand",
+        slug="security-other",
+        status=SellerStatus.active,
+        total_slots=50,
+    )
+    db.add_all([owner, other])
+    await db.flush()
+    db.add_all(
+        [
+            SellerWallet(seller_id=owner.id, available_balance=Decimal("1000")),
+            SellerWallet(seller_id=other.id, available_balance=Decimal("9000")),
+        ]
+    )
+    product = Product(
+        seller_id=owner.id,
+        name="Security shirt",
+        slug="security-shirt",
+        price=Decimal("1500"),
+        is_published=True,
+    )
+    db.add(product)
+    await db.flush()
+    variant = ProductVariant(
+        product_id=product.id, sku="SEC-M", size_type=SizeType.alpha, size_value="M", colour="Ivory"
+    )
+    db.add(variant)
+    await db.flush()
+    db.add(ProductInventory(variant_id=variant.id, stock=8))
+    db.add(
+        ProductImage(
+            product_id=product.id, url="https://example.test/security.webp", is_primary=True
         )
-        if resp.status_code != 200:
-            pytest.skip("No test user available")
-        token = resp.json().get("access_token", "")
-        if not token or token.count(".") != 2:
-            pytest.skip("Token format unexpected")
+    )
+    await db.commit()
+    return SimpleNamespace(**users, owner=owner, foreign=other, product=product, variant=variant)
 
-        header_b64, payload_b64, sig = token.split(".")
-        # Decode and tamper with role
-        padding = "=" * (4 - len(payload_b64) % 4)
-        decoded = json.loads(base64.urlsafe_b64decode(payload_b64 + padding))
-        decoded["role"] = "admin"
-        tampered_payload = base64.urlsafe_b64encode(
-            json.dumps(decoded).encode()
-        ).rstrip(b"=").decode()
-        bad_token = f"{header_b64}.{tampered_payload}.{sig}"
 
-        resp2 = await client.get(
-            "/api/v1/customers/me",
-            headers={"Authorization": f"Bearer {bad_token}"},
+def token_for(user, **claims):
+    return create_access_token(
+        subject=str(user.id),
+        role=user.role.value,
+        extra_claims={"ver": user.auth_version, **claims},
+    )[0]
+
+
+def headers(user, **claims):
+    return {"Authorization": f"Bearer {token_for(user, **claims)}"}
+
+
+def assert_error(response, status, code):
+    assert response.status_code == status, response.text
+    assert response.json()["error"]["code"] == code
+
+
+async def snapshot(db):
+    return {
+        model.__tablename__: sorted(
+            tuple(map(str, row))
+            for row in (await db.execute(select(*model.__table__.columns))).all()
         )
-        assert resp2.status_code == 401
-
-    async def test_expired_token_rejected(self, client: AsyncClient):
-        """An expired JWT must return 401 with TOKEN_EXPIRED code."""
-        expired_token = (
-            "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9."
-            "eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDAiLCJleHAiOjE2MDAwMDAwMDB9."
-            "invalidsignature"
+        for model in (
+            Product,
+            ProductVariant,
+            ProductImage,
+            ProductInventory,
+            SellerWallet,
+            Order,
+            Payment,
         )
-        resp = await client.get(
-            "/api/v1/customers/me",
-            headers={"Authorization": f"Bearer {expired_token}"},
+    }
+
+
+@pytest.mark.parametrize(
+    "path,limit,window,success,code",
+    [
+        ("/auth/login", 5, 300, 401, "INVALID_CREDENTIALS"),
+        ("/auth/register", 3, 3600, 201, None),
+        ("/auth/forgot-password", 3, 3600, 200, None),
+    ],
+)
+async def test_auth_rate_limit_exact_threshold(
+    client, db, isolated_redis, monkeypatch, offline_services, path, limit, window, success, code
+):
+    monkeypatch.setattr(settings, "TRUSTED_PROXY_IPS", [])
+    for index in range(limit):
+        payload = {"email": f"security-rate-{index}@example.com"}
+        if not path.endswith("/forgot-password"):
+            payload["password"] = "StrongPassword123"
+        if path.endswith("/register"):
+            payload.update(first_name="Synthetic", last_name="Customer")
+        response = await client.post("/api/v1" + path, json=payload)
+        assert response.status_code == success, response.text
+        if code:
+            assert response.json()["error"]["code"] == code
+        assert response.headers["X-RateLimit-Limit"] == str(limit)
+        assert response.headers["X-RateLimit-Remaining"] == str(limit - index - 1)
+    payload = {**payload, "email": "blocked@example.com"}
+    blocked = await client.post("/api/v1" + path, json=payload)
+    assert_error(blocked, 429, "RATE_LIMITED")
+    assert blocked.headers["Retry-After"] == str(window)
+    assert blocked.headers["X-RateLimit-Remaining"] == "0"
+    spoofed = await client.post(
+        "/api/v1" + path, json=payload, headers={"X-Forwarded-For": "192.0.2.99"}
+    )
+    assert_error(spoofed, 429, "RATE_LIMITED")
+    keys = await isolated_redis.keys(f"drip:rl:POST:/api/v1{path}:*")
+    assert len(keys) == 1
+    assert 0 < await isolated_redis.ttl(keys[0]) <= window
+    count = await db.scalar(select(func.count(User.id)))
+    assert count == (3 if path.endswith("/register") else 0)
+    assert offline_services.pool.enqueue_job.await_count == (3 if path.endswith("/register") else 0)
+
+
+async def test_reset_response_does_not_enumerate_accounts(client, accounts, offline_services):
+    known = await client.post("/api/v1/auth/forgot-password", json={"email": accounts.buyer.email})
+    unknown = await client.post(
+        "/api/v1/auth/forgot-password", json={"email": "absent@example.com"}
+    )
+    assert known.status_code == unknown.status_code == 200
+    assert known.json() == unknown.json()
+    assert "if an account exists" in known.json()["message"].lower()
+    offline_services.pool.enqueue_job.assert_awaited_once()
+
+
+async def assert_valid_identity(client, user):
+    response = await client.get("/api/v1/auth/me", headers=headers(user))
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] == str(user.id)
+
+
+async def test_valid_signed_token_reaches_current_user(client, accounts):
+    await assert_valid_identity(client, accounts.buyer)
+
+
+async def test_tampered_signed_payload_is_rejected(client, accounts):
+    await assert_valid_identity(client, accounts.buyer)
+    head, body, signature = token_for(accounts.buyer).split(".")
+    claims = json.loads(base64.urlsafe_b64decode(body + "=" * (-len(body) % 4)))
+    claims["role"] = "admin"
+    changed = base64.urlsafe_b64encode(json.dumps(claims).encode()).rstrip(b"=").decode()
+    response = await client.get(
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {head}.{changed}.{signature}"}
+    )
+    assert_error(response, 401, "TOKEN_INVALID")
+
+
+async def test_expired_correctly_signed_token_is_rejected(client, accounts):
+    await assert_valid_identity(client, accounts.buyer)
+    now = datetime.now(UTC)
+    expired = token_for(
+        accounts.buyer, iat=now - timedelta(minutes=2), exp=now - timedelta(minutes=1)
+    )
+    response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {expired}"})
+    assert_error(response, 401, "TOKEN_EXPIRED")
+
+
+@pytest.mark.parametrize("token", ["not-a-jwt", "Bearer", "eyXXXXXXX", "a.b"])
+async def test_malformed_token_is_rejected(client, token):
+    response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert_error(response, 401, "TOKEN_INVALID")
+
+
+async def test_absent_token_is_rejected(client):
+    assert_error(await client.get("/api/v1/auth/me"), 401, "UNAUTHORIZED")
+
+
+@pytest.mark.parametrize(
+    "case", ["role", "version", "deleted", "unverified", "revoked", "audience", "issuer"]
+)
+async def test_invalid_session_cannot_use_signed_token(client, db, accounts, case):
+    user = accounts.buyer
+    await assert_valid_identity(client, user)
+    extra = (
+        {"role": "admin"}
+        if case == "role"
+        else (
+            {"aud": "another-client"}
+            if case == "audience"
+            else {"iss": "another-issuer"}
+            if case == "issuer"
+            else {}
         )
-        assert resp.status_code == 401
+    )
+    token = token_for(user, **extra)
+    if case == "version":
+        user.auth_version += 1
+    elif case == "deleted":
+        user.deleted_at = datetime.now(UTC)
+    elif case == "unverified":
+        user.has_verified_email = False
+    elif case == "revoked":
+        _, jti = create_access_token(subject=str(user.id), role=user.role.value)
+        # Revoke the exact valid token used below, with a known signed jti.
+        token = token_for(user, jti=jti)
+        await revoke_token(jti, datetime.now(UTC) + timedelta(minutes=15))
+    await db.commit()
+    response = await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {token}"})
+    assert_error(response, 401, "EMAIL_NOT_VERIFIED" if case == "unverified" else "TOKEN_INVALID")
 
-    async def test_no_token_rejected(self, client: AsyncClient):
-        """Protected routes must return 401 when no token is supplied."""
-        resp = await client.get("/api/v1/customers/me")
-        assert resp.status_code == 401
 
-    async def test_malformed_token_rejected(self, client: AsyncClient):
-        """Garbage tokens must return 401."""
-        for bad_token in ["not-a-jwt", "Bearer", "eyXXXXXXX", "a.b"]:
-            resp = await client.get(
-                "/api/v1/customers/me",
-                headers={"Authorization": f"Bearer {bad_token}"},
-            )
-            assert resp.status_code in {401, 403}, f"Expected 401/403 for token: {bad_token!r}"
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# CROSS-SELLER RESOURCE ISOLATION
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestSellerIsolation:
-    async def test_seller_cannot_edit_other_sellers_product(
-        self,
-        client: AsyncClient,
-        seller_a_headers: dict,
-        seller_b_product_id: str,
-    ):
-        """Seller A editing Seller B's product must return 403."""
-        resp = await client.patch(
-            f"/api/v1/products/{seller_b_product_id}",
-            json={"name": "Hacked"},
-            headers=seller_a_headers,
+@pytest.mark.parametrize(
+    "kind,status,code",
+    [
+        ("edit", 403, "FORBIDDEN"),
+        ("delete", 403, "FORBIDDEN"),
+        ("inventory", 404, "NOT_FOUND"),
+    ],
+)
+async def test_foreign_seller_writes_are_rejected_without_mutation(
+    client, db, accounts, kind, status, code
+):
+    owner_read = await client.get(
+        f"/api/v1/seller/products/{accounts.product.id}", headers=headers(accounts.seller)
+    )
+    assert owner_read.status_code == 200, owner_read.text
+    before = await snapshot(db)
+    path = f"/api/v1/seller/products/{accounts.product.id}"
+    if kind == "edit":
+        response = await client.put(
+            path, headers=headers(accounts.other), json={"name": "Unauthorized edit"}
         )
-        assert resp.status_code in {403, 404}
-
-    async def test_seller_cannot_delete_other_sellers_product(
-        self,
-        client: AsyncClient,
-        seller_a_headers: dict,
-        seller_b_product_id: str,
-    ):
-        resp = await client.delete(
-            f"/api/v1/products/{seller_b_product_id}",
-            headers=seller_a_headers,
-        )
-        assert resp.status_code in {403, 404}
-
-    async def test_seller_cannot_view_other_sellers_wallet(
-        self,
-        client: AsyncClient,
-        seller_a_headers: dict,
-    ):
-        """Wallet endpoint must scope to the authenticated seller."""
-        resp = await client.get("/api/v1/wallet/balance", headers=seller_a_headers)
-        assert resp.status_code in {200, 404}
-        # The key check: we cannot reach another seller's wallet via this route
-        # (route is always scoped to current_user)
-
-    async def test_seller_cannot_update_other_sellers_inventory(
-        self,
-        client: AsyncClient,
-        seller_a_headers: dict,
-        seller_b_variant_id: str,
-    ):
-        resp = await client.put(
-            f"/api/v1/seller/inventory/{seller_b_variant_id}",
+    elif kind == "delete":
+        response = await client.delete(path, headers=headers(accounts.other))
+    else:
+        response = await client.put(
+            f"/api/v1/seller/inventory/{accounts.variant.id}",
+            headers=headers(accounts.other),
             json={"stock": 9999},
-            headers=seller_a_headers,
         )
-        assert resp.status_code in {403, 404}
+    assert_error(response, status, code)
+    assert await snapshot(db) == before
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# ROLE-BASED ACCESS CONTROL
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestRBAC:
-    async def test_customer_cannot_access_admin_dashboard(
-        self, client: AsyncClient, customer_headers: dict
-    ):
-        resp = await client.get("/api/v1/admin/dashboard", headers=customer_headers)
-        assert resp.status_code == 403
-
-    async def test_customer_cannot_access_seller_dashboard(
-        self, client: AsyncClient, customer_headers: dict
-    ):
-        resp = await client.get("/api/v1/seller/dashboard", headers=customer_headers)
-        assert resp.status_code == 403
-
-    async def test_seller_cannot_access_admin_dashboard(
-        self, client: AsyncClient, seller_a_headers: dict
-    ):
-        resp = await client.get("/api/v1/admin/dashboard", headers=seller_a_headers)
-        assert resp.status_code == 403
-
-    async def test_seller_cannot_approve_payouts(
-        self, client: AsyncClient, seller_a_headers: dict
-    ):
-        resp = await client.post(
-            f"/api/v1/admin/payouts/{uuid4()}/approve",
-            headers=seller_a_headers,
+async def test_wallet_read_uses_authenticated_seller_not_query_id(client, db, accounts):
+    before = await snapshot(db)
+    for user, other_id, balance in [
+        (accounts.seller, accounts.foreign.id, Decimal("1000")),
+        (accounts.other, accounts.owner.id, Decimal("9000")),
+    ]:
+        response = await client.get(
+            "/api/v1/seller/wallet", headers=headers(user), params={"seller_id": str(other_id)}
         )
-        assert resp.status_code in {403, 404}
+        assert response.status_code == 200, response.text
+        assert Decimal(response.json()["available_balance"]) == balance
+    assert await snapshot(db) == before
 
-    async def test_unauthenticated_cannot_place_order(self, client: AsyncClient):
-        resp = await client.post(
-            "/api/v1/orders",
-            json={
-                "items": [{"variant_id": str(uuid4()), "quantity": 1}],
-                "shipping_address": {"street": "123 Main St", "city": "Karachi", "province": "Sindh"},
-                "payment_method": "cod",
-            },
+
+@pytest.mark.parametrize(
+    "actor,method,path",
+    [
+        ("buyer", "GET", "/admin/products"),
+        ("buyer", "GET", "/seller/products"),
+        ("seller", "GET", "/admin/products"),
+        ("seller", "POST", "/admin/wallet/payouts/{id}/approve"),
+    ],
+)
+async def test_wrong_role_is_forbidden_before_resource_lookup(
+    client, db, accounts, actor, method, path
+):
+    for role, control in [("admin", "/admin/products"), ("seller", "/seller/products")]:
+        response = await client.get("/api/v1" + control, headers=headers(getattr(accounts, role)))
+        assert response.status_code == 200, response.text
+    before = await snapshot(db)
+    response = await client.request(
+        method,
+        "/api/v1" + path.format(id=uuid4()),
+        headers=headers(getattr(accounts, actor)),
+        json={},
+    )
+    assert_error(response, 403, "FORBIDDEN")
+    assert await snapshot(db) == before
+
+
+async def test_account_order_requires_identity(client, db, accounts):
+    before = await snapshot(db)
+    response = await client.post(
+        "/api/v1/orders", json={"shipping_address": ADDRESS, "payment_method": "cod"}
+    )
+    assert_error(response, 401, "UNAUTHORIZED")
+    assert await snapshot(db) == before
+
+
+@pytest.fixture
+async def online_payment(db, accounts, monkeypatch):
+    monkeypatch.setattr(settings, "PAYFAST_ENABLED", True)
+    monkeypatch.setattr(settings, "PAYFAST_MERCHANT_ID", "synthetic-merchant")
+    monkeypatch.setattr(settings, "PAYFAST_SECURED_KEY", "synthetic-key")
+    monkeypatch.setattr(settings, "PAYFAST_IPN_IPS", [])
+    created = await OrderService(db).create_guest_order(
+        CreateGuestOrderRequest(
+            shipping_address=ADDRESS,
+            payment_method="payfast",
+            guest_email="guest@example.com",
+            guest_name="Synthetic Customer",
+            guest_phone="03001234567",
+            items=[{"variant_id": accounts.variant.id, "quantity": 1}],
         )
-        assert resp.status_code == 401
+    )
+    payment = Payment(
+        order_id=created.order_id,
+        method="payfast",
+        amount=created.total,
+        status=PaymentStatus.pending,
+        currency="PKR",
+    )
+    db.add(payment)
+    await db.commit()
+    return payment
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# PAYMENT CALLBACK HMAC VERIFICATION
-# ══════════════════════════════════════════════════════════════════════════════
-
-class TestPaymentCallbackSecurity:
-    async def test_payfast_callback_rejects_invalid_hmac(self, client: AsyncClient):
-        payload = {"payment_status": "PAID", "order_id": str(uuid4()), "amount": "1000", "signature": "badsig"}
-        resp = await client.post("/api/v1/payments/callback/payfast", data=payload)
-        assert resp.status_code in {200, 400}  # always returns 200 to PayFast but logs the error
-
-    async def test_payfast_callback_rejects_missing_signature(self, client: AsyncClient):
-        payload = {"payment_status": "PAID", "order_id": str(uuid4()), "amount": "1000"}
-        resp = await client.post("/api/v1/payments/callback/payfast", data=payload)
-        assert resp.status_code == 200  # gracefully handles, never crashes
+def callback_payload(payment, error_code="000"):
+    client = PayFastClient("synthetic-merchant", "synthetic-key")
+    basket = str(payment.order_id)
+    return {
+        "basket_id": basket,
+        "err_code": error_code,
+        "transaction_id": "synthetic-txn",
+        "validation_hash": client.callback_hash(basket_id=basket, error_code=error_code),
+        "amount": str(payment.amount),
+        "currency_code": "PKR",
+    }
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-# INPUT VALIDATION / INJECTION PREVENTION
-# ══════════════════════════════════════════════════════════════════════════════
+async def callback_request(client, method, payload, **kwargs):
+    if method == "GET":
+        return await client.get("/api/v1/payments/callback/payfast", params=payload, **kwargs)
+    return await client.post(
+        "/api/v1/payments/callback/payfast",
+        data=payload,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+        **kwargs,
+    )
 
-class TestInputSecurity:
-    async def test_sql_injection_in_search(self, client: AsyncClient):
-        """SQL injection attempts in query params must be safely handled."""
-        for payload in [
-            "' OR '1'='1",
-            "'; DROP TABLE products; --",
-            "1; SELECT * FROM users",
-        ]:
-            resp = await client.get(f"/api/v1/products?q={payload}")
-            assert resp.status_code in {200, 422}, f"Unexpected status for payload: {payload!r}"
 
-    async def test_xss_in_product_search(self, client: AsyncClient):
-        """XSS payloads in search must return safe responses (not echoed raw)."""
-        resp = await client.get("/api/v1/products?q=<script>alert(1)</script>")
-        assert resp.status_code in {200, 422}
-        if resp.status_code == 200:
-            body = resp.text
-            assert "<script>" not in body
+@pytest.mark.parametrize("method", ["GET", "POST"])
+@pytest.mark.parametrize("fault", ["bad_hash", "missing_hash", "missing_transaction"])
+async def test_invalid_callback_authentication_cannot_change_payment(
+    client, db, online_payment, offline_services, method, fault
+):
+    payload = callback_payload(online_payment)
+    if fault == "bad_hash":
+        payload["validation_hash"] = "0" * 64
+    else:
+        payload.pop("validation_hash" if fault == "missing_hash" else "transaction_id")
+    before = await snapshot(db)
+    response = await callback_request(client, method, payload)
+    assert_error(response, 422, "BUSINESS_RULE_VIOLATION")
+    assert await snapshot(db) == before
+    audits = (await db.scalars(select(PaymentCallback))).all()
+    assert len(audits) == 1
+    assert audits[0].is_verified is False
+    offline_services.transport.assert_not_awaited()
 
-    async def test_oversized_request_body_rejected(self, client: AsyncClient):
-        """Very large request bodies should be rejected (413 or 422)."""
-        huge_payload = {"name": "x" * 100_000}
-        resp = await client.post("/api/v1/auth/login", json=huge_payload)
-        assert resp.status_code in {413, 422, 400}
 
-    async def test_path_traversal_in_product_slug(self, client: AsyncClient):
-        """Path traversal in slug must not leak filesystem info."""
-        for slug in ["../../../etc/passwd", "..%2F..%2Fetc%2Fpasswd"]:
-            resp = await client.get(f"/api/v1/products/slug/{slug}")
-            assert resp.status_code in {400, 404, 422}
+@pytest.mark.parametrize("field,value", [("amount", "0.01"), ("currency_code", "USD")])
+async def test_callback_hash_does_not_override_monetary_checks(
+    client, db, online_payment, offline_services, field, value
+):
+    payload = {**callback_payload(online_payment), field: value}
+    before = await snapshot(db)
+    response = await callback_request(client, "POST", payload)
+    assert_error(response, 422, "BUSINESS_RULE_VIOLATION")
+    assert await snapshot(db) == before
+    audit = (await db.scalars(select(PaymentCallback))).one()
+    assert audit.is_verified is False
+    offline_services.transport.assert_not_awaited()
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+async def test_valid_failed_callback_control_reaches_verified_handler(
+    client, db, online_payment, offline_services, method
+):
+    response = await callback_request(client, method, callback_payload(online_payment, "001"))
+    assert response.status_code == 200, response.text
+    assert response.json() == {"status": "ok"}
+    await db.refresh(online_payment)
+    assert online_payment.status == PaymentStatus.failed
+    assert (await db.scalars(select(PaymentCallback))).one().is_verified is True
+    offline_services.transport.assert_not_awaited()
+
+
+async def test_untrusted_forwarding_header_cannot_bypass_callback_allowlist(
+    client, db, online_payment, monkeypatch
+):
+    monkeypatch.setattr(settings, "PAYFAST_IPN_IPS", ["192.0.2.99"])
+    monkeypatch.setattr(settings, "PAYFAST_TRUSTED_PROXY_IPS", [])
+    monkeypatch.setattr(settings, "TRUSTED_PROXY_IPS", [])
+    before = await snapshot(db)
+    response = await callback_request(
+        client, "GET", callback_payload(online_payment), headers={"X-Forwarded-For": "192.0.2.99"}
+    )
+    assert_error(response, 403, "FORBIDDEN")
+    assert await snapshot(db) == before
+    assert await db.scalar(select(func.count(PaymentCallback.id))) == 0
+
+
+@pytest.mark.parametrize(
+    "query", ["' OR '1'='1", "'; DROP TABLE products; --", "1; SELECT * FROM users"]
+)
+async def test_search_sql_strings_are_bound_as_data(client, db, accounts, query):
+    before = await snapshot(db)
+    response = await client.get("/api/v1/products", params={"q": query})
+    assert response.status_code == 200, response.text
+    assert response.json()["data"] == []
+    assert await snapshot(db) == before
+    assert await db.scalar(select(func.count(Product.id))) == 1
+
+
+async def test_search_script_input_is_not_echoed_as_catalogue_content(client, accounts):
+    response = await client.get("/api/v1/products", params={"q": "<script>alert(1)</script>"})
+    assert response.status_code == 200, response.text
+    assert response.json()["data"] == []
+    assert "<script>" not in response.text
+
+
+async def test_oversized_callback_is_rejected_before_payment_handler(client, db, online_payment):
+    before = await snapshot(db)
+    response = await client.post(
+        "/api/v1/payments/callback/payfast",
+        content=b"x" * 16385,
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    assert_error(response, 413, "PAYLOAD_TOO_LARGE")
+    assert await snapshot(db) == before
+    assert await db.scalar(select(func.count(PaymentCallback.id))) == 0
+
+
+async def test_oversized_registration_password_is_schema_rejected(client, db):
+    response = await client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "synthetic@example.com",
+            "password": "X" * 100000,
+            "first_name": "Synthetic",
+            "last_name": "Customer",
+        },
+    )
+    assert_error(response, 422, "VALIDATION_ERROR")
+    assert "password" in response.json()["error"]["fields"]
+    assert await db.scalar(select(func.count(User.id))) == 0
+
+
+@pytest.mark.parametrize("slug", ["../../../etc/passwd", "..%2F..%2Fetc%2Fpasswd"])
+async def test_traversal_slug_returns_no_file_content(client, db, accounts, slug):
+    before = await snapshot(db)
+    response = await client.get(f"/api/v1/products/slug/{slug}")
+    assert_error(response, 404, "NOT_FOUND")
+    assert await snapshot(db) == before
