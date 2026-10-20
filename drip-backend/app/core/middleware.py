@@ -19,8 +19,8 @@ from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from app.core.config import settings
 from app.core.client_ip import client_ip
+from app.core.config import settings
 from app.core.error_responses import error_response, unexpected_error_response
 from app.core.logging import get_logger
 
@@ -85,11 +85,38 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         "Cross-Origin-Opener-Policy": "same-origin",
     }
 
+    # FastAPI's development docs load CDN assets and inline bootstrap code.
+    # Never apply this exception to API responses or non-development environments.
+    _DOCS_CSP = (
+        "default-src 'self'; "
+        "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline'; "
+        "style-src 'self' https://cdn.jsdelivr.net https://fonts.googleapis.com 'unsafe-inline'; "
+        "font-src 'self' https://fonts.gstatic.com; "
+        "img-src 'self' data: https://fastapi.tiangolo.com; "
+        "connect-src 'self'; "
+        "worker-src 'self' blob:; "
+        "object-src 'none'; "
+        "base-uri 'self'; "
+        "frame-src 'none'; "
+        "frame-ancestors 'none';"
+    )
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         """Attach the configured security headers after downstream request handling."""
         response = await call_next(request)
         for header, value in self._HEADERS.items():
             response.headers[header] = value
+        if (
+            settings.is_development
+            and request.scope["path"] in {
+                request.app.docs_url,
+                request.app.redoc_url,
+                request.app.swagger_ui_oauth2_redirect_url,
+            }
+            and response.status_code == 200
+            and response.headers.get("content-type", "").startswith("text/html")
+        ):
+            response.headers["Content-Security-Policy"] = self._DOCS_CSP
         return response
 
 

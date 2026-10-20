@@ -281,3 +281,46 @@ async def test_cors_preflight_keeps_protocol_response(error_client):
     assert response.status_code == 400
     assert response.headers["content-type"].startswith("text/plain")
     assert "access-control-allow-origin" not in response.headers
+
+
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/docs/oauth2-redirect"])
+async def test_development_docs_allow_assets_and_bootstrap(monkeypatch, path):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    monkeypatch.setattr(RateLimitMiddleware, "_check", AsyncMock(return_value=(True, 10)))
+    async with AsyncClient(
+        transport=ASGITransport(app=create_application()), base_url="http://testserver"
+    ) as client:
+        response = await client.get(path)
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/html")
+        policy = response.headers["content-security-policy"]
+        assert "script-src 'self' https://cdn.jsdelivr.net 'unsafe-inline';" in policy
+        assert "style-src 'self' https://cdn.jsdelivr.net" in policy
+        assert "https://fonts.googleapis.com 'unsafe-inline';" in policy
+        assert "font-src 'self' https://fonts.gstatic.com;" in policy
+        assert "img-src 'self' data: https://fastapi.tiangolo.com;" in policy
+        assert "connect-src 'self';" in policy
+        assert "frame-ancestors 'none';" in policy
+        assert response.headers["x-content-type-options"] == "nosniff"
+        schema = await client.get("/openapi.json")
+        assert schema.status_code == 200
+        assert "script-src 'self';" in schema.headers["content-security-policy"]
+        missing = await client.get("/docs/not-a-doc-page")
+        assert missing.status_code == 404
+        assert "'unsafe-inline'" not in missing.headers["content-security-policy"]
+
+
+@pytest.mark.parametrize("environment", ["test", "production"])
+@pytest.mark.parametrize("path", ["/docs", "/redoc", "/docs/oauth2-redirect"])
+async def test_non_development_docs_stay_disabled_and_strict(monkeypatch, environment, path):
+    monkeypatch.setattr(settings, "ENVIRONMENT", environment)
+    monkeypatch.setattr(RateLimitMiddleware, "_check", AsyncMock(return_value=(True, 10)))
+    async with AsyncClient(
+        transport=ASGITransport(app=create_application()), base_url="http://testserver"
+    ) as client:
+        response = await client.get(path)
+    assert response.status_code == 404
+    policy = response.headers["content-security-policy"]
+    assert "script-src 'self';" in policy
+    assert "'unsafe-inline'" not in policy
+    assert "cdn.jsdelivr.net" not in policy

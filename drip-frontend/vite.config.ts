@@ -1,21 +1,29 @@
-import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
-import { resolve } from 'path'
+import { loadEnv } from 'vite'
+import { defineConfig } from 'vitest/config'
 
-export default defineConfig({
-  plugins: [react()],
-  resolve: {
-    alias: {
-      '@': resolve(__dirname, 'src'),
-    },
-  },
-  server: {
-    port: 3000,
-    proxy: {
-      '/api': {
-        target: process.env.VITE_API_URL || 'http://localhost:8000',
-        changeOrigin: true,
+export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
+  return {
+    plugins: [react()],
+    server: {
+      host: '127.0.0.1',
+      port: 3000,
+      strictPort: true,
+      // Same-origin requests preserve the backend's HttpOnly refresh cookie.
+      proxy: {
+        '/api': {
+          target: env.API_PROXY_TARGET || 'http://127.0.0.1:8000',
+          changeOrigin: true,
+        },
       },
     },
-  },
+    test: {
+      include: ['src/**/*.test.{ts,tsx}'],
+      environment: 'jsdom',
+      setupFiles: ['./src/test/setup.ts'],
+      clearMocks: true,
+      restoreMocks: true,
+    },
+  }
 })

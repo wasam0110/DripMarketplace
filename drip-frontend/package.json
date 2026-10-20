@@ -1,36 +1,35 @@
 {
   "name": "drip-frontend",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "engines": { "node": ">=22.12.0" },
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
-    "preview": "vite preview",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:browser": "node scripts/test-browser.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.0",
-    "@tanstack/react-query": "^5.51.0",
-    "zustand": "^4.5.4",
-    "react-hook-form": "^7.52.1",
-    "zod": "^3.23.8",
-    "axios": "^1.7.3",
-    "framer-motion": "^11.3.19",
-    "lucide-react": "^0.383.0",
-    "react-helmet-async": "^2.0.5",
-    "@hookform/resolvers": "^3.9.0"
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "react-router": "8.5.0"
   },
   "devDependencies": {
-    "@types/react": "^18.3.3",
-    "@types/react-dom": "^18.3.0",
-    "@vitejs/plugin-react": "^4.3.1",
-    "typescript": "^5.5.4",
-    "vite": "^5.3.5",
-    "tailwindcss": "^3.4.7",
-    "autoprefixer": "^10.4.19",
-    "postcss": "^8.4.40"
+    "@playwright/test": "1.64.1",
+    "@axe-core/playwright": "4.14.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "jsdom": "^26.1.0",
+    "typescript": "~5.9.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.5"
   }
 }
