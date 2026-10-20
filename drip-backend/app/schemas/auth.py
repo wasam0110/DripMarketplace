@@ -31,6 +31,7 @@ class RegisterRequest(DRIPBaseModel):
     @field_validator("email")
     @classmethod
     def normalise_email(cls, v: str) -> str:
+        """Normalize the registration address and reject invalid or disposable addresses."""
         v = v.strip().lower()
         if not re.match(r"^[a-zA-Z0-9._%+\-]{1,64}@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$", v):
             raise ValueError("Enter a valid email address.")
@@ -44,6 +45,7 @@ class RegisterRequest(DRIPBaseModel):
     @field_validator("password")
     @classmethod
     def validate_password(cls, v: str) -> str:
+        """Require the password length and character classes before accepting credentials."""
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters.")
         if len(v) > 128:
@@ -59,6 +61,7 @@ class RegisterRequest(DRIPBaseModel):
     @field_validator("first_name", "last_name")
     @classmethod
     def validate_name(cls, v: str) -> str:
+        """Trim registration names and enforce their length bounds."""
         v = v.strip()
         if len(v) < 2:
             raise ValueError("Must be at least 2 characters.")
@@ -69,6 +72,7 @@ class RegisterRequest(DRIPBaseModel):
     @field_validator("phone")
     @classmethod
     def normalise_phone(cls, v: str | None) -> str | None:
+        """Validate a Pakistani mobile number and normalize it to the 92 country prefix."""
         if v is None:
             return None
         clean = re.sub(r"[\s\-()]", "", v)
@@ -88,6 +92,7 @@ class LoginRequest(DRIPBaseModel):
     @field_validator("email")
     @classmethod
     def normalise_email(cls, v: str) -> str:
+        """Strip whitespace and lowercase the address before authentication lookups."""
         return v.strip().lower()
 
 
@@ -103,6 +108,7 @@ class ForgotPasswordRequest(DRIPBaseModel):
     @field_validator("email")
     @classmethod
     def normalise_email(cls, v: str) -> str:
+        """Strip whitespace and lowercase the address before authentication lookups."""
         return v.strip().lower()
 
 
@@ -113,6 +119,7 @@ class ResetPasswordRequest(DRIPBaseModel):
     @field_validator("new_password")
     @classmethod
     def validate_password(cls, v: str) -> str:
+        """Require the password length and character classes before accepting credentials."""
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters.")
         if len(v) > 128:
@@ -133,6 +140,7 @@ class ChangePasswordRequest(DRIPBaseModel):
     @field_validator("new_password")
     @classmethod
     def validate_new(cls, v: str) -> str:
+        """Require the replacement password's length and character classes."""
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters.")
         if len(v) > 128:
@@ -147,6 +155,7 @@ class ChangePasswordRequest(DRIPBaseModel):
 
     @model_validator(mode="after")
     def passwords_differ(self) -> "ChangePasswordRequest":
+        """Prevent a password-change request from reusing the supplied current password."""
         if self.current_password == self.new_password:
             raise ValueError("New password must differ from the current password.")
         return self
@@ -158,6 +167,7 @@ class VerifyTOTPRequest(DRIPBaseModel):
     @field_validator("code")
     @classmethod
     def validate_code(cls, v: str) -> str:
+        """Require exactly six digits for the admin TOTP verification flow."""
         v = v.strip()
         if not re.match(r"^\d{6}$", v):
             raise ValueError("TOTP code must be exactly 6 digits.")

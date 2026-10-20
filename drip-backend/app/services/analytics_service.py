@@ -1,14 +1,18 @@
+"""services / analytics service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal, ROUND_HALF_UP
 from uuid import UUID
-from typing import Optional
 
 from sqlalchemy import select, func, desc, and_, case, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.order import Order, OrderStatus, OrderItem, SellerOrder
+from app.models.order import Order, OrderStatus, OrderItem
 from app.models.product import Product, ProductVariant, ProductInventory
 from app.models.seller import Seller, SellerStatus
 from app.models.user import User, UserRole
@@ -37,14 +41,17 @@ from app.schemas.analytics import (
 
 
 def _period_to_days(period: str) -> int:
+    """Translate the requested analytics period into a day count."""
     return {"7d": 7, "30d": 30, "90d": 90, "1y": 365}.get(period, 30)
 
 
 def _date_from(period: str) -> datetime:
+    """Compute the lower timestamp bound for the requested analytics period."""
     return datetime.now(timezone.utc) - timedelta(days=_period_to_days(period))
 
 
 def _trunc(granularity: str) -> str:
+    """Choose the PostgreSQL date-truncation bucket for an analytics interval."""
     return {"day": "day", "week": "week", "month": "month"}.get(granularity, "day")
 
 
@@ -58,9 +65,13 @@ def _money(value: Decimal | int) -> Decimal:
 
 class SellerAnalyticsService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind SellerAnalyticsService to its injected dependencies for subsequent
+        operations.
+        """
         self.db = db
 
     async def get_overview(self, seller_id: UUID, period: str) -> SellerAnalyticsOverview:
+        """Aggregate seller sales, orders, and customer metrics for the selected period."""
         date_from = _date_from(period)
 
         # Commission totals
@@ -123,6 +134,7 @@ class SellerAnalyticsService:
     async def get_revenue_series(
         self, seller_id: UUID, period: str, granularity: str
     ) -> RevenueSeriesResponse:
+        """Group seller revenue into ordered time buckets for the dashboard chart."""
         date_from = _date_from(period)
         trunc_unit = _trunc(granularity)
 
@@ -163,6 +175,7 @@ class SellerAnalyticsService:
     async def get_top_products(
         self, seller_id: UUID, period: str, sort_by: str, limit: int
     ) -> TopProductsResponse:
+        """Rank the seller's products by their qualifying order-item sales."""
         date_from = _date_from(period)
 
         valid_orders = select(Order.id).where(
@@ -222,6 +235,7 @@ class SellerAnalyticsService:
         )
 
     async def get_inventory_health(self, seller_id: UUID) -> InventoryHealthResponse:
+        """Summarize the seller's stock, reservations, and low-stock variants."""
         avail = ProductInventory.stock - ProductInventory.reserved
 
         q = (
@@ -258,12 +272,17 @@ class SellerAnalyticsService:
 
 class AdminAnalyticsService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind AdminAnalyticsService to its injected dependencies for subsequent
+        operations.
+        """
         self.db = db
 
     async def get_platform_analytics(self, period: str) -> PlatformAnalytics:
+        """Aggregate marketplace sales, orders, and participant metrics."""
         date_from = _date_from(period)
 
         async def scalar(q):
+            """Execute an analytics aggregate with a zero default for missing data."""
             return (await self.db.execute(q)).scalar_one() or 0
 
         total_gmv = await scalar(
@@ -327,6 +346,7 @@ class AdminAnalyticsService:
         )
 
     async def get_platform_revenue(self, period: str, granularity: str) -> RevenueSeriesResponse:
+        """Group platform revenue into time buckets for the admin dashboard."""
         date_from = _date_from(period)
         trunc_unit = _trunc(granularity)
 
@@ -360,6 +380,7 @@ class AdminAnalyticsService:
         )
 
     async def get_top_sellers(self, period: str, limit: int) -> TopSellersResponse:
+        """Rank visible sellers by their qualifying marketplace sales."""
         date_from = _date_from(period)
 
         q = (
@@ -401,6 +422,7 @@ class AdminAnalyticsService:
         )
 
     async def get_cohort(self, months: int) -> CohortResponse:
+        """Calculate customer retention cohorts from recorded order activity."""
         now = datetime.now(timezone.utc)
         current_index = now.year * 12 + now.month - 1
         first_index = current_index - months + 1
@@ -447,6 +469,7 @@ class AdminAnalyticsService:
         return CohortResponse(months=months, data=list(cohorts.values()))
 
     async def get_payment_methods(self, period: str) -> PaymentMethodsResponse:
+        """Group order activity by payment method for the admin breakdown."""
         date_from = _date_from(period)
 
         q = (
@@ -467,6 +490,7 @@ class AdminAnalyticsService:
         all_total = sum((v["total"] for v in data.values()), Decimal(0)) or Decimal(1)
 
         def stat(method: str, **extra) -> PaymentMethodStat:
+            """Convert a payment-method aggregate into its API statistics model."""
             d = data.get(method, {"count": 0, "total": _money(0)})
             return PaymentMethodStat(
                 count=d["count"],
@@ -507,6 +531,7 @@ class AdminAnalyticsService:
         )
 
     async def get_cities(self, period: str, limit: int) -> CitiesResponse:
+        """Group qualifying orders by shipping city for geographic analytics."""
         from app.models.order import OrderAddress
 
         date_from = _date_from(period)
@@ -546,6 +571,7 @@ class AdminAnalyticsService:
         )
 
     async def get_conversion(self, period: str) -> ConversionResponse:
+        """Combine recorded browsing and order activity into conversion-stage counts."""
         date_from = _date_from(period)
         rows = (
             await self.db.execute(
@@ -575,6 +601,7 @@ class AdminAnalyticsService:
         )
 
     async def get_search_queries(self, period: str, limit: int) -> SearchQueriesResponse:
+        """Rank recorded search terms for the selected analytics period."""
         rows = (
             await self.db.execute(
                 select(

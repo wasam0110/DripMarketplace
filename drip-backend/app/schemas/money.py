@@ -7,6 +7,7 @@ from pydantic import Field, PlainSerializer
 
 
 def _serialize_amount(value: Decimal) -> str:
+    """Serialize a response amount as a fixed two-decimal string to preserve PKR precision."""
     return format(value, ".2f")
 
 

@@ -1,3 +1,8 @@
+"""api / v1 / wallet.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -26,6 +31,8 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 async def get_wallet_summary(
     db: DB, current_seller: CurrentSeller
 ) -> WalletSummaryResponse:
+    # Handle GET /seller/wallet at this router boundary. Delegates to WalletService.get_summary.
+    # Access dependency: CurrentSeller.
     return await WalletService(db).get_summary(UUID(current_seller["seller_id"]))
 
 
@@ -40,6 +47,8 @@ async def get_wallet_transactions(
     page:     int = Query(default=1, ge=1),
     per_page: int = Query(default=25, ge=1, le=100),
 ) -> PaginatedTransactions:
+    # Handle GET /seller/wallet/transactions at this router boundary. Delegates to
+    # WalletService.get_transactions. Access dependency: CurrentSeller.
     return await WalletService(db).get_transactions(
         seller_id = UUID(current_seller["seller_id"]),
         tx_type   = tx_type,
@@ -54,6 +63,8 @@ async def request_withdrawal(
     db:             DB,
     current_seller: CurrentSeller,
 ) -> PayoutResponse:
+    # Handle POST /seller/wallet/withdraw at this router boundary. Delegates to
+    # WalletService.request_withdrawal. Access dependency: CurrentSeller.
     return await WalletService(db).request_withdrawal(
         seller_id=UUID(current_seller["seller_id"]), payload=payload
     )
@@ -69,6 +80,8 @@ async def get_payout_history(
     ),
     page: int = Query(default=1, ge=1),
 ) -> PaginatedPayouts:
+    # Handle GET /seller/wallet/payouts at this router boundary. Delegates to
+    # WalletService.get_payouts. Access dependency: CurrentSeller.
     return await WalletService(db).get_payouts(
         seller_id=UUID(current_seller["seller_id"]),
         status=status,
@@ -84,6 +97,8 @@ async def get_commission_breakdown(
     date_to:        Optional[str] = Query(default=None),
     page:           int           = Query(default=1, ge=1),
 ) -> CommissionBreakdownResponse:
+    # Handle GET /seller/wallet/commission-breakdown at this router boundary. Delegates to
+    # WalletService.get_commission_breakdown. Access dependency: CurrentSeller.
     return await WalletService(db).get_commission_breakdown(
         seller_id = UUID(current_seller["seller_id"]),
         date_from = date_from,
@@ -98,6 +113,8 @@ async def get_commission_breakdown(
 async def admin_wallet_overview(
     db: DB, current_admin: CurrentAdmin
 ) -> AdminWalletOverviewResponse:
+    # Handle GET /admin/wallet/overview at this router boundary. Delegates to
+    # WalletService.admin_overview. Access dependency: CurrentAdmin.
     return await WalletService(db).admin_overview()
 
 
@@ -111,6 +128,8 @@ async def admin_list_payouts(
     ),
     page: int = Query(default=1, ge=1),
 ) -> PaginatedPayouts:
+    # Handle GET /admin/wallet/payouts at this router boundary. Delegates to
+    # WalletService.payout_repo.list_admin. Access dependency: CurrentAdmin.
     rows, total = await WalletService(db).payout_repo.list_admin(status=status, page=page)
     from app.schemas.wallet import PayoutResponse
     return PaginatedPayouts(
@@ -135,6 +154,8 @@ async def admin_approve_payout(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> PayoutResponse:
+    # Handle POST /admin/wallet/payouts/{payout_id}/approve at this router boundary. Delegates
+    # to WalletService.admin_approve_payout. Access dependency: CurrentAdmin.
     return await WalletService(db).admin_approve_payout(
         payout_id=payout_id,
         admin_id=UUID(current_admin["sub"]),
@@ -149,6 +170,8 @@ async def admin_reject_payout(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> PayoutResponse:
+    # Handle POST /admin/wallet/payouts/{payout_id}/reject at this router boundary. Delegates to
+    # WalletService.admin_reject_payout. Access dependency: CurrentAdmin.
     if not payload.admin_note:
         from fastapi import HTTPException
         raise HTTPException(status_code=422, detail="admin_note is required for rejection")
@@ -161,4 +184,6 @@ async def admin_reject_payout(
 
 @router.post("/admin/wallet/payouts/{payout_id}/complete", response_model=PayoutResponse)
 async def admin_complete_payout(payout_id: UUID, payload: CompletePayoutRequest, db: DB, current_admin: CurrentAdmin) -> PayoutResponse:
+    # Handle POST /admin/wallet/payouts/{payout_id}/complete at this router boundary. Delegates
+    # to WalletService.admin_complete_payout. Access dependency: CurrentAdmin.
     return await WalletService(db).admin_complete_payout(payout_id, UUID(current_admin["sub"]), payload.reference)

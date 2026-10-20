@@ -13,6 +13,7 @@ from app.repositories.order_repo import OrderRepository
 
 
 def create_guest_token(order_id: UUID) -> str:
+    """Generate the opaque token used to authorize access to a guest order."""
     now = datetime.now(UTC)
     return jwt.encode(
         {
@@ -28,6 +29,7 @@ def create_guest_token(order_id: UUID) -> str:
 
 
 def guest_token_matches(token: str | None, order_id: UUID) -> bool:
+    """Compare the supplied guest token with the order's stored token securely."""
     if not token:
         return False
     try:
@@ -45,6 +47,7 @@ def guest_token_matches(token: str | None, order_id: UUID) -> bool:
 
 
 async def authorized_order(db, order_id, user_id=None, guest_token=None, *, lock=False):
+    """Load an order only for its owning account or a valid guest-order token."""
     if user_id is None and not guest_token:
         raise AuthenticationError("Sign in or provide a guest order token")
     order = await OrderRepository(db).get_by_id(order_id, for_update=lock)

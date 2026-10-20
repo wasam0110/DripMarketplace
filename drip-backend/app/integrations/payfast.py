@@ -53,6 +53,7 @@ class PayFastClient:
         timeout_seconds: float = 15.0,
         http_client: httpx.AsyncClient | None = None,
     ) -> None:
+        """Store the configuration and dependencies used by PayFastClient."""
         root = UAT_ROOT if sandbox else LIVE_ROOT
         self.merchant_id = merchant_id.strip()
         self.secured_key = secured_key.strip()
@@ -70,10 +71,12 @@ class PayFastClient:
         return self.checkout_url
 
     def _ensure_configured(self) -> None:
+        """Reject provider requests until the required merchant credentials are present."""
         if not self.merchant_id or not self.secured_key or not self.merchant_name:
             raise PayFastProtocolError("PayFast is not configured")
 
     async def _post_form(self, url: str, data: dict[str, str]) -> httpx.Response:
+        """Post PayFast form data and propagate transport errors or non-success HTTP status."""
         if self._http_client is not None:
             response = await self._http_client.post(url, data=data)
         else:
@@ -85,6 +88,7 @@ class PayFastClient:
     async def _get(
         self, url: str, *, headers: dict[str, str], params: dict[str, str] | None = None
     ) -> httpx.Response:
+        """Get a PayFast resource and propagate transport errors or non-success HTTP status."""
         if self._http_client is not None:
             response = await self._http_client.get(url, headers=headers, params=params)
         else:
@@ -255,6 +259,7 @@ class PayFastClient:
 
 
 def _format_amount(amount: Decimal) -> str:
+    """Format provider amounts as two-decimal PKR strings."""
     value = Decimal(amount)
     if not value.is_finite() or value <= 0:
         raise PayFastProtocolError("PayFast amount must be positive and finite")

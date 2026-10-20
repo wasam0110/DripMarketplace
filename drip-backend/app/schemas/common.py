@@ -20,7 +20,6 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    field_validator,
     model_validator,
 )
 
@@ -74,10 +73,12 @@ class PagePagination(DRIPResponseModel):
 
     @property
     def has_next(self) -> bool:
+        """Expose whether the pagination metadata identifies a later page."""
         return self.page < self.total_pages
 
     @property
     def has_prev(self) -> bool:
+        """Expose whether the pagination metadata identifies an earlier page."""
         return self.page > 1
 
 
@@ -148,10 +149,12 @@ class PKRAmount(int):
 
     @classmethod
     def __get_validators__(cls):  # Pydantic v1 compat
+        """Yield the legacy PKR type validator for Pydantic's custom-type protocol."""
         yield cls.validate
 
     @classmethod
     def validate(cls, v: Any) -> "PKRAmount":
+        """Coerce numeric input to whole PKR and enforce the legacy amount bounds."""
         if not isinstance(v, int | float):
             raise ValueError("Amount must be a number")
         amount = int(v)
@@ -171,6 +174,7 @@ class PaginationParams(DRIPBaseModel):
 
     @property
     def offset(self) -> int:
+        """Translate one-based page parameters into a database row offset."""
         return (self.page - 1) * self.per_page
 
 
@@ -181,6 +185,7 @@ class DateRangeParams(DRIPBaseModel):
 
     @model_validator(mode="after")
     def validate_range(self) -> "DateRangeParams":
+        """Reject a date filter whose start follows its end."""
         if self.date_from and self.date_to:
             if self.date_from > self.date_to:
                 raise ValueError("date_from must be before date_to")

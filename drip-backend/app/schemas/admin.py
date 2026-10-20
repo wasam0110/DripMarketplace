@@ -1,3 +1,8 @@
+"""schemas / admin.
+
+Validated request and response contracts used by API routes and services.
+"""
+
 from __future__ import annotations
 from decimal import Decimal
 

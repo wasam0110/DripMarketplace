@@ -67,38 +67,47 @@ class RedisKeys:
 
     @staticmethod
     def rate_limit(key: str) -> str:
+        """Build the namespaced Redis key for rate limit operations."""
         return f"drip:rl:{key}"
 
     @staticmethod
     def jwt_blocklist(jti: str) -> str:
+        """Build the namespaced Redis key for jwt blocklist operations."""
         return f"drip:jwt:block:{jti}"
 
     @staticmethod
     def email_verify_token(token: str) -> str:
+        """Build the namespaced Redis key for email verify token operations."""
         return f"drip:email:verify:{token}"
 
     @staticmethod
     def password_reset_token(token: str) -> str:
+        """Build the namespaced Redis key for password reset token operations."""
         return f"drip:pwd:reset:{token}"
 
     @staticmethod
     def product_cache(product_id: str) -> str:
+        """Build the namespaced Redis key for product cache operations."""
         return f"drip:cache:product:{product_id}"
 
     @staticmethod
     def catalogue_cache(filter_hash: str) -> str:
+        """Build the namespaced Redis key for catalogue cache operations."""
         return f"drip:cache:cat:{filter_hash}"
 
     @staticmethod
     def seller_dashboard_cache(seller_id: str, period: str) -> str:
+        """Build the namespaced Redis key for seller dashboard cache operations."""
         return f"drip:cache:dash:{seller_id}:{period}"
 
     @staticmethod
     def cod_timer(order_id: str) -> str:
+        """Build the namespaced Redis key for cod timer operations."""
         return f"drip:cod:timer:{order_id}"
 
     @staticmethod
     def login_attempts(ip: str) -> str:
+        """Build the namespaced Redis key for login attempts operations."""
         return f"drip:login:attempts:{ip}"
 
 

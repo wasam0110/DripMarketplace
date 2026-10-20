@@ -1,3 +1,8 @@
+"""services / notification outbox.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -31,6 +36,7 @@ async def queue_notification(
 
 
 async def list_failed_notifications(db: AsyncSession, page: int, per_page: int) -> dict:
+    """List unresolved failed outbox events for administrative recovery."""
     rows = await db.scalars(
         select(NotificationOutbox)
         .where(NotificationOutbox.dead_lettered_at.is_not(None))
@@ -62,6 +68,7 @@ async def replay_failed_notification(
     admin_id: UUID,
     reason: str,
 ) -> dict:
+    """Reset an eligible failed outbox event so the worker can attempt delivery again."""
     row = await db.scalar(
         select(NotificationOutbox)
         .where(NotificationOutbox.id == event_id)

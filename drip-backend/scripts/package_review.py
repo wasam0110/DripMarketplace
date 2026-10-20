@@ -31,6 +31,9 @@ FILES = (
 
 
 def selected_files() -> list[Path]:
+    """Select allowed source artifacts while excluding hidden files, caches, and unsafe
+    paths.
+    """
     paths = [ROOT / name for name in FILES if (ROOT / name).is_file()]
     for name in TREES:
         for path in (ROOT / name).rglob("*"):
@@ -55,6 +58,7 @@ def selected_files() -> list[Path]:
 
 
 def main() -> None:
+    """Package the selected backend files and verify their archived content against hashes."""
     output = ROOT / "dist"
     output.mkdir(exist_ok=True)
     destination = output / "WearHowZ_Task_6_Review.zip"

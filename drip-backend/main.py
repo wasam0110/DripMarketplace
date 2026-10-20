@@ -96,6 +96,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # ── Application factory ───────────────────────────────────────────────────────
 
 def create_application() -> FastAPI:
+    """Assemble FastAPI routes, middleware, exception handlers, and resource lifespan."""
     app = FastAPI(
             swagger_ui_parameters={"url": "/openapi.json"},
 
@@ -165,12 +166,14 @@ def _register_exception_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(HTTPException)
     async def http_exception_handler(request: Request, exc: HTTPException) -> Response:
+        """Adapt framework HTTP errors to the common API response contract."""
         return http_error_response(request, exc)
 
     @app.exception_handler(DRIPException)
     async def drip_exception_handler(
         request: Request, exc: DRIPException
     ) -> JSONResponse:
+        """Serialize domain exceptions using their status, code, fields, and request ID."""
         if exc.http_status >= 500:
             logger.error(
                 "drip.exception",

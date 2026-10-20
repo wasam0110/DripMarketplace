@@ -9,6 +9,7 @@ from app.schemas.admin import PlatformSettingsResponse
 
 
 async def get_platform_settings(db: AsyncSession) -> PlatformSettingsResponse:
+    """Combine supported database overrides with defaults into validated runtime policy."""
     values = {key: getattr(settings, key.upper()) for key in PlatformSettingsResponse.model_fields}
     result = await db.execute(select(SystemSetting).execution_options(populate_existing=True))
     values.update({row.key: row.value for row in result.scalars().all() if row.key in values})

@@ -1,3 +1,8 @@
+"""services / admin service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -5,18 +10,17 @@ from uuid import UUID
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 
-from sqlalchemy import select, update, func, and_, desc
+from sqlalchemy import select, update, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.core.exceptions import BusinessRuleError, NotFoundError, InvalidStatusTransitionError
-from app.models.seller import Seller, SellerStatus, SellerWallet
-from app.models.order import Order, OrderStatus, SellerOrder, OrderItem
+from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.models.seller import Seller, SellerStatus
+from app.models.order import Order, OrderStatus, SellerOrder
 from app.models.product import Product
 from app.models.wallet import Payout, PayoutStatus, CommissionLedger
 from app.models.admin import SystemSetting, Banner
 from app.models.user import User, UserRole
-from app.repositories.seller_repo import SellerRepository
 from app.schemas.admin import (
     AdminDashboardResponse, AdminSellerRowResponse, AdminSellerDetailResponse,
     PaginatedAdminSellers, AdminOrderRowResponse, OrderTotals, PaginatedAdminOrders,
@@ -39,20 +43,24 @@ DEFAULT_SETTINGS = {
 
 class AdminService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind AdminService to its injected dependencies for subsequent operations."""
         self.db = db
 
     # ── Dashboard ──────────────────────────────────────────────────────────────
 
     async def get_dashboard(self, period: str) -> AdminDashboardResponse:
+        """Aggregate marketplace counts and financial totals for the admin dashboard."""
         now = datetime.now(timezone.utc)
         since = now.replace(hour=0, minute=0, second=0, microsecond=0) if period == "today" else now - timedelta(days={
             "week": 7, "month": 30, "quarter": 90, "year": 365,
         }.get(period, 30))
         async def count(model, *filters):
+            """Execute a dashboard count query using the shared database session."""
             r = await self.db.execute(select(func.count(model.id)).where(*filters))
             return r.scalar_one() or 0
 
         async def sum_col(col, *filters):
+            """Execute a dashboard sum query and normalize an empty result to zero."""
             r = await self.db.execute(select(func.coalesce(func.sum(col), 0)).where(*filters))
             return Decimal(r.scalar_one())
 
@@ -95,6 +103,7 @@ class AdminService:
         page:     int = 1,
         per_page: int = 25,
     ) -> PaginatedAdminSellers:
+        """Build a filtered seller page with product counts and settlement totals."""
         query = select(Seller).options(selectinload(Seller.wallet)).where(Seller.deleted_at.is_(None))
 
         if status and status != "all":
@@ -132,6 +141,7 @@ class AdminService:
         )
 
     async def get_seller(self, seller_id: UUID) -> AdminSellerDetailResponse:
+        """Build the admin seller detail view from seller, wallet, and order records."""
         result = await self.db.execute(
             select(Seller)
             .options(selectinload(Seller.wallet))
@@ -167,6 +177,7 @@ class AdminService:
         )
 
     async def approve_seller(self, seller_id: UUID, admin_id: UUID) -> dict:
+        """Approve an eligible seller and queue the decision notification transactionally."""
         seller = await self._get_seller(seller_id)
         if seller.status != SellerStatus.pending_approval:
             raise BusinessRuleError(
@@ -192,6 +203,7 @@ class AdminService:
         return {"message": f"Seller '{seller.brand_name}' approved and activated"}
 
     async def reject_seller(self, seller_id: UUID, admin_id: UUID, reason: str) -> dict:
+        """Reject a pending seller application and queue the decision notification."""
         seller = await self._get_seller(seller_id)
         if seller.status not in (SellerStatus.pending_approval, SellerStatus.pending_payment):
             raise BusinessRuleError("Can only reject pending applications")
@@ -215,6 +227,7 @@ class AdminService:
         return {"message": f"Seller '{seller.brand_name}' rejected"}
 
     async def suspend_seller(self, seller_id: UUID, admin_id: UUID, reason: str) -> dict:
+        """Suspend an active seller after validating the current approval state."""
         seller = await self._get_seller(seller_id)
         if seller.status != SellerStatus.active:
             raise BusinessRuleError("Can only suspend active sellers")
@@ -231,6 +244,7 @@ class AdminService:
         return {"message": f"Seller '{seller.brand_name}' suspended. All products hidden."}
 
     async def reinstate_seller(self, seller_id: UUID, admin_id: UUID) -> dict:
+        """Restore a suspended seller to active status."""
         seller = await self._get_seller(seller_id)
         if seller.status != SellerStatus.suspended:
             raise BusinessRuleError("Can only reinstate suspended sellers")
@@ -256,6 +270,7 @@ class AdminService:
         page:           int = 1,
         per_page:       int = 25,
     ) -> PaginatedAdminOrders:
+        """Build the filtered admin order page with order and seller-order totals."""
         query = select(Order).options(
             selectinload(Order.items),
             selectinload(Order.seller_orders),
@@ -319,6 +334,7 @@ class AdminService:
     # ── COD Queue ──────────────────────────────────────────────────────────────
 
     async def list_cod_queue(self) -> list[CODQueueItem]:
+        """Read pending COD verification orders using the runtime verification deadline."""
         from app.services.platform_settings import get_platform_settings
         policy = await get_platform_settings(self.db)
         result = await self.db.execute(
@@ -358,6 +374,7 @@ class AdminService:
         return items
 
     async def verify_cod(self, order_id: UUID, admin_id: UUID, note: Optional[str] = None) -> dict:
+        """Advance an eligible COD order and queue its status notification."""
         from app.repositories.order_repo import OrderRepository
         repo  = OrderRepository(self.db)
         order = await repo.get_by_id(order_id, for_update=True)
@@ -377,6 +394,9 @@ class AdminService:
         return {"message": f"COD order {order.order_number} verified and moved to processing"}
 
     async def cancel_cod(self, order_id: UUID, admin_id: UUID, reason: Optional[str] = None) -> dict:
+        """Cancel an unverified COD order, release reservations, and queue its
+        notification.
+        """
         from app.repositories.order_repo import OrderRepository, SellerOrderRepository
         from app.repositories.inventory_repo import InventoryRepository
         from app.models.order import SellerOrderStatus
@@ -415,12 +435,14 @@ class AdminService:
     # ── Banners ────────────────────────────────────────────────────────────────
 
     async def list_banners(self) -> list[BannerResponse]:
+        """Convert stored banners into the admin response contract."""
         result = await self.db.execute(
             select(Banner).order_by(Banner.sort_order, Banner.created_at)
         )
         return [BannerResponse.model_validate(b) for b in result.scalars().all()]
 
     async def create_banner(self, **kwargs) -> BannerResponse:
+        """Persist a banner and return its response model."""
         banner = Banner(**kwargs)
         self.db.add(banner)
         await self.db.flush()
@@ -429,6 +451,7 @@ class AdminService:
         return BannerResponse.model_validate(banner)
 
     async def delete_banner(self, banner_id: UUID) -> None:
+        """Delete the requested banner or report that it does not exist."""
         result = await self.db.execute(select(Banner).where(Banner.id == banner_id))
         banner = result.scalar_one_or_none()
         if not banner:
@@ -439,12 +462,16 @@ class AdminService:
     # ── Settings ───────────────────────────────────────────────────────────────
 
     async def get_settings(self) -> PlatformSettingsResponse:
+        """Return the effective platform settings from the shared policy loader."""
         from app.services.platform_settings import get_platform_settings
         return await get_platform_settings(self.db)
 
     async def update_settings(
         self, updates: dict, admin_id: UUID
     ) -> PlatformSettingsResponse:
+        """Validate and persist supported runtime settings, then reload the effective
+        policy.
+        """
         from sqlalchemy.dialects.postgresql import insert
         from app.schemas.admin import UpdateSettingsRequest
         updates = UpdateSettingsRequest.model_validate(updates).model_dump(exclude_none=True)
@@ -463,6 +490,7 @@ class AdminService:
     # ── Internal helpers ───────────────────────────────────────────────────────
 
     async def _get_seller(self, seller_id: UUID) -> Seller:
+        """Load a non-deleted seller for administrative state changes."""
         result = await self.db.execute(
             select(Seller).where(Seller.id == seller_id, Seller.deleted_at.is_(None))
         )
@@ -472,6 +500,7 @@ class AdminService:
         return seller
 
     async def _count_products(self, seller_id: UUID) -> int:
+        """Count the seller's published, non-deleted products."""
         result = await self.db.execute(
             select(func.count(Product.id)).where(
                 Product.seller_id == seller_id,
@@ -482,6 +511,7 @@ class AdminService:
         return result.scalar_one() or 0
 
     async def _seller_commission(self, seller_id: UUID) -> Decimal:
+        """Aggregate the seller's net platform commission from settlement records."""
         result = await self.db.execute(
             select(func.coalesce(func.sum(CommissionLedger.net_commission_amount), 0))
             .where(CommissionLedger.seller_id == seller_id)
@@ -489,6 +519,7 @@ class AdminService:
         return result.scalar_one()
 
     async def _seller_gmv(self, seller_id: UUID) -> Decimal:
+        """Aggregate the seller's net settled gross merchandise value."""
         return await self.db.scalar(select(func.coalesce(func.sum(SellerOrder.subtotal), 0)).where(
             SellerOrder.seller_id == seller_id, SellerOrder.status == "delivered",
         ))

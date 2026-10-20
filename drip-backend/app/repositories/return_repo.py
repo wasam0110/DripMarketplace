@@ -1,3 +1,8 @@
+"""repositories / return repo.
+
+Database operations used by services within their transaction boundaries.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -21,9 +26,11 @@ from app.models.return_ import (
 
 class ReturnRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind ReturnRepository to its injected dependencies for subsequent operations."""
         self.db = db
 
     async def create(self, **kwargs) -> Return:
+        """Insert a return and return it within the caller's transaction."""
         r = Return(**kwargs)
         self.db.add(r)
         await self.db.flush()
@@ -31,6 +38,7 @@ class ReturnRepository:
         return r
 
     async def add_item(self, **kwargs) -> ReturnItem:
+        """Attach an order item and requested quantity to a return."""
         item = ReturnItem(**kwargs)
         self.db.add(item)
         await self.db.flush()
@@ -43,6 +51,7 @@ class ReturnRepository:
         *,
         for_update: bool = False,
     ) -> Optional[Return]:
+        """Look up a return by id; return None when absent."""
         q = select(Return).options(
             selectinload(Return.items),
             selectinload(Return.dispute).selectinload(Dispute.messages),
@@ -57,6 +66,7 @@ class ReturnRepository:
     async def list_by_user(
         self, user_id: UUID, page: int = 1, per_page: int = 10
     ) -> tuple[Sequence[Return], int]:
+        """Query return records for by user reads using the caller's session."""
         q = select(Return).options(selectinload(Return.items)).where(Return.user_id == user_id)
 
         count_q = select(func.count()).select_from(q.subquery())
@@ -69,6 +79,7 @@ class ReturnRepository:
     async def list_admin(
         self, status: Optional[str] = None, page: int = 1, per_page: int = 25
     ) -> tuple[Sequence[Return], int]:
+        """Query return records for admin reads using the caller's session."""
         q = select(Return).options(selectinload(Return.items))
         if status:
             q = q.where(Return.status == ReturnStatus(status))
@@ -83,6 +94,7 @@ class ReturnRepository:
     async def get_by_seller(
         self, return_id: UUID, seller_id: UUID, *, for_update: bool = False
     ) -> Optional[Return]:
+        """Look up a return by seller; return None when absent."""
         query = (
             select(Return)
             .join(SellerOrder, SellerOrder.id == Return.seller_order_id)
@@ -105,6 +117,7 @@ class ReturnRepository:
         page: int = 1,
         per_page: int = 25,
     ) -> tuple[Sequence[Return], int]:
+        """Query return records for seller reads using the caller's session."""
         q = (
             select(Return)
             .join(SellerOrder, SellerOrder.id == Return.seller_order_id)
@@ -129,6 +142,7 @@ class ReturnRepository:
         notes:       Optional[str] = None,
         resolved_at: Optional[datetime] = None,
     ) -> None:
+        """Apply the return status change within the caller's transaction."""
         values: dict = {"status": status}
         if notes:
             values["notes"] = notes
@@ -141,9 +155,11 @@ class ReturnRepository:
 
 class DisputeRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind DisputeRepository to its injected dependencies for subsequent operations."""
         self.db = db
 
     async def create(self, **kwargs) -> Dispute:
+        """Insert a dispute and return it within the caller's transaction."""
         d = Dispute(**kwargs)
         self.db.add(d)
         await self.db.flush()
@@ -153,6 +169,7 @@ class DisputeRepository:
     async def get_by_id(
         self, dispute_id: UUID, *, for_update: bool = False
     ) -> Optional[Dispute]:
+        """Look up a dispute by id; return None when absent."""
         query = (
             select(Dispute)
             .options(selectinload(Dispute.messages))
@@ -166,6 +183,7 @@ class DisputeRepository:
     async def get_by_return_id(
         self, return_id: UUID, *, for_update: bool = False
     ) -> Optional[Dispute]:
+        """Look up a dispute by return id; return None when absent."""
         query = (
             select(Dispute)
             .options(selectinload(Dispute.messages))
@@ -177,6 +195,7 @@ class DisputeRepository:
         return result.scalar_one_or_none()
 
     async def add_message(self, **kwargs) -> DisputeMessage:
+        """Append a customer or administrator message to the dispute history."""
         msg = DisputeMessage(**kwargs)
         self.db.add(msg)
         await self.db.flush()
@@ -185,6 +204,7 @@ class DisputeRepository:
     async def list_admin(
         self, status: Optional[str] = None, page: int = 1, per_page: int = 25
     ) -> tuple[Sequence[Dispute], int]:
+        """Query dispute records for admin reads using the caller's session."""
         q = select(Dispute).options(selectinload(Dispute.messages))
         if status:
             q = q.where(Dispute.status == DisputeStatus(status))
@@ -203,6 +223,9 @@ class DisputeRepository:
         resolution_note: str,
         resolved_by:     UUID,
     ) -> None:
+        """Persist the dispute outcome and resolution details within the current
+        transaction.
+        """
         await self.db.execute(
             update(Dispute)
             .where(Dispute.id == dispute_id)

@@ -81,6 +81,9 @@ def assert_error(response, status, code):
     assert isinstance(payload["error"]["message"], str)
     assert payload["error"]["request_id"] == response.headers["x-request-id"] == "error-contract"
     assert response.headers["x-content-type-options"] == "nosniff"
+    assert "script-src 'self';" in response.headers["content-security-policy"]
+    assert "frame-src 'none';" in response.headers["content-security-policy"]
+    assert "stripe.com" not in response.headers["content-security-policy"]
     assert response.headers["access-control-allow-origin"] == settings.ALLOWED_ORIGINS[0]
     assert response.headers["cache-control"] == "no-store"
     assert "private-provider-secret" not in response.text

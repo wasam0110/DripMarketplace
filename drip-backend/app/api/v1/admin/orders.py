@@ -1,3 +1,8 @@
+"""api / v1 / admin / orders.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -25,6 +30,8 @@ async def list_all_orders(
     page:           int = Query(default=1, ge=1),
     per_page:       int = Query(default=25, ge=1, le=100),
 ) -> PaginatedAdminOrders:
+    # Handle GET /orders at this router boundary. Delegates to AdminService.list_orders. Access
+    # dependency: CurrentAdmin.
     return await AdminService(db).list_orders(
         status=status,
         seller_id=seller_id,

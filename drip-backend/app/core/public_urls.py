@@ -24,6 +24,7 @@ def normalize_origin(value: str) -> str:
 
 
 def _build_url(origin: str, path: str, query: dict[str, str]) -> str:
+    """Join a validated origin and root-relative path, then safely encode query parameters."""
     if (
         (path and (not path.startswith("/") or path.startswith("//")))
         or any(char.isspace() or ord(char) < 32 or char in "\\?#" for char in path)
@@ -35,12 +36,14 @@ def _build_url(origin: str, path: str, query: dict[str, str]) -> str:
 
 
 def frontend_url(path: str = "", **query: str) -> str:
+    """Build a public frontend link from configured origins rather than request headers."""
     from app.core.config import settings
 
     return _build_url(settings.FRONTEND_URL, path, query)
 
 
 def api_url(path: str, **query: str) -> str:
+    """Build a public API callback link from the configured API origin."""
     from app.core.config import settings
 
     return _build_url(settings.API_BASE_URL, path, query)

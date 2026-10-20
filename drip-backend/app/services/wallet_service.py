@@ -1,3 +1,8 @@
+"""services / wallet service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -8,9 +13,9 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import BusinessRuleError, NotFoundError, PermissionDeniedError
-from app.models.wallet import WalletTxType, Payout, PayoutStatus
-from app.models.seller import SellerWallet, SellerBankAccount
+from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.models.wallet import WalletTxType, PayoutStatus
+from app.models.seller import SellerBankAccount
 from app.repositories.wallet_repo import (
     WalletTransactionRepository, PayoutRepository, CommissionRepository
 )
@@ -25,6 +30,7 @@ from app.services.notification_outbox import queue_notification
 
 class WalletService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind WalletService to its injected dependencies for subsequent operations."""
         self.db          = db
         self.wallet_repo = WalletRepository(db)
         self.tx_repo     = WalletTransactionRepository(db)
@@ -35,6 +41,7 @@ class WalletService:
     # ── Summary ────────────────────────────────────────────────────────────────
 
     async def get_summary(self, seller_id: UUID) -> WalletSummaryResponse:
+        """Read the seller wallet's held, available, and accumulated balances."""
         wallet = await self.wallet_repo.get_by_seller_id(seller_id)
         if not wallet:
             raise NotFoundError("Wallet not found")
@@ -54,6 +61,7 @@ class WalletService:
         page:      int = 1,
         per_page:  int = 25,
     ) -> PaginatedTransactions:
+        """Paginate the seller's wallet transaction history."""
         rows, total = await self.tx_repo.list_by_seller(seller_id, tx_type, page, per_page)
         total_pages = max(1, (total + per_page - 1) // per_page)
         return PaginatedTransactions(
@@ -77,6 +85,9 @@ class WalletService:
     async def request_withdrawal(
         self, seller_id: UUID, payload: WithdrawalRequest
     ) -> PayoutResponse:
+        """Validate limits and destination, reserve available funds, and create a payout
+        request.
+        """
         wallet = await self.wallet_repo.get_by_seller_id(seller_id, for_update=True)
         if not wallet:
             raise NotFoundError("Wallet not found")
@@ -158,6 +169,7 @@ class WalletService:
         status:    Optional[str] = None,
         page:      int = 1,
     ) -> PaginatedPayouts:
+        """Paginate the seller's payout history."""
         rows, total = await self.payout_repo.list_by_seller(seller_id, status, page)
         total_pages = max(1, (total + 24) // 25)
         return PaginatedPayouts(
@@ -187,6 +199,7 @@ class WalletService:
         date_to:   Optional[str] = None,
         page:      int = 1,
     ) -> CommissionBreakdownResponse:
+        """Return settlement entries and refund-adjusted commission totals."""
         rows, total, summary = await self.comm_repo.list_by_seller(
             seller_id, date_from, date_to, page
         )
@@ -221,6 +234,7 @@ class WalletService:
     # ── Admin ──────────────────────────────────────────────────────────────────
 
     async def admin_overview(self) -> AdminWalletOverviewResponse:
+        """Aggregate wallet and payout totals for administrative reconciliation."""
         from sqlalchemy import func as sqlfunc
         from app.models.seller import SellerWallet as SW
         result = await self.db.execute(
@@ -244,6 +258,7 @@ class WalletService:
     async def admin_approve_payout(
         self, payout_id: UUID, admin_id: UUID, note: Optional[str] = None
     ) -> PayoutResponse:
+        """Approve an eligible payout request and queue its status notification."""
         payout = await self.payout_repo.get_by_id(payout_id, for_update=True)
         if not payout:
             raise NotFoundError("Payout not found")
@@ -275,6 +290,7 @@ class WalletService:
     async def admin_reject_payout(
         self, payout_id: UUID, admin_id: UUID, note: str
     ) -> PayoutResponse:
+        """Reject an eligible payout, restore reserved funds, and queue its notification."""
         payout = await self.payout_repo.get_by_id(payout_id, for_update=True)
         if not payout:
             raise NotFoundError("Payout not found")
@@ -323,6 +339,9 @@ class WalletService:
         reference: str,
         note: Optional[str] = None,
     ) -> PayoutResponse:
+        """Record the approved transfer receipt idempotently and queue completion
+        notification.
+        """
         from datetime import UTC, datetime
         payout = await self.payout_repo.get_by_id(payout_id, for_update=True)
         if not payout:

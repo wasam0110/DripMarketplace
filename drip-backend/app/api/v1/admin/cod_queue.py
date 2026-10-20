@@ -1,3 +1,8 @@
+"""api / v1 / admin / cod queue.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -18,6 +23,8 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 async def list_cod_queue(
     db: DB, current_admin: CurrentAdmin
 ) -> list[CODQueueItem]:
+    # Handle GET /cod-queue at this router boundary. Delegates to AdminService.list_cod_queue.
+    # Access dependency: CurrentAdmin.
     return await AdminService(db).list_cod_queue()
 
 
@@ -28,6 +35,8 @@ async def verify_cod_order(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> dict:
+    # Handle POST /cod-queue/{order_id}/verify at this router boundary. Delegates to
+    # AdminService.verify_cod. Access dependency: CurrentAdmin.
     return await AdminService(db).verify_cod(
         order_id=order_id,
         admin_id=UUID(current_admin["sub"]),
@@ -42,6 +51,8 @@ async def cancel_cod_order(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> dict:
+    # Handle POST /cod-queue/{order_id}/cancel at this router boundary. Delegates to
+    # AdminService.cancel_cod. Access dependency: CurrentAdmin.
     return await AdminService(db).cancel_cod(
         order_id=order_id,
         admin_id=UUID(current_admin["sub"]),

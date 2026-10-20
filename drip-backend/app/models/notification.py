@@ -1,3 +1,8 @@
+"""models / notification.
+
+SQLAlchemy persistence definitions shared by repositories and services.
+"""
+
 from __future__ import annotations
 
 from sqlalchemy import Index as SchemaIndex

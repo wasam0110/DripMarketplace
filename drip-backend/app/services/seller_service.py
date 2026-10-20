@@ -1,9 +1,13 @@
+"""services / seller service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 from decimal import Decimal
 
 import re
 from uuid import UUID
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -30,6 +34,7 @@ BASE_SLOTS       = 50
 
 
 def _slugify(text: str) -> str:
+    """Normalize a brand name into the bounded URL slug used by seller profiles."""
     text = text.lower().strip()
     text = text.encode("ascii", errors="ignore").decode()
     text = re.sub(r"[^\w\s-]", "", text)
@@ -39,6 +44,7 @@ def _slugify(text: str) -> str:
 
 class SellerService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind SellerService to its injected dependencies for subsequent operations."""
         self.db          = db
         self.seller_repo = SellerRepository(db)
         self.wallet_repo = WalletRepository(db)
@@ -48,6 +54,9 @@ class SellerService:
     # ── Registration (public — creates User + Seller in one call) ──────────────
 
     async def register(self, payload: SellerRegistrationRequest) -> SellerRegistrationResponse:
+        """Create the seller account, brand profile, wallet, and applicable registration-
+        fee state.
+        """
         # 1. Email must not already exist
         if await self.user_repo.get_by_email(self.db, payload.email):
             raise ConflictError("An account with this email already exists")
@@ -119,12 +128,14 @@ class SellerService:
     # ── Profile ────────────────────────────────────────────────────────────────
 
     async def get_profile(self, user_id: UUID) -> SellerProfileResponse:
+        """Resolve the user's seller account and build its profile response."""
         seller = await self._require_seller(user_id)
         return self._to_profile(seller)
 
     async def update_profile(
         self, user_id: UUID, payload: SellerProfileUpdateRequest
     ) -> SellerProfileResponse:
+        """Update the authenticated seller's allowed profile fields."""
         seller = await self._require_seller(user_id)
         data   = {k: v for k, v in payload.model_dump().items() if v is not None}
         updated = await self.seller_repo.update_profile(seller.id, **data)
@@ -132,6 +143,7 @@ class SellerService:
         return self._to_profile(updated)
 
     async def update_logo(self, user_id: UUID, logo_url: str) -> LogoUploadResponse:
+        """Store the uploaded logo URL on the authenticated seller profile."""
         seller = await self._require_seller(user_id)
         await self.seller_repo.update_logo(seller.id, logo_url)
         await self.db.commit()
@@ -140,6 +152,7 @@ class SellerService:
     # ── Dashboard ──────────────────────────────────────────────────────────────
 
     async def get_dashboard(self, user_id: UUID, period: str) -> SellerDashboardResponse:
+        """Combine the active seller's wallet, listings, and order-status metrics."""
         seller = await self._require_seller(user_id)
         self._require_active(seller)
 
@@ -176,6 +189,7 @@ class SellerService:
     # ── Bank Accounts ──────────────────────────────────────────────────────────
 
     async def list_bank_accounts(self, user_id: UUID) -> list[BankAccountResponse]:
+        """Read payout destinations for the authenticated seller."""
         seller   = await self._require_seller(user_id)
         accounts = await self.bank_repo.list_by_seller(seller.id)
         return [BankAccountResponse.model_validate(a) for a in accounts]
@@ -183,6 +197,9 @@ class SellerService:
     async def add_bank_account(
         self, user_id: UUID, payload: CreateBankAccountRequest
     ) -> BankAccountResponse:
+        """Create a seller payout destination and update the default selection if
+        requested.
+        """
         seller = await self._require_seller(user_id)
         if payload.is_default:
             await self.bank_repo.clear_default(seller.id)
@@ -192,6 +209,7 @@ class SellerService:
         return BankAccountResponse.model_validate(account)
 
     async def delete_bank_account(self, user_id: UUID, account_id: UUID) -> None:
+        """Delete a payout destination only from the authenticated seller's account."""
         seller  = await self._require_seller(user_id)
         deleted = await self.bank_repo.delete(account_id, seller.id)
         if not deleted:
@@ -201,6 +219,7 @@ class SellerService:
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     async def _require_seller(self, user_id: UUID) -> Seller:
+        """Resolve the user's seller profile or raise not found."""
         seller = await self.seller_repo.get_by_user_id(user_id)
         if not seller:
             raise NotFoundError("Seller profile not found")
@@ -208,12 +227,14 @@ class SellerService:
 
     @staticmethod
     def _require_active(seller: Seller) -> None:
+        """Reject seller operations until the seller's approval state is active."""
         if seller.status != SellerStatus.active:
             raise PermissionDeniedError(
                 f"Account is '{seller.status.value}'. Only active sellers can access this."
             )
 
     async def _unique_slug(self, brand_name: str) -> str:
+        """Find a brand slug not already assigned to another seller."""
         base      = _slugify(brand_name)
         candidate = base
         counter   = 1
@@ -224,6 +245,7 @@ class SellerService:
 
     @staticmethod
     def _to_profile(seller: Seller) -> SellerProfileResponse:
+        """Build the seller profile response with listing capacity and registration status."""
         return SellerProfileResponse(
             id               = seller.id,
             brand_name       = seller.brand_name,

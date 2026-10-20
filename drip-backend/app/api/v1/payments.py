@@ -61,6 +61,8 @@ async def get_payment_status(
     current_user: OptionalUser,
     guest_token: str | None = Header(default=None, alias="X-Guest-Token"),
 ) -> PaymentStatusResponse:
+    # Handle GET /{order_id}/status at this router boundary. Delegates to
+    # PaymentService.get_status. Access dependency: OptionalUser.
     return await PaymentService(db).get_status(
         order_id=order_id,
         user_id=UUID(current_user["sub"]) if current_user else None,
@@ -77,6 +79,8 @@ async def retry_payment(
     current_user: OptionalUser,
     guest_token: str | None = Header(default=None, alias="X-Guest-Token"),
 ) -> PaymentInitResponse:
+    # Handle POST /{order_id}/retry at this router boundary. Delegates to PaymentService.retry.
+    # Access dependency: OptionalUser.
     return await PaymentService(db).retry(
         order_id=order_id,
         user_id=UUID(current_user["sub"]) if current_user else None,
@@ -97,6 +101,8 @@ def _client_ip(request: Request) -> str:
 
 @router.api_route("/callback/payfast", methods=["GET", "POST"], include_in_schema=False)
 async def payfast_callback(request: Request, db: DB) -> dict:
+    # Handle GET/POST /callback/payfast at this router boundary. Delegates to
+    # PaymentService.handle_payfast_callback.
     # ── IP allowlist ──────────────────────────────────────────────────────────
     # When PAYFAST_IPN_IPS is populated, only accept requests from those IPs.
     from app.core.config import settings
@@ -126,6 +132,8 @@ async def payfast_callback(request: Request, db: DB) -> dict:
 
 @router.get("/gateway-status", response_model=GatewayStatusResponse)
 async def gateway_status(db: DB, current_admin: CurrentAdmin) -> GatewayStatusResponse:
+    # Handle GET /gateway-status at this router boundary. Delegates to
+    # PaymentService.gateway_status. Access dependency: CurrentAdmin.
     return await PaymentService(db).gateway_status()
 
 
@@ -147,6 +155,8 @@ async def list_payments(
     method: str | None = Query(default=None, pattern="^(payfast|cod)$"),
     page: int = Query(default=1, ge=1),
 ) -> PaginatedPayments:
+    # Handle GET / at this router boundary. Delegates to PaymentService.list_admin. Access
+    # dependency: CurrentAdmin.
     return await PaymentService(db).list_admin(status=status, method=method, page=page)
 
 
@@ -158,6 +168,8 @@ async def list_refunds(
     payment_id: UUID | None = Query(default=None),
     page: int = Query(default=1, ge=1),
 ) -> PaginatedRefunds:
+    # Handle GET /refunds at this router boundary. Delegates to
+    # PaymentService.list_admin_refunds. Access dependency: CurrentAdmin.
     return await PaymentService(db).list_admin_refunds(
         status=status, payment_id=payment_id, page=page
     )
@@ -169,6 +181,8 @@ async def get_refund(
     db: DB,
     current_admin: CurrentAdmin,
 ) -> AdminRefundDetailResponse:
+    # Handle GET /refunds/{refund_id} at this router boundary. Delegates to
+    # PaymentService.get_admin_refund. Access dependency: CurrentAdmin.
     return await PaymentService(db).get_admin_refund(refund_id)
 
 
@@ -178,6 +192,8 @@ async def get_payment_refunds(
     db: DB,
     current_admin: CurrentAdmin,
 ) -> PaymentRefundHistoryResponse:
+    # Handle GET /{payment_id}/refunds at this router boundary. Delegates to
+    # PaymentService.get_payment_refund_history. Access dependency: CurrentAdmin.
     return await PaymentService(db).get_payment_refund_history(payment_id)
 
 
@@ -188,6 +204,8 @@ async def refund_payment(
     db: DB,
     current_admin: CurrentAdmin,
 ) -> RefundResponse:
+    # Handle POST /{payment_id}/refund at this router boundary. Delegates to
+    # PaymentService.refund. Access dependency: CurrentAdmin.
     return await PaymentService(db).refund(
         payment_id=payment_id,
         admin_id=UUID(current_admin["sub"]),
@@ -199,6 +217,8 @@ async def refund_payment(
 async def confirm_refund(
     refund_id: UUID, payload: TransferConfirmationRequest, db: DB, current_admin: CurrentAdmin
 ):
+    # Handle POST /refunds/{refund_id}/confirm at this router boundary. Delegates to
+    # PaymentService.confirm_refund. Access dependency: CurrentAdmin.
     return await PaymentService(db).confirm_refund(
         refund_id, UUID(current_admin["sub"]), payload.reference
     )
@@ -208,6 +228,8 @@ async def confirm_refund(
 async def record_cod_collection(
     payment_id: UUID, payload: TransferConfirmationRequest, db: DB, current_admin: CurrentAdmin
 ):
+    # Handle POST /{payment_id}/cod-collection at this router boundary. Delegates to
+    # PaymentService.record_cod_collection. Access dependency: CurrentAdmin.
     return await PaymentService(db).record_cod_collection(
         payment_id, UUID(current_admin["sub"]), payload.reference
     )

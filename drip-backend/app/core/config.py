@@ -63,11 +63,6 @@ class Settings(BaseSettings):
     # Destructive maintenance stays opt-in even when storage credentials exist.
     SUPABASE_ORPHAN_CLEANUP_ENABLED: bool = False
 
-    # ── Payments — Stripe ─────────────────────────────────────────────────────
-    STRIPE_SECRET_KEY: str = ""
-    STRIPE_WEBHOOK_SECRET: str = ""
-    STRIPE_CURRENCY: str = "pkr"
-
     # ── Email — Resend ────────────────────────────────────────────────────────
     RESEND_API_KEY: str = ""
     FROM_EMAIL: str = "orders@example.com"
@@ -97,6 +92,7 @@ class Settings(BaseSettings):
     # ── Validators ────────────────────────────────────────────────────────────
     @model_validator(mode="after")
     def validate_withdrawal_limits(self) -> "Settings":
+        """Keep configured payout limits within the database amount constraints."""
         # ck_payouts_amount_min fixes the database payout floor at PKR 500.
         # Wallet/payout NUMERIC(12, 2) allows ten whole-number digits.
         if not 500 <= self.MIN_WITHDRAWAL_AMOUNT <= self.MAX_WITHDRAWAL_AMOUNT <= 9_999_999_999:
@@ -109,6 +105,7 @@ class Settings(BaseSettings):
     @field_validator("DATABASE_URL")
     @classmethod
     def validate_database_url(cls, v: str) -> str:
+        """Require the async PostgreSQL driver used by the session factory."""
         if not v.startswith("postgresql+asyncpg://"):
             raise ValueError(
                 "DATABASE_URL must use the 'postgresql+asyncpg://' scheme. "
@@ -119,6 +116,7 @@ class Settings(BaseSettings):
     @field_validator("COMMISSION_RATE")
     @classmethod
     def validate_commission_rate(cls, v: float) -> float:
+        """Reject commission fractions outside the exclusive zero-to-one range."""
         if not 0 < v < 1:
             raise ValueError("COMMISSION_RATE must be between 0 and 1 (e.g. 0.15 for 15%)")
         return v
@@ -129,6 +127,7 @@ class Settings(BaseSettings):
     )
     @classmethod
     def parse_origins(cls, v: str | list[str]) -> list[str]:
+        """Accept comma-separated origins or proxy networks as configuration lists."""
         if isinstance(v, str):
             return [o.strip() for o in v.split(",") if o.strip()]
         return v
@@ -136,11 +135,13 @@ class Settings(BaseSettings):
     @field_validator("FRONTEND_URL", "API_BASE_URL")
     @classmethod
     def validate_public_origin(cls, value: str) -> str:
+        """Normalize the trusted origin used to construct public links."""
         return normalize_origin(value)
 
     @field_validator("ALLOWED_ORIGINS")
     @classmethod
     def validate_cors_origins(cls, values: list[str]) -> list[str]:
+        """Normalize and deduplicate origins before CORS middleware consumes them."""
         return list(dict.fromkeys(normalize_origin(value) for value in values))
 
     @model_validator(mode="after")
@@ -210,10 +211,12 @@ class Settings(BaseSettings):
     # ── Derived properties ────────────────────────────────────────────────────
     @property
     def is_development(self) -> bool:
+        """Expose the development-mode switch used by logging and API documentation."""
         return self.ENVIRONMENT == "development"
 
     @property
     def is_production(self) -> bool:
+        """Expose the production-mode switch used by security configuration."""
         return self.ENVIRONMENT == "production"
 
     @property
@@ -223,11 +226,13 @@ class Settings(BaseSettings):
 
     @property
     def redoc_url(self) -> str | None:
+        """Enable the ReDoc route only in development."""
         return "/redoc" if self.is_development else None
 
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
+    """Cache validated runtime settings; tests deliberately skip the local .env file."""
     # A test process must never inherit application secrets from the local .env.
     return Settings(_env_file=None if os.environ.get("ENVIRONMENT") == "test" else ".env")
 

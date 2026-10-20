@@ -48,6 +48,7 @@ class UpdateProfileRequest(DRIPBaseModel):
     @field_validator("first_name", "last_name")
     @classmethod
     def validate_name(cls, v: Optional[str]) -> Optional[str]:
+        """Trim a supplied profile name and enforce its allowed characters and length."""
         if v is None:
             return v
         v = v.strip()
@@ -60,6 +61,7 @@ class UpdateProfileRequest(DRIPBaseModel):
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: Optional[str]) -> Optional[str]:
+        """Validate an optional Pakistani mobile number for profile updates."""
         if v is None:
             return v
         v = v.strip()
@@ -76,6 +78,7 @@ class ChangePasswordRequest(DRIPBaseModel):
     @field_validator("new_password")
     @classmethod
     def validate_new_password(cls, v: str) -> str:
+        """Enforce password length and character classes before account password changes."""
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters.")
         if len(v) > 128:
@@ -90,6 +93,7 @@ class ChangePasswordRequest(DRIPBaseModel):
 
     @model_validator(mode="after")
     def passwords_match(self) -> "ChangePasswordRequest":
+        """Require the password confirmation to equal the new password."""
         if self.new_password != self.confirm_password:
             raise ValueError("New password and confirmation do not match.")
         return self
@@ -121,6 +125,7 @@ class CreateAddressRequest(DRIPBaseModel):
     @field_validator("street")
     @classmethod
     def validate_street(cls, v: str) -> str:
+        """Trim the street address and enforce shipping-address length bounds."""
         v = v.strip()
         if len(v) < 10:
             raise ValueError("Street address must be at least 10 characters.")
@@ -131,6 +136,7 @@ class CreateAddressRequest(DRIPBaseModel):
     @field_validator("city", "province")
     @classmethod
     def validate_location(cls, v: str) -> str:
+        """Trim a city or province value and enforce its length bounds."""
         v = v.strip()
         if len(v) < 2:
             raise ValueError("Must be at least 2 characters.")
@@ -141,6 +147,7 @@ class CreateAddressRequest(DRIPBaseModel):
     @field_validator("label")
     @classmethod
     def validate_label(cls, v: Optional[str]) -> Optional[str]:
+        """Trim an optional address label and enforce its maximum length."""
         if v is None:
             return v
         v = v.strip()
@@ -198,6 +205,7 @@ class CreateReviewRequest(DRIPBaseModel):
     @field_validator("rating")
     @classmethod
     def validate_rating(cls, v: int) -> int:
+        """Keep supplied review ratings within the one-to-five range."""
         if v < 1 or v > 5:
             raise ValueError("Rating must be between 1 and 5.")
         return v
@@ -205,6 +213,7 @@ class CreateReviewRequest(DRIPBaseModel):
     @field_validator("title")
     @classmethod
     def validate_title(cls, v: Optional[str]) -> Optional[str]:
+        """Trim an optional review title and enforce its maximum length."""
         if v is None:
             return v
         v = v.strip()
@@ -215,6 +224,7 @@ class CreateReviewRequest(DRIPBaseModel):
     @field_validator("body")
     @classmethod
     def validate_body(cls, v: Optional[str]) -> Optional[str]:
+        """Trim optional review text and enforce its maximum length."""
         if v is None:
             return v
         v = v.strip()
@@ -231,6 +241,7 @@ class UpdateReviewRequest(DRIPBaseModel):
     @field_validator("rating")
     @classmethod
     def validate_rating(cls, v: Optional[int]) -> Optional[int]:
+        """Keep supplied review ratings within the one-to-five range."""
         if v is not None and (v < 1 or v > 5):
             raise ValueError("Rating must be between 1 and 5.")
         return v
@@ -298,6 +309,7 @@ class DeleteAccountRequest(DRIPBaseModel):
     @field_validator("confirm_phrase")
     @classmethod
     def validate_phrase(cls, v: str) -> str:
+        """Require the exact confirmation phrase before account-deletion processing."""
         if v.strip() != "DELETE MY ACCOUNT":
             raise ValueError('Type "DELETE MY ACCOUNT" exactly to confirm.')
         return v.strip()

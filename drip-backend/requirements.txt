@@ -36,7 +36,7 @@ python-magic==0.4.27            # Magic-byte MIME detection
 httpx==0.28.1                   # Async HTTP (payment gateways, Resend)
 
 # ── Payments ─────────────────────────────────────────────────────────────────
-stripe==11.4.1
+# PayFast uses the shared httpx client; no separate gateway SDK is required.
 
 # ── Email ────────────────────────────────────────────────────────────────────
 resend==2.6.0

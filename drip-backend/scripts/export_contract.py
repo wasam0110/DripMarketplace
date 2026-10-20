@@ -14,6 +14,9 @@ sys.path.insert(0, str(ROOT))
 
 
 def main() -> None:
+    """Export OpenAPI and the endpoint inventory using isolated non-production
+    configuration.
+    """
     os.environ.update(
         {
             "ENVIRONMENT": "test",
@@ -40,6 +43,7 @@ def main() -> None:
     )
 
     def dependencies(node: "Dependant") -> set[str]:
+        """Walk nested FastAPI dependencies to report endpoint access requirements."""
         names = set()
         for child in node.dependencies:
             names.add(getattr(child.call, "__name__", type(child.call).__name__))

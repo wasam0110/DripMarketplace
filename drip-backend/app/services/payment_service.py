@@ -41,6 +41,7 @@ from app.services.notification_outbox import queue_notification
 
 
 def _build_payfast() -> PayFastClient:
+    """Construct the configured PayFast adapter only when online payments are enabled."""
     if not settings.PAYFAST_ENABLED or not (
         settings.PAYFAST_MERCHANT_ID and settings.PAYFAST_SECURED_KEY
     ):
@@ -74,6 +75,7 @@ def _provider_money_matches(data: dict, amount: Decimal, currency: str) -> bool:
 
 class PaymentService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind PaymentService to its injected dependencies for subsequent operations."""
         self.db = db
         self.payment_repo = PaymentRepository(db)
 
@@ -84,6 +86,9 @@ class PaymentService:
         guest_token: str | None = None,
         customer_ip: str = "",
     ) -> PaymentInitResponse:
+        """Validate the order and payment state before initiating the selected supported
+        method.
+        """
         order = await authorized_order(self.db, order_id, user_id, guest_token, lock=True)
         if order.payment_method.value not in {"payfast", "cod"}:
             raise BusinessRuleError("Historical payment methods cannot initiate new payments")
@@ -149,6 +154,7 @@ class PaymentService:
     async def get_status(
         self, order_id: UUID, user_id: UUID | None = None, guest_token: str | None = None
     ) -> PaymentStatusResponse:
+        """Read the authorized order's payment status for checkout polling."""
         await authorized_order(self.db, order_id, user_id, guest_token)
         payment = await self.payment_repo.get_by_order_id(order_id)
         if payment is None:
@@ -171,6 +177,9 @@ class PaymentService:
         guest_token: str | None = None,
         customer_ip: str = "",
     ) -> PaymentInitResponse:
+        """Validate retry eligibility and coordinate any permitted payment-method
+        transition.
+        """
         order = await authorized_order(self.db, order_id, user_id, guest_token, lock=True)
         if order.status != OrderStatus.pending_payment:
             raise BusinessRuleError("This order cannot be retried")
@@ -210,6 +219,7 @@ class PaymentService:
         return response
 
     async def handle_payfast_callback(self, data: dict) -> None:
+        """Validate callback identity and amount before provider-backed reconciliation."""
         pf = _build_payfast()
         callback = PaymentCallback(gateway="payfast", raw_payload=data, is_verified=False)
         self.db.add(callback)
@@ -415,6 +425,9 @@ class PaymentService:
         return_id: UUID | None = None,
         commit: bool = True,
     ) -> RefundResponse:
+        """Create or reuse an idempotent refund request within the remaining refundable
+        balance.
+        """
         payment = await self.db.scalar(
             select(Payment).where(Payment.id == payment_id).with_for_update()
         )
@@ -551,6 +564,7 @@ class PaymentService:
 
     @staticmethod
     def _refund_response(refund: Refund) -> RefundResponse:
+        """Convert a stored refund into its customer-facing response model."""
         return RefundResponse(
             refund_id=refund.id,
             payment_id=refund.payment_id,
@@ -565,6 +579,7 @@ class PaymentService:
     async def list_admin_refunds(
         self, status: str | None = None, payment_id: UUID | None = None, page: int = 1
     ) -> PaginatedRefunds:
+        """Paginate refunds with their administrative accounting summaries."""
         rows, total = await self.payment_repo.list_refunds_admin(
             status=status, payment_id=payment_id, page=page
         )
@@ -575,6 +590,9 @@ class PaymentService:
         )
 
     async def get_admin_refund(self, refund_id: UUID) -> AdminRefundDetailResponse:
+        """Assemble refund details, history, balances, and seller reconciliation
+        allocations.
+        """
         refund = await self.payment_repo.get_refund_admin(refund_id)
         if not refund:
             raise NotFoundError("Refund not found")
@@ -603,6 +621,7 @@ class PaymentService:
     async def get_payment_refund_history(
         self, payment_id: UUID
     ) -> PaymentRefundHistoryResponse:
+        """Assemble the payment's refund history and remaining refundable balance."""
         payment = await self.payment_repo.get_payment_refunds(payment_id)
         if not payment:
             raise NotFoundError("Payment not found")
@@ -620,6 +639,9 @@ class PaymentService:
     def _refund_admin_row(
         refund: Refund, payment: Payment | None = None
     ) -> AdminRefundRowResponse:
+        """Serialize the refund and its seller-allocation accounting for administrator
+        reads.
+        """
         payment = payment or refund.payment
         accounting = refund.accounting
         accounting_response = None
@@ -669,6 +691,7 @@ class PaymentService:
 
     @staticmethod
     def _refund_payment_balance(payment: Payment) -> RefundPaymentBalanceResponse:
+        """Calculate requested, confirmed, and remaining refund amounts for a payment."""
         pending = sum(
             (refund.amount for refund in payment.refunds if not refund.processed_at),
             Decimal("0"),
@@ -696,6 +719,7 @@ class PaymentService:
         )
 
     async def record_cod_collection(self, payment_id: UUID, admin_id: UUID, reference: str):
+        """Confirm a delivered COD payment and settle eligible seller orders idempotently."""
         payment = await self.db.get(Payment, payment_id)
         if not payment:
             raise NotFoundError("Payment not found")
@@ -728,6 +752,7 @@ class PaymentService:
         return {"status": "completed"}
 
     async def list_admin(self, **filters) -> PaginatedPayments:
+        """Paginate payments for administrative reconciliation."""
         rows, total = await self.payment_repo.list_admin(**filters)
         return PaginatedPayments(
             data=[
@@ -749,6 +774,7 @@ class PaymentService:
         )
 
     async def gateway_status(self) -> GatewayStatusResponse:
+        """Report supported payment-method availability from runtime configuration."""
         state = (
             "disabled_pending_verification"
             if not settings.PAYFAST_ENABLED

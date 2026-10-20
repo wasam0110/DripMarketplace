@@ -38,6 +38,7 @@ def error_response(
     fields: dict[str, str] | None = None,
     headers: dict[str, str] | None = None,
 ) -> JSONResponse:
+    """Build the shared non-cacheable API error envelope with its request ID."""
     error = DRIPException(message, code=code, fields=fields)
     request_id = getattr(request.state, "request_id", None)
     response = JSONResponse(error.to_response(request_id), status_code=status_code, headers=headers)
@@ -48,6 +49,7 @@ def error_response(
 
 
 def http_error_response(request: Request, exc: HTTPException) -> Response:
+    """Translate framework HTTP errors while preserving headers and bodyless statuses."""
     # Preserve HTTP's bodyless statuses even if raised as an exception.
     if exc.status_code < 200 or exc.status_code in (204, 304):
         return Response(status_code=exc.status_code, headers=exc.headers)
@@ -69,6 +71,7 @@ def http_error_response(request: Request, exc: HTTPException) -> Response:
 
 
 def unexpected_error_response(request: Request, exc: Exception) -> JSONResponse:
+    """Log an unexpected exception and return the sanitized server-error envelope."""
     logger.exception(
         "drip.unhandled_exception",
         path=request.url.path,

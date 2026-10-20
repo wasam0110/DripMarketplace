@@ -11,6 +11,7 @@ from app.models.wallet import WalletTransaction, WalletTxType
 
 
 async def seller_fee_revenue(db: AsyncSession, since: datetime) -> Decimal:
+    """Aggregate recorded seller registration and slot fees for platform revenue reporting."""
     registration = await db.scalar(select(func.coalesce(func.sum(Seller.registration_fee), 0)).where(
         Seller.registration_paid_at >= since,
     ))

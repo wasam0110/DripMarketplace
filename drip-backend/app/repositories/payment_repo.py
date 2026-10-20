@@ -1,3 +1,8 @@
+"""repositories / payment repo.
+
+Database operations used by services within their transaction boundaries.
+"""
+
 from __future__ import annotations
 
 from datetime import datetime
@@ -15,9 +20,11 @@ from app.models.wallet import RefundAccounting
 
 class PaymentRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind PaymentRepository to its injected dependencies for subsequent operations."""
         self.db = db
 
     async def create(self, **kwargs) -> Payment:
+        """Insert a payment and return it within the caller's transaction."""
         payment = Payment(**kwargs)
         self.db.add(payment)
         await self.db.flush()
@@ -25,6 +32,7 @@ class PaymentRepository:
         return payment
 
     async def get_by_id(self, payment_id: UUID) -> Optional[Payment]:
+        """Look up a payment by id; return None when absent."""
         result = await self.db.execute(
             select(Payment)
             .options(selectinload(Payment.refunds))
@@ -33,12 +41,14 @@ class PaymentRepository:
         return result.scalar_one_or_none()
 
     async def get_by_order_id(self, order_id: UUID) -> Optional[Payment]:
+        """Look up a payment by order id; return None when absent."""
         result = await self.db.execute(
             select(Payment).where(Payment.order_id == order_id)
         )
         return result.scalar_one_or_none()
 
     async def get_by_gateway_reference(self, ref: str) -> Optional[Payment]:
+        """Look up a payment by gateway reference; return None when absent."""
         result = await self.db.execute(
             select(Payment).where(Payment.gateway_reference == ref)
         )
@@ -54,6 +64,7 @@ class PaymentRepository:
         failure_reason: Optional[str] = None,
         paid_at: Optional[datetime] = None,
     ) -> None:
+        """Apply the payment status change within the caller's transaction."""
         values: dict = {"status": status}
         if gateway_reference:
             values["gateway_reference"] = gateway_reference
@@ -74,6 +85,7 @@ class PaymentRepository:
         payment_id: Optional[UUID] = None,
         is_verified: bool = False,
     ) -> PaymentCallback:
+        """Persist the provider callback audit record for payment reconciliation."""
         cb = PaymentCallback(
             gateway=gateway,
             raw_payload=raw_payload,
@@ -85,6 +97,7 @@ class PaymentRepository:
         return cb
 
     async def create_refund(self, **kwargs) -> Refund:
+        """Persist a refund request within the caller's transaction."""
         refund = Refund(**kwargs)
         self.db.add(refund)
         await self.db.flush()
@@ -92,6 +105,7 @@ class PaymentRepository:
         return refund
 
     async def get_total_refunded(self, payment_id: UUID) -> Decimal:
+        """Sum refund amounts according to the repository's refund-status filter."""
         result = await self.db.execute(
             select(func.coalesce(func.sum(Refund.amount), 0))
             .where(Refund.payment_id == payment_id)
@@ -105,6 +119,7 @@ class PaymentRepository:
         page: int = 1,
         per_page: int = 25,
     ) -> tuple[Sequence[Refund], int]:
+        """Query payment records for refunds admin reads using the caller's session."""
         query = select(Refund).options(
             selectinload(Refund.payment).selectinload(Payment.order),
             joinedload(Refund.accounting).selectinload(RefundAccounting.allocations),
@@ -128,6 +143,7 @@ class PaymentRepository:
         return result.scalars().all(), total
 
     async def get_refund_admin(self, refund_id: UUID) -> Optional[Refund]:
+        """Load refund, payment, order, and accounting details for the admin view."""
         return await self.db.scalar(
             select(Refund)
             .options(
@@ -143,6 +159,7 @@ class PaymentRepository:
         )
 
     async def get_payment_refunds(self, payment_id: UUID) -> Optional[Payment]:
+        """Load a payment and its refund allocations for reconciliation history."""
         return await self.db.scalar(
             select(Payment)
             .options(
@@ -162,6 +179,7 @@ class PaymentRepository:
         page: int = 1,
         per_page: int = 25,
     ) -> tuple[Sequence[Payment], int]:
+        """Query payment records for admin reads using the caller's session."""
         q = select(Payment).options(selectinload(Payment.order))
         if status:
             q = q.where(Payment.status == PaymentStatus(status))

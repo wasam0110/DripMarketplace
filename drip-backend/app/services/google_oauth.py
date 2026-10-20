@@ -28,11 +28,13 @@ CALLBACK_PATH = "/api/v1/auth/google/callback"
 
 
 def require_configuration():
+    """Reject Google sign-in until client credentials are configured."""
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise ExternalServiceError("Google sign-in is not configured")
 
 
 async def start_google_login(response):
+    """Create the OAuth state and redirect target for the Google authorization flow."""
     require_configuration()
     state, nonce, verifier = (secrets.token_urlsafe(32) for _ in range(3))
     challenge = (
@@ -69,6 +71,7 @@ async def start_google_login(response):
 
 
 async def finish_google_login(request, db):
+    """Validate OAuth state and identity, create a session, and redirect with auth cookies."""
     require_configuration()
     state = request.query_params.get("state", "")
     cookie = request.cookies.get(STATE_COOKIE, "")

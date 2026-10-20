@@ -1,8 +1,11 @@
+"""services / cart service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
-import json
 from uuid import UUID
-from typing import Optional
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,8 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.services.account_lifecycle import lock_active_user
-from app.models.product import ProductVariant, ProductInventory, Product
-from app.models.seller import Seller
+from app.models.product import ProductVariant, Product
 from app.schemas.order import (
     CartResponse, CartItemResponse, SellerCartGroup, AddToCartRequest,
 )
@@ -23,15 +25,18 @@ SHIPPING_FEE = settings.STANDARD_SHIPPING_FEE
 
 
 def _cart_key(user_id: UUID) -> str:
+    """Build the account-scoped Redis key shared by cart operations."""
     return f"cart:{user_id}"
 
 
 class CartService:
     def __init__(self, db: AsyncSession, redis) -> None:
+        """Bind CartService to its injected dependencies for subsequent operations."""
         self.db    = db
         self.redis = redis
 
     async def get_cart(self, user_id: UUID) -> CartResponse:
+        """Rebuild the Redis cart against current product availability and runtime pricing."""
         raw = await self.redis.hgetall(_cart_key(user_id))
         if not raw:
             return self._empty_cart()
@@ -86,6 +91,7 @@ class CartService:
         return self._build_cart_response(items, free_threshold=policy.free_shipping_threshold, shipping_fee=policy.standard_shipping_fee)
 
     async def add_item(self, user_id: UUID, payload: AddToCartRequest) -> CartResponse:
+        """Check account and stock eligibility before adding a variant to the Redis cart."""
         await lock_active_user(self.db, user_id)
         variant = await self._get_variant(payload.variant_id)
         inv     = variant.inventory
@@ -111,6 +117,7 @@ class CartService:
     async def update_item(
         self, user_id: UUID, variant_id: UUID, quantity: int
     ) -> CartResponse:
+        """Validate the new quantity against stock before updating the user's cart."""
         await lock_active_user(self.db, user_id)
         if quantity == 0:
             await self.redis.hdel(_cart_key(user_id), str(variant_id))
@@ -126,12 +133,15 @@ class CartService:
         return await self.get_cart(user_id)
 
     async def remove_item(self, user_id: UUID, variant_id: UUID) -> None:
+        """Remove the selected variant from the user's Redis cart."""
         await self.redis.hdel(_cart_key(user_id), str(variant_id))
 
     async def clear(self, user_id: UUID) -> None:
+        """Delete the user's Redis cart after checkout or an explicit clear request."""
         await self.redis.delete(_cart_key(user_id))
 
     async def sync(self, user_id: UUID, local_items: list[dict]) -> CartResponse:
+        """Merge client cart items through the authenticated account's cart rules."""
         await lock_active_user(self.db, user_id)
         for item in local_items:
             vid      = str(item["variant_id"])
@@ -143,6 +153,7 @@ class CartService:
         return await self.get_cart(user_id)
 
     async def get_raw_items(self, user_id: UUID) -> dict[UUID, int]:
+        """Return variant IDs and quantities for checkout calculation."""
         raw = await self.redis.hgetall(_cart_key(user_id))
         return {
             UUID(k.decode() if isinstance(k, bytes) else k): int(v)
@@ -150,6 +161,7 @@ class CartService:
         }
 
     async def _get_variant(self, variant_id: UUID) -> ProductVariant:
+        """Load an available variant and its product context for cart validation."""
         result = await self.db.execute(
             select(ProductVariant)
             .options(
@@ -165,6 +177,7 @@ class CartService:
 
     @staticmethod
     def _empty_cart() -> CartResponse:
+        """Return the empty-cart response with zero totals."""
         return CartResponse(
             items=[], grouped_by_seller=[], item_count=0,
             subtotal=0, shipping_fee=0, total=0,
@@ -172,6 +185,7 @@ class CartService:
 
     @staticmethod
     def _build_cart_response(items: list[CartItemResponse], *, free_threshold=SHIPPING_FREE, shipping_fee=SHIPPING_FEE) -> CartResponse:
+        """Group validated cart items by seller and assemble the cart totals."""
         subtotal = sum(i.subtotal for i in items)
         shipping = 0 if not items or subtotal >= free_threshold else shipping_fee
 

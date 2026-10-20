@@ -20,9 +20,8 @@ from app.tasks.email_tasks import (
 )
 
 # ── Order tasks ────────────────────────────────────────────────────────────────
-# Note: order_tasks also has send_order_confirmation but it is functionally
-# identical to the notification_tasks version and is superseded by it.
-# Only cod_verification_timeout and expire_pending_orders are unique here.
+# Confirmation delivery is registered from notification_tasks below so it uses
+# the durable outbox's retry and idempotency handling.
 from app.tasks.order_tasks import (
     cod_verification_timeout,
     expire_pending_orders,
@@ -56,6 +55,7 @@ logger = get_logger(__name__)
 
 
 async def startup(ctx: dict) -> None:
+    """Initialize logging, database, and Redis; clean up partial startup failures."""
     configure_logging()
     from contextlib import AsyncExitStack
     from app.core.database import close_db, init_db
@@ -70,6 +70,7 @@ async def startup(ctx: dict) -> None:
 
 
 async def shutdown(ctx: dict) -> None:
+    """Close Redis and always release database resources during worker shutdown."""
     from app.core.database import close_db
     from app.core.redis import close_redis
     try:

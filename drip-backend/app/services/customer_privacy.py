@@ -15,6 +15,7 @@ from app.services.notification_outbox import queue_notification
 
 
 async def clear_customer_cache(user_id: UUID) -> None:
+    """Clear the deleted customer's cached account data from Redis."""
     async with asyncio.timeout(3):
         await get_redis().delete(f"cart:{user_id}", f"wishlist:{user_id}", f"notif_prefs:{user_id}")
 

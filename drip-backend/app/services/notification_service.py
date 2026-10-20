@@ -1,3 +1,8 @@
+"""services / notification service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 import uuid
@@ -44,6 +49,7 @@ class NotifType:
 
 class NotificationService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind NotificationService to its injected dependencies for subsequent operations."""
         self.db = db
         self.repo = NotificationRepository(db)
         self.log_repo = EmailLogRepository(db)
@@ -59,6 +65,9 @@ class NotificationService:
         action_url: Optional[str] = None,
         event_key: Optional[str] = None,
     ) -> Notification | None:
+        """Persist an in-app notification, using a deterministic ID when delivery is
+        deduplicated.
+        """
         user = await self.db.scalar(select(User).where(User.id == user_id).with_for_update()
                                     .execution_options(populate_existing=True))
         if user is None or user.deleted_at is not None:
@@ -90,6 +99,7 @@ class NotificationService:
         page: int = 1,
         per_page: int = 20,
     ) -> NotificationListResponse:
+        """Return the user's notification page and unread count."""
         rows, total = await self.repo.list_by_user(user_id, unread_only, page, per_page)
         unread_count = await self.repo.unread_count(user_id)
         return NotificationListResponse(
@@ -100,11 +110,13 @@ class NotificationService:
         )
 
     async def mark_read(self, notification_id: UUID, user_id: UUID) -> bool:
+        """Mark an owned notification read through the notification repository."""
         result = await self.repo.mark_read(notification_id, user_id)
         await self.db.commit()
         return result
 
     async def mark_all_read(self, user_id: UUID) -> int:
+        """Mark all of the user's unread notifications through the repository."""
         count = await self.repo.mark_all_read(user_id)
         await self.db.commit()
         return count
@@ -114,6 +126,7 @@ class NotificationService:
     async def get_preferences(
         self, user_id: UUID, *, commit: bool = True
     ) -> NotificationPreferencesResponse:
+        """Load the user's canonical notification preferences for delivery decisions."""
         from app.services.legacy_preferences import import_legacy_preferences
 
         prefs = await import_legacy_preferences(self.db, user_id)
@@ -124,6 +137,7 @@ class NotificationService:
     async def update_preferences(
         self, user_id: UUID, payload: UpdatePreferencesRequest
     ) -> NotificationPreferencesResponse:
+        """Persist supported delivery-preference updates and return the canonical response."""
         updates = {k: v for k, v in payload.model_dump().items() if v is not None}
         from app.services.legacy_preferences import import_legacy_preferences
 
@@ -182,6 +196,7 @@ class NotificationService:
     async def notify_order_placed(
         self, order_id: UUID, event_key: Optional[str] = None
     ) -> None:
+        """Create order-confirmation notifications and email from persisted order details."""
         from sqlalchemy.orm import selectinload
         from app.models.order import Order
 
@@ -263,6 +278,7 @@ class NotificationService:
     async def notify_order_status(
         self, order_id: UUID, new_status: str, event_key: Optional[str] = None
     ) -> None:
+        """Apply delivery preferences to an order-status notification and email."""
         from app.models.order import Order
 
         result = await self.db.execute(select(Order).where(Order.id == order_id))
@@ -336,6 +352,7 @@ class NotificationService:
     async def notify_payout(
         self, payout_id: UUID, status: str, event_key: Optional[str] = None
     ) -> None:
+        """Create the seller's payout-status notification under their delivery preferences."""
         from app.models.wallet import Payout
         from app.models.seller import Seller
 
@@ -387,6 +404,7 @@ class NotificationService:
         reason: Optional[str] = None,
         event_key: Optional[str] = None,
     ) -> None:
+        """Create the seller's application-decision notification."""
         from app.models.seller import Seller
 
         result = await self.db.execute(select(Seller).where(Seller.id == seller_id))
@@ -423,6 +441,7 @@ class NotificationService:
     # ── Admin broadcast ───────────────────────────────────────────────────────
 
     async def broadcast(self, payload: BroadcastRequest, admin_id: UUID) -> BroadcastResponse:
+        """Queue notifications for the selected active audience through the durable outbox."""
         if payload.audience == "all":
             result = await self.db.execute(select(User.id).where(User.deleted_at.is_(None)))
         elif payload.audience == "customers":
@@ -458,6 +477,7 @@ class NotificationService:
         date_from: Optional[str] = None,
         page: int = 1,
     ) -> dict:
+        """Read delivery-log entries for administrative troubleshooting."""
         rows, total = await self.log_repo.list_admin(recipient_email, date_from, page)
         return {
             "data": [EmailLogResponse.model_validate(r) for r in rows],

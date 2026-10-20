@@ -17,6 +17,7 @@ sys.path.insert(0, str(ROOT))
 
 
 def parse_args() -> argparse.Namespace:
+    """Require explicit command-line options for storage writes and real email delivery."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--storage-write",
@@ -32,6 +33,7 @@ def parse_args() -> argparse.Namespace:
 
 
 async def verify_storage() -> None:
+    """Upload, locate, and finally delete a unique marker in each configured image bucket."""
     from app.core.config import settings
     from app.integrations.supabase_storage import SupabaseStorage
 
@@ -54,6 +56,7 @@ async def verify_storage() -> None:
 
 
 async def verify_email(address: str) -> None:
+    """Send a requested verification message and report the Resend acceptance receipt."""
     from app.integrations.resend_client import ResendClient
 
     receipt = await ResendClient().send(
@@ -65,6 +68,7 @@ async def verify_email(address: str) -> None:
 
 
 async def main() -> int:
+    """Report OAuth configuration and run only the external checks explicitly requested."""
     from app.core.config import settings
 
     args = parse_args()

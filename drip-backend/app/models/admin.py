@@ -1,3 +1,8 @@
+"""models / admin.
+
+SQLAlchemy persistence definitions shared by repositories and services.
+"""
+
 from __future__ import annotations
 
 from sqlalchemy import Index as SchemaIndex
@@ -6,7 +11,6 @@ from sqlalchemy import text as sql_text
 
 from uuid import UUID, uuid4
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import String, Text, Boolean, Integer, DateTime, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column

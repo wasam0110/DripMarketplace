@@ -1,3 +1,8 @@
+"""models / seller.
+
+SQLAlchemy persistence definitions shared by repositories and services.
+"""
+
 from __future__ import annotations
 
 from sqlalchemy import Index as SchemaIndex
@@ -91,10 +96,12 @@ class Seller(Base, TimestampMixin, SoftDeleteMixin):
     
     @property
     def slots_available(self) -> int:
+        """Subtract occupied slots from the seller's purchased listing capacity."""
         return self.total_slots - self.slots_used
 
     @property
     def is_active(self) -> bool:
+        """Expose the approval status used by seller-access checks."""
         return self.status == SellerStatus.active
 
 

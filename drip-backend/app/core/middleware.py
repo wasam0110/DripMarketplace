@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Callable
 
 import structlog
 from fastapi import Request, Response
@@ -32,15 +31,20 @@ class ErrorBoundaryMiddleware:
     """Catch pre-response failures inside request-ID, security and CORS wrappers."""
 
     def __init__(self, app: ASGIApp) -> None:
+        """Store the configuration and dependencies used by ErrorBoundaryMiddleware."""
         self.app = app
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        """Convert pre-response HTTP failures to API errors; propagate started-response
+        failures.
+        """
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         response_started = False
 
         async def tracked_send(message: Message) -> None:
+            """Track response headers so the error boundary cannot send a second response."""
             nonlocal response_started
             if message["type"] == "http.response.start":
                 response_started = True
@@ -74,14 +78,15 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
         "Content-Security-Policy": (
             "default-src 'self'; "
-            "script-src 'self' https://js.stripe.com; "
-            "frame-src https://js.stripe.com; "
+            "script-src 'self'; "
+            "frame-src 'none'; "
             "frame-ancestors 'none';"
         ),
         "Cross-Origin-Opener-Policy": "same-origin",
     }
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        """Attach the configured security headers after downstream request handling."""
         response = await call_next(request)
         for header, value in self._HEADERS.items():
             response.headers[header] = value
@@ -100,6 +105,7 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        """Bind a request ID to logging context and echo it in the response."""
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())[:12]
         request.state.request_id = request_id
 
@@ -124,6 +130,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     _SKIP_PATHS = {"/api/v1/health", "/favicon.ico"}
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        """Measure downstream request duration and emit structured request metadata."""
         if request.url.path in self._SKIP_PATHS:
             return await call_next(request)
 
@@ -144,6 +151,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _get_client_ip(request: Request) -> str:
+        """Resolve the client through the configured trusted-proxy policy for request logs."""
         return client_ip(request, settings.TRUSTED_PROXY_IPS) or "unknown"
 
 
@@ -175,6 +183,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        """Apply the Redis rate rule, returning 429 when exhausted and allowing Redis
+        outages.
+        """
         # Skip health checks and OPTIONS (CORS preflight)
         if request.url.path == "/api/v1/health" or request.method == "OPTIONS":
             return await call_next(request)
@@ -218,11 +229,13 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _get_limit(method: str, path: str) -> tuple[int, int]:
+        """Expose the selected rate limit and window without its Redis scope identifier."""
         _, limit, window = RateLimitMiddleware._get_rule(method, path)
         return limit, window
 
     @staticmethod
     def _get_rule(method: str, path: str) -> tuple[str, int, int]:
+        """Choose the first matching method/path rule or the shared default rate window."""
         for rule_method, rule_path, limit, window in _RATE_LIMIT_RULES:
             method_match = not rule_method or method == rule_method
             if method_match and (path == rule_path or path.startswith(rule_path + "/")):
@@ -231,6 +244,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     @staticmethod
     def _get_identifier(request: Request) -> str:
+        """Partition rate counters by authenticated user when available, otherwise trusted
+        client IP.
+        """
         # Only use an identity supplied by earlier trusted middleware. Route auth
         # dependencies run later, so the normal outer limiter is per client IP.
         user_id = getattr(request.state, "user_id", None)

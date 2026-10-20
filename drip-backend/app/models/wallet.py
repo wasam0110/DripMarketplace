@@ -1,3 +1,8 @@
+"""models / wallet.
+
+SQLAlchemy persistence definitions shared by repositories and services.
+"""
+
 from __future__ import annotations
 
 from sqlalchemy import Index as SchemaIndex
@@ -101,26 +106,32 @@ class CommissionLedger(Base):
 
     @hybrid_property
     def net_gross_amount(self) -> Decimal:
+        """Subtract refunded gross from the settlement's original gross amount."""
         return self.gross_amount - self.refunded_gross_amount
 
     @net_gross_amount.expression
     def net_gross_amount(cls):
+        """Subtract refunded gross from the settlement's original gross amount."""
         return cls.gross_amount - cls.refunded_gross_amount
 
     @hybrid_property
     def net_commission_amount(self) -> Decimal:
+        """Subtract reversed commission from the settlement's original commission."""
         return self.commission_amount - self.reversed_commission_amount
 
     @net_commission_amount.expression
     def net_commission_amount(cls):
+        """Subtract reversed commission from the settlement's original commission."""
         return cls.commission_amount - cls.reversed_commission_amount
 
     @hybrid_property
     def net_seller_amount(self) -> Decimal:
+        """Subtract reversed seller proceeds from the original settlement allocation."""
         return self.seller_amount - self.reversed_seller_amount
 
     @net_seller_amount.expression
     def net_seller_amount(cls):
+        """Subtract reversed seller proceeds from the original settlement allocation."""
         return cls.seller_amount - cls.reversed_seller_amount
 
 

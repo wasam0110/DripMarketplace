@@ -1,3 +1,8 @@
+"""api / v1 / admin / payouts.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -36,6 +41,8 @@ async def list_all_payouts(
     ),
     page: int = Query(default=1, ge=1),
 ) -> PaginatedPayouts:
+    # Handle GET /payouts at this router boundary. Delegates to
+    # WalletService.payout_repo.list_admin. Access dependency: CurrentAdmin.
     svc = WalletService(db)
     rows, total = await svc.payout_repo.list_admin(status=status, page=page)
     return PaginatedPayouts(
@@ -60,6 +67,8 @@ async def approve_payout(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> PayoutResponse:
+    # Handle POST /payouts/{payout_id}/approve at this router boundary. Delegates to
+    # WalletService.admin_approve_payout. Access dependency: CurrentAdmin.
     return await WalletService(db).admin_approve_payout(
         payout_id=payout_id,
         admin_id=UUID(current_admin["sub"]),
@@ -74,6 +83,8 @@ async def complete_payout(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> PayoutResponse:
+    # Handle POST /payouts/{payout_id}/complete at this router boundary. Delegates to
+    # WalletService.admin_complete_payout. Access dependency: CurrentAdmin.
     return await WalletService(db).admin_complete_payout(
         payout_id=payout_id,
         admin_id=UUID(current_admin["sub"]),
@@ -89,6 +100,8 @@ async def reject_payout(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> PayoutResponse:
+    # Handle POST /payouts/{payout_id}/reject at this router boundary. Delegates to
+    # WalletService.admin_reject_payout. Access dependency: CurrentAdmin.
     if not payload.admin_note:
         raise HTTPException(status_code=422, detail="admin_note required for rejection")
     return await WalletService(db).admin_reject_payout(

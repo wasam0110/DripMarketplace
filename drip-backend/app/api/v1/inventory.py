@@ -20,13 +20,12 @@ from __future__ import annotations
 from uuid import UUID
 from typing import Annotated, Optional
 
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import Field, field_validator
 
 from app.api.deps import get_db, CurrentSeller, CurrentAdmin
 from app.schemas.common import DRIPBaseModel, DRIPResponseModel
-from app.repositories.inventory_repo import InventoryRepository
 
 router = APIRouter(tags=["inventory"])
 
@@ -65,6 +64,7 @@ class SetStockRequest(DRIPBaseModel):
     @field_validator("stock")
     @classmethod
     def stock_non_negative(cls, v: int) -> int:
+        """Keep stock input within the inventory column's permitted range."""
         if v < 0:
             raise ValueError("Stock cannot be negative.")
         if v > 999_999:
@@ -74,6 +74,7 @@ class SetStockRequest(DRIPBaseModel):
     @field_validator("reorder_point")
     @classmethod
     def reorder_non_negative(cls, v: Optional[int]) -> Optional[int]:
+        """Keep reorder thresholds within the supported inventory range."""
         if v is not None and not 0 <= v <= 999_999:
             raise ValueError("Reorder point must be between 0 and 999,999.")
         return v
@@ -86,6 +87,7 @@ class AdjustStockRequest(DRIPBaseModel):
     @field_validator("delta")
     @classmethod
     def delta_in_range(cls, v: int) -> int:
+        """Bound a stock adjustment before inventory arithmetic is performed."""
         if v == 0:
             raise ValueError("Delta cannot be zero.")
         if abs(v) > 10_000:
@@ -95,6 +97,7 @@ class AdjustStockRequest(DRIPBaseModel):
     @field_validator("reason")
     @classmethod
     def reason_not_empty(cls, v: str) -> str:
+        """Reject blank audit reasons for stock adjustments."""
         v = v.strip()
         if len(v) < 3:
             raise ValueError("Reason must be at least 3 characters.")
@@ -123,6 +126,7 @@ class BulkStockUpdateRequest(DRIPBaseModel):
     @field_validator("updates")
     @classmethod
     def validate_updates(cls, v: list) -> list:
+        """Validate each bulk stock row before the inventory service applies updates."""
         if len({item.variant_id for item in v}) != len(v):
             raise ValueError("Each variant may appear only once per batch.")
         return v

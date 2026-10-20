@@ -6,7 +6,6 @@ from __future__ import annotations
 
 import logging
 from uuid import UUID
-from decimal import Decimal
 
 logger = logging.getLogger(__name__)
 

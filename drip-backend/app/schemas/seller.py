@@ -1,3 +1,8 @@
+"""schemas / seller.
+
+Validated request and response contracts used by API routes and services.
+"""
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -28,6 +33,7 @@ class SellerRegistrationRequest(BaseModel):
     @field_validator("whatsapp_number")
     @classmethod
     def validate_pk_phone(cls, v: str) -> str:
+        """Require a Pakistani mobile number during seller registration."""
         if not re.match(r"^(\+92|0)?3[0-9]{9}$", v):
             raise ValueError("Must be a valid Pakistani mobile number (03XXXXXXXXX or +923XXXXXXXXX)")
         return v
@@ -35,6 +41,7 @@ class SellerRegistrationRequest(BaseModel):
     @field_validator("password")
     @classmethod
     def password_strength(cls, v: str) -> str:
+        """Require an uppercase letter and digit in the seller's registration password."""
         if not re.search(r"[A-Z]", v):
             raise ValueError("Password must contain at least one uppercase letter")
         if not re.search(r"[0-9]", v):
@@ -70,6 +77,7 @@ class SlotPricingResponse(BaseModel):
         "registration_fee", "extra_slot_price", "extra_cost", "total_cost", when_used="json"
     )
     def serialize_money(self, value: Decimal) -> str:
+        """Serialize slot-pricing amounts as fixed two-decimal PKR strings."""
         return format(value, ".2f")
 
 
@@ -86,6 +94,7 @@ class SlotPurchaseResponse(BaseModel):
 
     @field_serializer("amount_charged", when_used="json")
     def serialize_money(self, value: Decimal) -> str:
+        """Serialize slot-pricing amounts as fixed two-decimal PKR strings."""
         return format(value, ".2f")
 
 
@@ -121,6 +130,7 @@ class SellerProfileUpdateRequest(BaseModel):
 
     @model_validator(mode="after")
     def at_least_one_field(self) -> "SellerProfileUpdateRequest":
+        """Reject seller profile updates containing only omitted or null values."""
         if all(v is None for v in self.model_dump().values()):
             raise ValueError("At least one field must be provided")
         return self
@@ -173,6 +183,7 @@ class SellerOrderRow(BaseModel):
 
     @field_serializer("shipped_at", "delivered_at", "created_at", when_used="json")
     def serialize_order_time(self, value: datetime | None) -> str | None:
+        """Convert optional seller-order timestamps to ISO 8601 strings."""
         # Keep the existing service's ISO offset spelling (including +00:00, not Z).
         return value.isoformat() if value is not None else None
 
@@ -206,6 +217,7 @@ class UpdateOrderStatusRequest(BaseModel):
 
     @model_validator(mode="after")
     def tracking_required_for_shipped(self) -> "UpdateOrderStatusRequest":
+        """Require tracking information before accepting a shipped-status request."""
         if self.status == "shipped" and not self.tracking_number:
             raise ValueError("tracking_number is required when status is 'shipped'")
         return self
@@ -221,6 +233,7 @@ class CreateBankAccountRequest(BaseModel):
 
     @model_validator(mode="after")
     def at_least_one_payment_method(self) -> "CreateBankAccountRequest":
+        """Require both bank name and account number for a payout destination."""
         if not (self.bank_name and self.account_number):
             raise ValueError(
                 "Provide both bank_name and account_number"

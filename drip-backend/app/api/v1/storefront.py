@@ -1,7 +1,6 @@
 """Public marketplace discovery, returning only approved storefront fields."""
 
 from datetime import UTC, datetime
-from uuid import UUID
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -11,10 +10,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db
 from app.core.exceptions import NotFoundError
 from app.models.admin import Banner
-from app.models.product import Category, Product
+from app.models.product import Category
 from app.models.seller import Seller, SellerStatus
 from app.schemas.admin import BannerResponse
-from app.schemas.product import CategoryResponse, CataloguePage
+from app.schemas.product import CataloguePage
 from app.services.product_service import ProductService
 
 router = APIRouter(tags=["storefront"])
@@ -22,6 +21,7 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 
 
 def brand_response(seller):
+    """Expose only approved public seller fields in storefront responses."""
     return {
         key: getattr(seller, key)
         for key in (
@@ -40,6 +40,7 @@ def brand_response(seller):
 
 @router.get("/categories")
 async def categories(db: DB):
+    # Handle GET /categories at this router boundary.
     rows = (
         await db.scalars(
             select(Category)
@@ -47,10 +48,8 @@ async def categories(db: DB):
             .order_by(Category.sort_order, Category.name, Category.id)
         )
     ).all()
-    active_ids = {c.id for c in rows}
-    visible = {}
-
     def is_visible(category, seen=None):
+        """Require an active ancestor chain and reject category cycles."""
         seen = set() if seen is None else seen
         if category.id in seen:
             return False
@@ -83,6 +82,7 @@ async def brands(
     page: int = Query(1, ge=1),
     per_page: int = Query(24, ge=1, le=100),
 ):
+    # Handle GET /brands at this router boundary.
     query = select(Seller).where(Seller.status == SellerStatus.active, Seller.deleted_at.is_(None))
     if q:
         query = query.where(Seller.brand_name.ilike(f"%{q}%"))
@@ -102,6 +102,7 @@ async def brands(
 
 @router.get("/brands/{slug}")
 async def brand_detail(slug: str, db: DB):
+    # Handle GET /brands/{slug} at this router boundary.
     seller = await db.scalar(
         select(Seller).where(
             Seller.slug == slug, Seller.status == SellerStatus.active, Seller.deleted_at.is_(None)
@@ -120,6 +121,8 @@ async def brand_products(
     cursor: str | None = Query(None),
     sort: str = Query("newest", pattern="^(newest|price_asc|price_desc|rating|trending)$"),
 ):
+    # Handle GET /brands/{slug}/products at this router boundary. Delegates to
+    # ProductService.get_catalogue.
     brand = await brand_detail(slug, db)
     return await ProductService(db).get_catalogue(
         seller_id=brand["id"], limit=limit, cursor=cursor, sort=sort
@@ -131,6 +134,7 @@ async def public_banners(
     db: DB,
     position: str | None = Query(None, pattern="^(homepage_hero|homepage_secondary|category_top)$"),
 ):
+    # Handle GET /content/banners at this router boundary.
     now = datetime.now(UTC)
     query = select(Banner).where(
         Banner.is_active.is_(True),

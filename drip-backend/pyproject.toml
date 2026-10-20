@@ -48,8 +48,6 @@ select = [
     "ANN", # type annotations
 ]
 ignore = [
-    "ANN101",  # Missing type annotation for `self`
-    "ANN102",  # Missing type annotation for `cls`
     "S101",    # Use of assert (allowed in tests)
     "B008",    # Do not perform function calls in default arguments (FastAPI Depends)
 ]
@@ -70,7 +68,7 @@ exclude                = ["alembic/", "tests/"]
 plugins                = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
 
 [[tool.mypy.overrides]]
-module = ["jose.*", "argon2.*", "magic.*", "pyotp.*", "qrcode.*", "arq.*", "structlog.*"]
+module = ["argon2.*", "magic.*", "pyotp.*", "qrcode.*", "arq.*", "structlog.*"]
 ignore_missing_imports = true
 
 # ── Coverage ──────────────────────────────────────────────────────────────────

@@ -1,3 +1,8 @@
+"""schemas / order.
+
+Validated request and response contracts used by API routes and services.
+"""
+
 from __future__ import annotations
 
 import re
@@ -23,6 +28,7 @@ class ShippingAddressInput(BaseModel):
     @field_validator("phone")
     @classmethod
     def validate_phone(cls, v: str) -> str:
+        """Require a Pakistani mobile number before order creation."""
         if not re.match(r"^(\+92|0)?3[0-9]{9}$", v):
             raise ValueError("Must be a valid Pakistani mobile number")
         return v
@@ -112,6 +118,7 @@ class CreateGuestOrderRequest(CreateOrderRequest):
     @field_validator("guest_phone")
     @classmethod
     def validate_phone(cls, v: str) -> str:
+        """Require a Pakistani mobile number before order creation."""
         if not re.match(r"^(\+92|0)?3[0-9]{9}$", v):
             raise ValueError("Must be a valid Pakistani mobile number")
         return v
@@ -266,6 +273,7 @@ class UpdateSellerOrderRequest(BaseModel):
 
     @model_validator(mode="after")
     def tracking_required_for_shipped(self) -> "UpdateSellerOrderRequest":
+        """Require tracking information before accepting a shipped-status request."""
         if self.status == "shipped" and not self.tracking_number:
             raise ValueError("tracking_number required when status is 'shipped'")
         return self

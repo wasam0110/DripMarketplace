@@ -19,12 +19,10 @@ async def cod_verification_timeout(ctx: dict, order_id: str) -> None:
 
     Business rule: BR-COD-02 — COD orders not verified within 30 min are cancelled.
     """
-    from sqlalchemy.ext.asyncio import AsyncSession
     from app.core.database import AsyncSessionLocal
-    from app.models.order import OrderStatus
-    from app.repositories.order_repo import OrderRepository, SellerOrderRepository
+    from app.models.order import OrderStatus, SellerOrderStatus
     from app.repositories.inventory_repo import InventoryRepository
-    from app.models.order import SellerOrderStatus
+    from app.repositories.order_repo import OrderRepository, SellerOrderRepository
 
     async with AsyncSessionLocal() as db:
         try:
@@ -80,15 +78,6 @@ async def cod_verification_timeout(ctx: dict, order_id: str) -> None:
             logger.error(f"COD timeout task failed for order {order_id}: {exc}")
             raise
 
-
-async def send_order_confirmation(ctx: dict, order_id: str) -> None:
-    from app.core.database import AsyncSessionLocal
-    from app.services.notification_service import NotificationService
-    async with AsyncSessionLocal() as db:
-        try:
-            await NotificationService(db).notify_order_placed(UUID(order_id))
-        except Exception as exc:
-            logger.error(f"Order confirmation failed for {order_id}: {exc}")
 
 async def expire_pending_orders(ctx: dict) -> None:
     """Sweep expired reservations; no per-order queue job needs to survive an outage."""

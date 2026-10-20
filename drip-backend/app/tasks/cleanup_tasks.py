@@ -232,6 +232,7 @@ async def cleanup_orphaned_images(ctx: dict) -> None:
 
 
 def _storage_timestamp(value: object) -> datetime | None:
+    """Parse an object timestamp for the orphan-cleanup age safety check."""
     if not isinstance(value, str) or not value.strip():
         return None
     try:

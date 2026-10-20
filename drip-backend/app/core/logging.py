@@ -87,6 +87,7 @@ def configure_logging() -> None:
 
 
 def get_logger(name: str = __name__) -> structlog.BoundLogger:
+    """Return a named structlog logger using the application's configured processors."""
     return structlog.get_logger(name)
 
 

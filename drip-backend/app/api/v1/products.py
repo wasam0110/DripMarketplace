@@ -1,3 +1,8 @@
+"""api / v1 / products.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -51,6 +56,7 @@ async def list_products(
     limit: int = Query(default=20, ge=1, le=100),
     cursor: Optional[str] = Query(default=None),
 ) -> CataloguePage:
+    # Handle GET /products at this router boundary. Delegates to ProductService.get_catalogue.
     return await ProductService(db).get_catalogue(
         category_id=category_id,
         seller_id=seller_id,
@@ -73,21 +79,29 @@ async def search_suggestions(
     db: DB,
     q: str = Query(min_length=2, max_length=100),
 ) -> SearchSuggestionsResponse:
+    # Handle GET /products/search/suggestions at this router boundary. Delegates to
+    # ProductService.search_suggestions.
     return await ProductService(db).search_suggestions(q)
 
 
 @router.get("/products/slug/{slug}", response_model=ProductDetailResponse)
 async def get_product_by_slug(slug: str, db: DB) -> ProductDetailResponse:
+    # Handle GET /products/slug/{slug} at this router boundary. Delegates to
+    # ProductService.get_product_by_slug.
     return await ProductService(db).get_product_by_slug(slug)
 
 
 @router.get("/products/{product_id}", response_model=ProductDetailResponse)
 async def get_product(product_id: UUID, db: DB) -> ProductDetailResponse:
+    # Handle GET /products/{product_id} at this router boundary. Delegates to
+    # ProductService.get_product_detail.
     return await ProductService(db).get_product_detail(product_id)
 
 
 @router.get("/products/{product_id}/variants", response_model=list[VariantWithStockResponse])
 async def get_product_variants(product_id: UUID, db: DB) -> list[VariantWithStockResponse]:
+    # Handle GET /products/{product_id}/variants at this router boundary. Delegates to
+    # ProductService.get_variants.
     return await ProductService(db).get_variants(product_id)
 
 
@@ -98,6 +112,8 @@ async def get_product_reviews(
     page: int = Query(default=1, ge=1),
     per_page: int = Query(default=10, ge=1, le=50),
 ):
+    # Handle GET /products/{product_id}/reviews at this router boundary. Delegates to
+    # ProductService.get_variants, CustomerService.list_product_reviews.
     await ProductService(db).get_variants(product_id)
     return await CustomerService(db).list_product_reviews(
         product_id, None, "newest", page, per_page
@@ -111,6 +127,8 @@ async def submit_review(
     db: DB,
     current_user: CurrentUser,
 ):
+    # Handle POST /products/{product_id}/reviews at this router boundary. Delegates to
+    # CustomerService.create_review. Access dependency: CurrentUser.
     if product_id != payload.product_id:
         raise HTTPException(422, "Product ID must match the URL")
     return await CustomerService(db).create_review(UUID(current_user["sub"]), payload)
@@ -128,6 +146,8 @@ async def list_seller_products(
     status: str = Query(default="all", pattern="^(all|published|draft)$"),
     page: int = Query(default=1, ge=1),
 ) -> SellerProductsPage:
+    # Handle GET /seller/products at this router boundary. Delegates to
+    # ProductService.get_seller_products. Access dependency: CurrentSeller.
     from uuid import UUID
 
     seller_id = UUID(current_seller["seller_id"])
@@ -140,6 +160,8 @@ async def create_product(
     db: DB,
     current_seller: CurrentSeller,
 ) -> ProductDetailResponse:
+    # Handle POST /seller/products at this router boundary. Delegates to
+    # ProductService.create_product. Access dependency: CurrentSeller.
     seller_id = UUID(current_seller["seller_id"])
     return await ProductService(db).create_product(seller_id, payload)
 
@@ -151,6 +173,8 @@ async def update_product(
     db: DB,
     current_seller: CurrentSeller,
 ) -> ProductDetailResponse:
+    # Handle PUT /seller/products/{product_id} at this router boundary. Delegates to
+    # ProductService.update_product. Access dependency: CurrentSeller.
     seller_id = UUID(current_seller["seller_id"])
     return await ProductService(db).update_product(seller_id, product_id, payload)
 
@@ -161,6 +185,8 @@ async def delete_product(
     db: DB,
     current_seller: CurrentSeller,
 ) -> Response:
+    # Handle DELETE /seller/products/{product_id} at this router boundary. Delegates to
+    # ProductService.delete_product. Access dependency: CurrentSeller.
     seller_id = UUID(current_seller["seller_id"])
     await ProductService(db).delete_product(seller_id, product_id)
     return Response(status_code=204)
@@ -172,6 +198,8 @@ async def publish_product(
     db: DB,
     current_seller: CurrentSeller,
 ) -> dict:
+    # Handle POST /seller/products/{product_id}/publish at this router boundary. Delegates to
+    # ProductService.publish_product. Access dependency: CurrentSeller.
     seller_id = UUID(current_seller["seller_id"])
     return await ProductService(db).publish_product(seller_id, product_id)
 
@@ -182,6 +210,8 @@ async def unpublish_product(
     db: DB,
     current_seller: CurrentSeller,
 ) -> dict:
+    # Handle POST /seller/products/{product_id}/unpublish at this router boundary. Delegates to
+    # ProductService.unpublish_product. Access dependency: CurrentSeller.
     seller_id = UUID(current_seller["seller_id"])
     return await ProductService(db).unpublish_product(seller_id, product_id)
 
@@ -195,6 +225,9 @@ async def upload_product_images(
     current_seller: CurrentSeller,
     images: List[UploadFile] = File(...),
 ) -> UploadImagesResponse:
+    # Handle POST /seller/products/{product_id}/images at this router boundary. Delegates to
+    # ProductService._require_owned, ProductService.add_images, ImageService.process_and_upload.
+    # Access dependency: CurrentSeller.
     if len(images) > MAX_IMAGES_PER_PRODUCT:
         raise HTTPException(
             status_code=422, detail=f"Maximum {MAX_IMAGES_PER_PRODUCT} images per upload"
@@ -231,6 +264,8 @@ async def admin_list_products(
     admin_hidden: Optional[bool] = Query(default=None),
     page: int = Query(default=1, ge=1),
 ) -> dict:
+    # Handle GET /admin/products at this router boundary. Delegates to
+    # ProductService.admin_list. Access dependency: CurrentAdmin.
     return await ProductService(db).admin_list(seller_id, admin_hidden, page)
 
 
@@ -240,6 +275,8 @@ async def admin_hide_product(
     db: DB,
     current_admin: CurrentAdmin,
 ) -> dict:
+    # Handle POST /admin/products/{product_id}/hide at this router boundary. Delegates to
+    # ProductService.set_hidden. Access dependency: CurrentAdmin.
     return await ProductService(db).set_hidden(product_id, True)
 
 
@@ -248,6 +285,8 @@ from app.schemas.product import CreateVariantRequest, UpdateVariantRequest, Reor
 
 @router.get("/seller/products/{product_id}", response_model=ProductDetailResponse)
 async def seller_product_detail(product_id: UUID, db: DB, current_seller: CurrentSeller):
+    # Handle GET /seller/products/{product_id} at this router boundary. Delegates to
+    # ProductService.get_seller_detail. Access dependency: CurrentSeller.
     return await ProductService(db).get_seller_detail(UUID(current_seller["seller_id"]), product_id)
 
 
@@ -257,6 +296,8 @@ async def seller_product_detail(product_id: UUID, db: DB, current_seller: Curren
 async def add_variant(
     product_id: UUID, payload: CreateVariantRequest, db: DB, current_seller: CurrentSeller
 ):
+    # Handle POST /seller/products/{product_id}/variants at this router boundary. Delegates to
+    # ProductService.add_variant. Access dependency: CurrentSeller.
     return await ProductService(db).add_variant(
         UUID(current_seller["seller_id"]), product_id, payload
     )
@@ -272,6 +313,8 @@ async def update_variant(
     db: DB,
     current_seller: CurrentSeller,
 ):
+    # Handle PATCH /seller/products/{product_id}/variants/{variant_id} at this router boundary.
+    # Delegates to ProductService.update_variant. Access dependency: CurrentSeller.
     return await ProductService(db).update_variant(
         UUID(current_seller["seller_id"]), product_id, variant_id, payload
     )
@@ -281,6 +324,8 @@ async def update_variant(
 async def reorder_images(
     product_id: UUID, payload: ReorderImagesRequest, db: DB, current_seller: CurrentSeller
 ):
+    # Handle PUT /seller/products/{product_id}/images/order at this router boundary. Delegates
+    # to ProductService.reorder_images. Access dependency: CurrentSeller.
     return await ProductService(db).reorder_images(
         UUID(current_seller["seller_id"]), product_id, payload.image_ids
     )
@@ -288,6 +333,8 @@ async def reorder_images(
 
 @router.put("/seller/products/{product_id}/images/{image_id}/primary")
 async def primary_image(product_id: UUID, image_id: UUID, db: DB, current_seller: CurrentSeller):
+    # Handle PUT /seller/products/{product_id}/images/{image_id}/primary at this router
+    # boundary. Delegates to ProductService.primary_image. Access dependency: CurrentSeller.
     return await ProductService(db).primary_image(
         UUID(current_seller["seller_id"]), product_id, image_id
     )
@@ -295,10 +342,14 @@ async def primary_image(product_id: UUID, image_id: UUID, db: DB, current_seller
 
 @router.delete("/seller/products/{product_id}/images/{image_id}", status_code=204)
 async def delete_image(product_id: UUID, image_id: UUID, db: DB, current_seller: CurrentSeller):
+    # Handle DELETE /seller/products/{product_id}/images/{image_id} at this router boundary.
+    # Delegates to ProductService.delete_image. Access dependency: CurrentSeller.
     await ProductService(db).delete_image(UUID(current_seller["seller_id"]), product_id, image_id)
     return Response(status_code=204)
 
 
 @router.post("/admin/products/{product_id}/unhide")
 async def unhide_product(product_id: UUID, db: DB, current_admin: CurrentAdmin):
+    # Handle POST /admin/products/{product_id}/unhide at this router boundary. Delegates to
+    # ProductService.set_hidden. Access dependency: CurrentAdmin.
     return await ProductService(db).set_hidden(product_id, False)

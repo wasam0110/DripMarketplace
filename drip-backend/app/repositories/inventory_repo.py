@@ -1,3 +1,8 @@
+"""repositories / inventory repo.
+
+Database operations used by services within their transaction boundaries.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -13,21 +18,25 @@ from app.core.exceptions import BusinessRuleError
 
 class InventoryRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind InventoryRepository to its injected dependencies for subsequent operations."""
         self.db = db
 
     async def create(self, variant_id: UUID, stock: int = 0) -> ProductInventory:
+        """Insert a inventory record and return it within the caller's transaction."""
         inv = ProductInventory(variant_id=variant_id, stock=stock)
         self.db.add(inv)
         await self.db.flush()
         return inv
 
     async def get_by_variant(self, variant_id: UUID) -> Optional[ProductInventory]:
+        """Look up a inventory record by variant; return None when absent."""
         result = await self.db.execute(
             select(ProductInventory).where(ProductInventory.variant_id == variant_id)
         )
         return result.scalar_one_or_none()
 
     async def update_stock(self, variant_id: UUID, stock: int) -> None:
+        """Set on-hand inventory within the caller's transaction."""
         await self.db.execute(
             update(ProductInventory)
             .where(ProductInventory.variant_id == variant_id)

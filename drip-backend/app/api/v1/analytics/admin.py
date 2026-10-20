@@ -1,3 +1,8 @@
+"""api / v1 / analytics / admin.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -24,6 +29,8 @@ async def platform_analytics(
     current_admin: CurrentAdmin,
     period:        str = Query(default="30d", pattern="^(7d|30d|90d|1y)$"),
 ) -> PlatformAnalytics:
+    # Handle GET /platform at this router boundary. Delegates to
+    # AdminAnalyticsService.get_platform_analytics. Access dependency: CurrentAdmin.
     return await AdminAnalyticsService(db).get_platform_analytics(period)
 
 
@@ -34,6 +41,8 @@ async def platform_revenue(
     period:        str = Query(default="30d", pattern="^(7d|30d|90d|1y)$"),
     granularity:   str = Query(default="day",  pattern="^(day|week|month)$"),
 ) -> RevenueSeriesResponse:
+    # Handle GET /revenue at this router boundary. Delegates to
+    # AdminAnalyticsService.get_platform_revenue. Access dependency: CurrentAdmin.
     return await AdminAnalyticsService(db).get_platform_revenue(period, granularity)
 
 
@@ -44,6 +53,8 @@ async def top_sellers(
     period:        str = Query(default="30d", pattern="^(7d|30d|90d|1y)$"),
     limit:         int = Query(default=10, ge=1, le=50),
 ) -> TopSellersResponse:
+    # Handle GET /top-sellers at this router boundary. Delegates to
+    # AdminAnalyticsService.get_top_sellers. Access dependency: CurrentAdmin.
     return await AdminAnalyticsService(db).get_top_sellers(period, limit)
 
 
@@ -53,6 +64,8 @@ async def cohort_retention(
     current_admin: CurrentAdmin,
     months:        int = Query(default=6, ge=1, le=12),
 ) -> CohortResponse:
+    # Handle GET /cohort at this router boundary. Delegates to AdminAnalyticsService.get_cohort.
+    # Access dependency: CurrentAdmin.
     return await AdminAnalyticsService(db).get_cohort(months)
 
 
@@ -62,6 +75,8 @@ async def payment_methods(
     current_admin: CurrentAdmin,
     period:        str = Query(default="30d", pattern="^(7d|30d|90d|1y)$"),
 ) -> PaymentMethodsResponse:
+    # Handle GET /payment-methods at this router boundary. Delegates to
+    # AdminAnalyticsService.get_payment_methods. Access dependency: CurrentAdmin.
     return await AdminAnalyticsService(db).get_payment_methods(period)
 
 
@@ -72,6 +87,8 @@ async def orders_by_city(
     period:        str = Query(default="30d", pattern="^(7d|30d|90d|1y)$"),
     limit:         int = Query(default=20, ge=1, le=100),
 ) -> CitiesResponse:
+    # Handle GET /cities at this router boundary. Delegates to AdminAnalyticsService.get_cities.
+    # Access dependency: CurrentAdmin.
     return await AdminAnalyticsService(db).get_cities(period, limit)
 
 
@@ -81,6 +98,8 @@ async def conversion_funnel(
     current_admin: CurrentAdmin,
     period:        str = Query(default="30d", pattern="^(7d|30d|90d|1y)$"),
 ) -> ConversionResponse:
+    # Handle GET /conversion at this router boundary. Delegates to
+    # AdminAnalyticsService.get_conversion. Access dependency: CurrentAdmin.
     return await AdminAnalyticsService(db).get_conversion(period)
 
 
@@ -91,4 +110,6 @@ async def search_queries(
     period:        str = Query(default="7d",  pattern="^(7d|30d|90d|1y)$"),
     limit:         int = Query(default=50, ge=1, le=200),
 ) -> SearchQueriesResponse:
+    # Handle GET /search-queries at this router boundary. Delegates to
+    # AdminAnalyticsService.get_search_queries. Access dependency: CurrentAdmin.
     return await AdminAnalyticsService(db).get_search_queries(period, limit)

@@ -1,3 +1,8 @@
+"""api / v1 / admin / dashboard.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from typing import Annotated
@@ -19,4 +24,6 @@ async def admin_dashboard(
     current_admin: CurrentAdmin,
     period:        str = Query(default="month", pattern="^(today|week|month|quarter|year)$"),
 ) -> AdminDashboardResponse:
+    # Handle GET /dashboard at this router boundary. Delegates to AdminService.get_dashboard.
+    # Access dependency: CurrentAdmin.
     return await AdminService(db).get_dashboard(period)

@@ -65,6 +65,7 @@ async def task_send_order_confirmation(
     total: MoneyDisplayValue,
     items: list[dict],
 ) -> None:
+    """Deliver the queued email through send_order_confirmation_email."""
     async with checked_email_recipient(ctx, email, order_number=order_number) as current_name:
         if current_name is None:
             return
@@ -83,6 +84,7 @@ async def task_send_shipping_notification(
     courier_name: str,
     brand_name: str,
 ) -> None:
+    """Deliver the queued email through send_shipping_notification_email."""
     async with checked_email_recipient(
         ctx, email, order_number=order_number, order_updates=True
     ) as current_name:
@@ -102,6 +104,7 @@ async def task_send_cod_timeout(
     name: str,
     order_number: str,
 ) -> None:
+    """Deliver the queued email through send_cod_timeout_email."""
     async with checked_email_recipient(
         ctx, email, order_number=order_number, order_updates=True
     ) as current_name:
@@ -119,6 +122,7 @@ async def task_send_seller_approved(
     brand_name: str,
     dashboard_url: str,
 ) -> None:
+    """Deliver the queued email through send_seller_approved_email."""
     async with checked_email_recipient(ctx, email, brand_name=brand_name) as current_name:
         if current_name is None:
             return

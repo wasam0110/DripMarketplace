@@ -82,12 +82,14 @@ def password_needs_rehash(hashed: str) -> bool:
 # ── JWT — RS256 ───────────────────────────────────────────────────────────────
 
 def _load_private_key() -> str:
+    """Normalize escaped PEM newlines in the signing-key text used by the JWT encoder."""
     key = settings.JWT_PRIVATE_KEY
     # Support newline-escaped keys from environment variables
     return key.replace("\\n", "\n")
 
 
 def _load_public_key() -> str:
+    """Normalize escaped PEM newlines in the verification-key text used by the JWT decoder."""
     key = settings.JWT_PUBLIC_KEY
     return key.replace("\\n", "\n")
 

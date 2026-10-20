@@ -1,3 +1,8 @@
+"""models / order.
+
+SQLAlchemy persistence definitions shared by repositories and services.
+"""
+
 from __future__ import annotations
 
 from sqlalchemy import Index as SchemaIndex
@@ -11,8 +16,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
-    String, Text, Numeric, Integer, Boolean,
-    DateTime, Enum as SAEnum, ForeignKey,
+    String, Text, Numeric, Integer, DateTime, Enum as SAEnum, ForeignKey,
     CheckConstraint, Index,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship

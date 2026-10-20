@@ -18,7 +18,6 @@ from typing import Any
 
 from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
-    AsyncConnection,
     AsyncEngine,
     AsyncSession,
     async_sessionmaker,
@@ -63,6 +62,7 @@ def create_engine_and_session() -> tuple[AsyncEngine, async_sessionmaker[AsyncSe
     if settings.is_development:
         @event.listens_for(engine.sync_engine, "connect")
         def on_connect(dbapi_conn: Any, connection_record: Any) -> None:
+            """Log creation of a pooled connection when development logging is enabled."""
             logger.debug("database.pool.connect")
 
     session_factory = async_sessionmaker(
@@ -158,10 +158,12 @@ async def atomic(session: AsyncSession) -> AsyncGenerator[AsyncSession, None]:
 # ── Serialisers ───────────────────────────────────────────────────────────────
 
 def _json_serializer(obj: Any) -> str:
+    """Encode database JSON values with orjson and return text for SQLAlchemy."""
     import orjson
     return orjson.dumps(obj).decode()
 
 
 def _json_deserializer(obj: str) -> Any:
+    """Decode database JSON values through the engine's orjson hook."""
     import orjson
     return orjson.loads(obj)

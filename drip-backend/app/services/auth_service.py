@@ -15,17 +15,14 @@ from app.core.config import settings
 from app.core.exceptions import (
     AuthenticationError,
     BusinessRuleError,
-    ConflictError,
     DuplicateEmailError,
     EmailNotVerifiedError,
     InvalidCredentialsError,
-    NotFoundError,
     TwoFactorRequiredError,
     TokenInvalidError,
 )
 from app.core.logging import get_logger
 from app.core.security import (
-    REFRESH_TOKEN_COOKIE_NAME,
     create_access_token,
     create_email_verify_token,
     create_password_reset_token,
@@ -33,7 +30,6 @@ from app.core.security import (
     decode_password_reset_token,
     generate_refresh_token,
     generate_totp_secret,
-    get_cookie_params,
     get_totp_uri,
     hash_password,
     hash_refresh_token,
@@ -56,6 +52,7 @@ logger = get_logger(__name__)
 
 
 def _user_to_response(user: User, seller_id: str | None = None) -> UserResponse:
+    """Convert a persisted user to the public authentication response fields."""
     return UserResponse(
         id=str(user.id),
         email=user.email,
@@ -304,6 +301,7 @@ class AuthService:
 
     @staticmethod
     async def reset_password(db: AsyncSession, token: str, new_password: str) -> None:
+        """Consume the reset token, replace the password hash, and revoke refresh sessions."""
         try:
             user_id = decode_password_reset_token(token)
         except TokenInvalidError:
@@ -336,6 +334,7 @@ class AuthService:
         current_password: str,
         new_password: str,
     ) -> None:
+        """Verify the current password, replace its hash, and revoke refresh sessions."""
         user = await UserRepository.get_by_id_or_raise(db, user_id)
         if not user.password_hash or not verify_password(current_password, user.password_hash):
             raise InvalidCredentialsError(message="Current password is incorrect.")
@@ -349,6 +348,7 @@ class AuthService:
 
     @staticmethod
     async def setup_totp(db: AsyncSession, user_id: uuid.UUID) -> TOTPSetupResponse:
+        """Prepare an admin TOTP secret and enrollment details without enabling it yet."""
         user = await UserRepository.get_by_id_or_raise(db, user_id)
         if user.role != UserRole.admin or user.is_2fa_enabled:
             raise BusinessRuleError("2FA setup requires an admin without existing 2FA")
@@ -363,6 +363,9 @@ class AuthService:
     async def verify_and_enable_totp(
         db: AsyncSession, user_id: uuid.UUID, code: str
     ) -> None:
+        """Validate the enrollment code before enabling admin-only two-factor
+        authentication.
+        """
         user = await UserRepository.get_by_id_or_raise(db, user_id)
         if user.role != UserRole.admin:
             raise BusinessRuleError("2FA is available to admins only")

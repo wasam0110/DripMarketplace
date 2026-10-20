@@ -8,7 +8,6 @@ Each route: validate input → call service → set cookie if needed → return 
 from __future__ import annotations
 
 from fastapi import APIRouter, Cookie, Depends, Request, Response
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentAdmin, CurrentUser, DBSession, get_current_user_payload
 from app.core.security import REFRESH_TOKEN_COOKIE_NAME, get_cookie_params
@@ -177,7 +176,7 @@ async def logout(
     Revoke the refresh token + blocklist the current access token.
     Clears the refresh token cookie.
     """
-    from datetime import UTC, datetime, timedelta
+    from datetime import UTC, datetime
 
     exp_ts = payload.get("exp", 0)
     exp_dt = datetime.fromtimestamp(exp_ts, tz=UTC)
@@ -243,6 +242,7 @@ async def reset_password(
     payload: ResetPasswordRequest,
     db: DBSession,
 ) -> MessageResponse:
+    # Handle POST /reset-password at this router boundary.
     await AuthService.reset_password(db, payload.token, payload.new_password)
     return MessageResponse(
         message="Password updated successfully. Please log in with your new password."
@@ -285,6 +285,7 @@ async def change_password(
     db: DBSession,
     token_payload: CurrentUser,
 ) -> MessageResponse:
+    # Handle POST /change-password at this router boundary. Access dependency: CurrentUser.
     import uuid
 
     await AuthService.change_password(
@@ -336,6 +337,7 @@ async def verify_2fa_setup(
     db: DBSession,
     token_payload: CurrentAdmin,
 ) -> MessageResponse:
+    # Handle POST /setup-2fa/verify at this router boundary. Access dependency: CurrentAdmin.
     import uuid
 
     await AuthService.verify_and_enable_totp(db, uuid.UUID(token_payload["sub"]), payload.code)
@@ -351,6 +353,7 @@ async def verify_2fa_setup(
     include_in_schema=True,
 )
 async def google_login(response: Response) -> dict:
+    # Handle GET /google at this router boundary.
     from app.services.google_oauth import start_google_login
 
     return await start_google_login(response)
@@ -358,6 +361,7 @@ async def google_login(response: Response) -> dict:
 
 @router.get("/google/callback")
 async def google_callback(request: Request, db: DBSession):
+    # Handle GET /google/callback at this router boundary.
     from app.services.google_oauth import finish_google_login
 
     return await finish_google_login(request, db)
@@ -365,6 +369,7 @@ async def google_callback(request: Request, db: DBSession):
 
 @router.post("/resend-verification", response_model=MessageResponse)
 async def resend_verification(payload: ForgotPasswordRequest, db: DBSession):
+    # Handle POST /resend-verification at this router boundary.
     from app.repositories.user_repo import UserRepository
     from app.core.redis import get_redis
     from app.core.security import create_email_verify_token
@@ -395,12 +400,14 @@ async def resend_verification(payload: ForgotPasswordRequest, db: DBSession):
 
 
 def _set_refresh_cookie(response: Response, token: str) -> None:
+    """Apply the shared secure cookie policy to a newly issued refresh token."""
     params = get_cookie_params()
     key = params.pop("key")
     response.set_cookie(value=token, **{k: v for k, v in params.items()}, key=key)
 
 
 def _clear_refresh_cookie(response: Response) -> None:
+    """Expire the refresh-token cookie with its configured path and scope."""
     response.delete_cookie(
         key=REFRESH_TOKEN_COOKIE_NAME,
         path="/api/v1/auth",
@@ -411,6 +418,7 @@ def _clear_refresh_cookie(response: Response) -> None:
 
 
 def _get_ip(request: Request) -> str | None:
+    """Resolve the login client's IP using the configured trusted-proxy policy."""
     forwarded = request.headers.get("X-Forwarded-For")
     if forwarded:
         return forwarded.split(",")[0].strip()

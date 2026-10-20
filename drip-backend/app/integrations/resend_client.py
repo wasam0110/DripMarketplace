@@ -20,6 +20,7 @@ logger = get_logger(__name__)
 
 
 def _configure_resend() -> None:
+    """Configure the Resend SDK from the shared runtime settings."""
     if not settings.RESEND_API_KEY:
         raise ExternalServiceError("Email delivery is not configured")
     resend.api_key = settings.RESEND_API_KEY
@@ -29,6 +30,7 @@ class ResendClient:
     """Async adapter returning the provider receipt used by EmailLog."""
 
     async def send(self, *, to: str, subject: str, html: str) -> str:
+        """Run the synchronous Resend SDK in a thread and return the provider message ID."""
         _configure_resend()
         response = await asyncio.to_thread(
             resend.Emails.send,
@@ -79,6 +81,7 @@ async def send_email(
 
 
 def _base_template(title: str, body: str) -> str:
+    """Wrap email-specific HTML in the shared WearHowZ email layout."""
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -121,6 +124,7 @@ def _base_template(title: str, body: str) -> str:
 
 
 async def send_verification_email(email: str, first_name: str, token: str) -> bool:
+    """Build the verification link and submit its email through send_email."""
     verify_url = escape(frontend_url("/verify-email", token=token), quote=True)
     body = f"""
     <h1>Verify your email</h1>
@@ -138,6 +142,7 @@ async def send_verification_email(email: str, first_name: str, token: str) -> bo
 
 
 async def send_password_reset_email(email: str, first_name: str, token: str) -> bool:
+    """Build the reset link and submit its email through send_email."""
     reset_url = escape(frontend_url("/reset-password", token=token), quote=True)
     body = f"""
     <h1>Reset your password</h1>
@@ -159,6 +164,7 @@ async def send_order_confirmation_email(
     total: MoneyDisplayValue,
     items: list[dict],
 ) -> bool:
+    """Render purchased items and totals for the order-confirmation email task."""
     items_html = "".join(
         f"<p style='margin:4px 0;color:#aaa;font-size:13px;'>"
         f"{i['product_name']} × {i['quantity']} — PKR {format_pkr(i['subtotal'])}</p>"
@@ -188,6 +194,7 @@ async def send_shipping_notification_email(
     courier_name: str,
     brand_name: str,
 ) -> bool:
+    """Render courier and tracking information for the shipping email task."""
     body = f"""
     <h1>Your order is on its way!</h1>
     <p>Hi {name}, <strong style="color:#DFFF00">{brand_name}</strong> has shipped your order.</p>
@@ -204,6 +211,7 @@ async def send_shipping_notification_email(
 
 
 async def send_cod_timeout_email(email: str, name: str, order_number: str) -> bool:
+    """Render the cancellation notice used by the COD-timeout email task."""
     body = f"""
     <h1>Order cancelled</h1>
     <p>Hi {name}, your Cash on Delivery order <strong style="color:#fff">{order_number}</strong>
@@ -219,6 +227,7 @@ async def send_cod_timeout_email(email: str, name: str, order_number: str) -> bo
 
 
 async def send_seller_approved_email(email: str, brand_name: str, dashboard_url: str) -> bool:
+    """Render the seller approval notice and dashboard link for email delivery."""
     body = f"""
     <h1>Your brand is live!</h1>
     <p>Congratulations! <strong style="color:#DFFF00">{brand_name}</strong> has been approved on WearHowZ.</p>

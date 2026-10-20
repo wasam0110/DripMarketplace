@@ -15,18 +15,17 @@ from __future__ import annotations
 import uuid
 from typing import Optional
 
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import (
     BusinessRuleError,
     NotFoundError,
-    PermissionDeniedError,
 )
 from app.core.logging import get_logger
 from app.core.security import hash_password, verify_password
 from app.models.user import User, UserAddress
-from app.models.review import Review, ReviewImage, ReviewStatus
+from app.models.review import Review, ReviewStatus
 from app.models.product import Product
 from app.repositories.user_repo import UserRepository
 from app.services.account_lifecycle import lock_active_user
@@ -58,11 +57,13 @@ MAX_ADDRESSES = 10
 
 class CustomerService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind CustomerService to its injected dependencies for subsequent operations."""
         self.db = db
 
     # ── helpers ───────────────────────────────────────────────────────────────
 
     async def _get_user(self, user_id: uuid.UUID) -> User:
+        """Load the customer account or raise the shared not-found error."""
         user = await UserRepository.get_by_id(self.db, user_id)
         if user is None:
             raise NotFoundError("User")
@@ -70,6 +71,7 @@ class CustomerService:
 
     @staticmethod
     def _review_to_schema(r: Review) -> ReviewResponse:
+        """Build a review response with author and image details."""
         return ReviewResponse(
             id=r.id,
             user=ReviewAuthorResponse(
@@ -99,6 +101,7 @@ class CustomerService:
     # ══════════════════════════════════════════════════════════════════════════
 
     async def get_profile(self, user_id: uuid.UUID) -> UserProfileResponse:
+        """Read the customer's account profile into its response model."""
         user = await self._get_user(user_id)
         return UserProfileResponse(
             id=user.id,
@@ -116,6 +119,7 @@ class CustomerService:
     async def update_profile(
         self, user_id: uuid.UUID, payload: UpdateProfileRequest
     ) -> UserProfileResponse:
+        """Lock the active account and persist the supplied profile changes."""
         user = await lock_active_user(self.db, user_id)
         updates: dict = {}
         if payload.first_name is not None:
@@ -138,6 +142,7 @@ class CustomerService:
         file_bytes: bytes,
         content_type: str,
     ) -> AvatarUploadResponse:
+        """Lock the account, process the image, and store its uploaded avatar URL."""
         from app.services.image_service import ImageService
         from app.core.config import settings
         await lock_active_user(self.db, user_id)
@@ -153,6 +158,7 @@ class CustomerService:
     async def change_password(
         self, user_id: uuid.UUID, payload: ChangePasswordRequest
     ) -> None:
+        """Verify local-account credentials and persist the replacement password hash."""
         user = await lock_active_user(self.db, user_id)
         if user.password_hash is None:
             raise BusinessRuleError("Cannot change password for OAuth-linked accounts.")
@@ -178,6 +184,7 @@ class CustomerService:
 
     @staticmethod
     def _addr_to_schema(a: UserAddress) -> AddressResponse:
+        """Convert a saved shipping address to its customer-facing response."""
         return AddressResponse(
             id=a.id,
             label=a.label,
@@ -189,6 +196,7 @@ class CustomerService:
         )
 
     async def list_addresses(self, user_id: uuid.UUID) -> list[AddressResponse]:
+        """Read the customer's saved addresses with default addresses first."""
         stmt = (
             select(UserAddress)
             .where(UserAddress.user_id == user_id)
@@ -200,6 +208,7 @@ class CustomerService:
     async def create_address(
         self, user_id: uuid.UUID, payload: CreateAddressRequest
     ) -> AddressResponse:
+        """Lock the account and create a saved address subject to account limits."""
         await lock_active_user(self.db, user_id)
         count_stmt = select(func.count()).where(UserAddress.user_id == user_id)
         count = (await self.db.execute(count_stmt)).scalar_one()
@@ -232,6 +241,7 @@ class CustomerService:
         address_id: uuid.UUID,
         payload: UpdateAddressRequest,
     ) -> AddressResponse:
+        """Lock the account and update only an address owned by that customer."""
         await lock_active_user(self.db, user_id)
         stmt = select(UserAddress).where(
             UserAddress.id == address_id, UserAddress.user_id == user_id
@@ -263,6 +273,7 @@ class CustomerService:
         return self._addr_to_schema(addr)
 
     async def delete_address(self, user_id: uuid.UUID, address_id: uuid.UUID) -> None:
+        """Delete a saved address after verifying customer ownership."""
         result = await self.db.execute(
             delete(UserAddress).where(
                 UserAddress.id == address_id, UserAddress.user_id == user_id
@@ -275,6 +286,7 @@ class CustomerService:
     async def set_default_address(
         self, user_id: uuid.UUID, address_id: uuid.UUID
     ) -> AddressResponse:
+        """Lock the account and switch its default shipping address."""
         await lock_active_user(self.db, user_id)
         if not await self.db.scalar(select(UserAddress.id).where(
             UserAddress.id == address_id, UserAddress.user_id == user_id
@@ -304,6 +316,7 @@ class CustomerService:
     async def list_user_reviews(
         self, user_id: uuid.UUID, page: int, per_page: int
     ) -> list[ReviewResponse]:
+        """Read the customer's reviews and convert them to response models."""
         offset = (page - 1) * per_page
         stmt = (
             select(Review)
@@ -318,6 +331,7 @@ class CustomerService:
     async def create_review(
         self, user_id: uuid.UUID, payload: CreateReviewRequest
     ) -> ReviewResponse:
+        """Check account, product, and purchase ownership before creating a review."""
         await lock_active_user(self.db, user_id)
         # Check product exists
         product = await self.db.get(Product, payload.product_id)
@@ -368,6 +382,7 @@ class CustomerService:
         review_id: uuid.UUID,
         payload: UpdateReviewRequest,
     ) -> ReviewResponse:
+        """Update an eligible owned review and refresh the product's rating aggregate."""
         await lock_active_user(self.db, user_id)
         stmt = select(Review).where(Review.id == review_id, Review.user_id == user_id)
         review = (await self.db.execute(stmt)).scalar_one_or_none()
@@ -391,6 +406,7 @@ class CustomerService:
         return self._review_to_schema(review)
 
     async def delete_review(self, user_id: uuid.UUID, review_id: uuid.UUID) -> None:
+        """Delete an owned review and refresh the product's rating aggregate."""
         review = await self.db.scalar(select(Review).where(Review.id == review_id, Review.user_id == user_id))
         if not review:
             raise NotFoundError("Review not found")
@@ -401,6 +417,7 @@ class CustomerService:
         await self.db.commit()
 
     async def refresh_product_rating(self, product_id):
+        """Recompute the product's public rating aggregate from eligible reviews."""
         await self.db.execute(select(Product.id).where(Product.id == product_id).with_for_update())
         average, count = (await self.db.execute(select(func.coalesce(func.avg(Review.rating), 0), func.count(Review.id))
             .where(Review.product_id == product_id, Review.status == ReviewStatus.approved))).one()
@@ -414,6 +431,7 @@ class CustomerService:
         page: int,
         per_page: int,
     ) -> PaginatedReviews:
+        """Paginate and sort public reviews for a product."""
         base = select(Review).where(
             Review.product_id == product_id,
             Review.status == ReviewStatus.approved,
@@ -463,6 +481,7 @@ class CustomerService:
     async def vote_review(
         self, user_id: uuid.UUID, review_id: uuid.UUID, helpful: bool
     ) -> None:
+        """Validate a helpfulness vote, rejecting self-votes and non-public reviews."""
         await lock_active_user(self.db, user_id)
         review = await self.db.get(Review, review_id)
         if review is None:
@@ -489,6 +508,7 @@ class CustomerService:
     # ══════════════════════════════════════════════════════════════════════════
 
     async def get_wishlist(self, user_id: uuid.UUID) -> WishlistResponse:
+        """Resolve stored wishlist identifiers against currently visible products."""
         # Wishlist stored in Redis for speed; fallback to user metadata
         from app.core.redis import get_redis
         redis = get_redis()
@@ -541,6 +561,7 @@ class CustomerService:
     async def add_to_wishlist(
         self, user_id: uuid.UUID, product_id: uuid.UUID
     ) -> WishlistResponse:
+        """Lock the account and add an eligible product to its wishlist."""
         await lock_active_user(self.db, user_id)
         product = await self.db.get(Product, product_id)
         if product is None or product.deleted_at is not None:
@@ -555,6 +576,7 @@ class CustomerService:
     async def remove_from_wishlist(
         self, user_id: uuid.UUID, product_id: uuid.UUID
     ) -> None:
+        """Remove a product identifier from the customer's wishlist."""
         from app.core.redis import get_redis
         redis = get_redis()
         await redis.srem(f"wishlist:{user_id}", str(product_id))
@@ -566,6 +588,7 @@ class CustomerService:
     async def get_notification_prefs(
         self, user_id: uuid.UUID
     ) -> NotificationPreferencesResponse:
+        """Read customer preferences through the shared notification service."""
         from app.services.notification_service import NotificationService
 
         prefs = await NotificationService(self.db).get_preferences(user_id)
@@ -582,6 +605,7 @@ class CustomerService:
         user_id: uuid.UUID,
         payload: UpdateNotificationPreferencesRequest,
     ) -> NotificationPreferencesResponse:
+        """Update customer delivery preferences through the shared notification service."""
         from app.schemas.notification import UpdatePreferencesRequest
         from app.services.notification_service import NotificationService
 
@@ -608,6 +632,9 @@ class CustomerService:
     async def delete_account(
         self, user_id: uuid.UUID, payload: DeleteAccountRequest
     ) -> None:
+        """Check customer deletion blockers, then anonymize and clean permitted account
+        data.
+        """
         from app.models.user import UserRole
 
         # Serialize with checkout; refresh an identity cached before acquiring the lock.

@@ -9,7 +9,7 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.user import User, UserAddress, UserSession
@@ -25,6 +25,7 @@ class UserRepository(BaseRepository[User]):
     async def get_by_email(
         cls, db: AsyncSession, email: str, include_deleted: bool = False
     ) -> User | None:
+        """Look up a user by email; return None when absent."""
         stmt = select(User).where(User.email == email.lower().strip())
         if not include_deleted:
             stmt = stmt.where(User.deleted_at.is_(None))
@@ -32,11 +33,13 @@ class UserRepository(BaseRepository[User]):
 
     @classmethod
     async def get_by_google_id(cls, db: AsyncSession, google_id: str) -> User | None:
+        """Look up a user by google id; return None when absent."""
         stmt = select(User).where(User.google_id == google_id, User.deleted_at.is_(None))
         return (await db.execute(stmt)).scalar_one_or_none()
 
     @classmethod
     async def email_exists(cls, db: AsyncSession, email: str) -> bool:
+        """Check whether the email already identifies a user."""
         stmt = select(User.id).where(
             User.email == email.lower().strip(),
             User.deleted_at.is_(None),
@@ -47,6 +50,7 @@ class UserRepository(BaseRepository[User]):
 
     @classmethod
     async def verify_email(cls, db: AsyncSession, user_id: uuid.UUID) -> None:
+        """Mark the user's email as verified within the caller's session."""
         await db.execute(
             update(User)
             .where(User.id == user_id, User.deleted_at.is_(None))
@@ -56,6 +60,7 @@ class UserRepository(BaseRepository[User]):
 
     @classmethod
     async def update_password(cls, db: AsyncSession, user_id: uuid.UUID, password_hash: str) -> None:
+        """Replace the stored password hash without handling session revocation here."""
         await db.execute(
             update(User)
             .where(User.id == user_id, User.deleted_at.is_(None))
@@ -65,6 +70,7 @@ class UserRepository(BaseRepository[User]):
 
     @classmethod
     async def update_last_login(cls, db: AsyncSession, user_id: uuid.UUID) -> None:
+        """Record the latest successful login timestamp."""
         await db.execute(
             update(User)
             .where(User.id == user_id, User.deleted_at.is_(None))
@@ -74,6 +80,7 @@ class UserRepository(BaseRepository[User]):
 
     @classmethod
     async def set_totp(cls, db: AsyncSession, user_id: uuid.UUID, secret: str | None, enabled: bool) -> None:
+        """Persist the admin TOTP secret and enablement state."""
         await db.execute(
             update(User)
             .where(User.id == user_id, User.deleted_at.is_(None))
@@ -95,6 +102,7 @@ class SessionRepository:
         ip_address: str | None = None,
         user_agent: str | None = None,
     ) -> UserSession:
+        """Insert a refresh session and return it within the caller's transaction."""
         from app.services.account_lifecycle import lock_active_user
         await lock_active_user(db, user_id)
         session = UserSession(
@@ -110,6 +118,9 @@ class SessionRepository:
 
     @classmethod
     async def get_by_token_hash(cls, db: AsyncSession, token_hash: str) -> UserSession | None:
+        """Lock an unexpired refresh session after checking its associated user remains
+        active.
+        """
         # Match deletion's user -> session lock order. Recheck the session after
         # waiting so simultaneous refreshes cannot reuse the same old token.
         user_id = await db.scalar(select(UserSession.user_id).where(
@@ -130,6 +141,7 @@ class SessionRepository:
 
     @classmethod
     async def delete_by_token_hash(cls, db: AsyncSession, token_hash: str) -> None:
+        """Revoke the refresh session identified by its stored token hash."""
         await db.execute(delete(UserSession).where(UserSession.token_hash == token_hash))
         await db.flush()
 
@@ -157,6 +169,7 @@ class AddressRepository(BaseRepository[UserAddress]):
 
     @classmethod
     async def list_for_user(cls, db: AsyncSession, user_id: uuid.UUID) -> list[UserAddress]:
+        """Query saved address records for for user reads using the caller's session."""
         stmt = (
             select(UserAddress)
             .where(UserAddress.user_id == user_id)
@@ -166,6 +179,7 @@ class AddressRepository(BaseRepository[UserAddress]):
 
     @classmethod
     async def clear_default(cls, db: AsyncSession, user_id: uuid.UUID) -> None:
+        """Clear the user's default address flag before choosing another address."""
         await db.execute(
             update(UserAddress)
             .where(UserAddress.user_id == user_id)

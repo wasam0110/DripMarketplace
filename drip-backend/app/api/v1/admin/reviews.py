@@ -27,6 +27,7 @@ async def list_reviews(
     status: ReviewStatus | None = None,
     page: int = Query(1, ge=1),
 ):
+    # Handle GET / at this router boundary. Access dependency: CurrentAdmin.
     query = select(Review)
     if status:
         query = query.where(Review.status == status)
@@ -48,6 +49,8 @@ async def list_reviews(
 async def moderate_review(
     review_id: UUID, payload: ModerateReviewRequest, db: DB, current_admin: CurrentAdmin
 ):
+    # Handle PATCH /{review_id} at this router boundary. Delegates to
+    # CustomerService.refresh_product_rating. Access dependency: CurrentAdmin.
     review = await db.scalar(select(Review).where(Review.id == review_id).with_for_update())
     if not review:
         raise NotFoundError("Review not found")

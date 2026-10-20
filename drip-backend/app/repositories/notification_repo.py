@@ -1,3 +1,8 @@
+"""repositories / notification repo.
+
+Database operations used by services within their transaction boundaries.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -13,15 +18,22 @@ from app.models.notification import Notification, NotificationPreference, EmailL
 
 class NotificationRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind NotificationRepository to its injected dependencies for subsequent
+        operations.
+        """
         self.db = db
 
     async def create(self, **kwargs) -> Notification:
+        """Insert a notification and return it within the caller's transaction."""
         n = Notification(**kwargs)
         self.db.add(n)
         await self.db.flush()
         return n
 
     async def create_once(self, notification_id: UUID, **kwargs) -> Notification:
+        """Insert by deterministic notification ID without duplicating an existing
+        delivery.
+        """
         statement = (
             insert(Notification)
             .values(id=notification_id, **kwargs)
@@ -37,6 +49,7 @@ class NotificationRepository:
         page:        int  = 1,
         per_page:    int  = 20,
     ) -> tuple[Sequence[Notification], int]:
+        """Query notification records for by user reads using the caller's session."""
         q = select(Notification).where(
             Notification.user_id == user_id, Notification.is_archived.is_(False)
         )
@@ -51,6 +64,7 @@ class NotificationRepository:
         return result.scalars().all(), total
 
     async def unread_count(self, user_id: UUID) -> int:
+        """Count a user's unread, unarchived notifications for the notification badge."""
         result = await self.db.execute(
             select(func.count(Notification.id)).where(
                 Notification.user_id == user_id,
@@ -61,6 +75,7 @@ class NotificationRepository:
         return result.scalar_one() or 0
 
     async def mark_read(self, notification_id: UUID, user_id: UUID) -> bool:
+        """Mark an owned notification as read and record its read timestamp."""
         result = await self.db.execute(
             update(Notification)
             .where(Notification.id == notification_id, Notification.user_id == user_id)
@@ -70,6 +85,7 @@ class NotificationRepository:
         return result.scalar_one_or_none() is not None
 
     async def mark_all_read(self, user_id: UUID) -> int:
+        """Mark the user's unread notifications and return the affected count."""
         result = await self.db.execute(
             update(Notification)
             .where(Notification.user_id == user_id, Notification.is_read.is_(False))
@@ -79,12 +95,14 @@ class NotificationRepository:
         return len(result.scalars().all())
 
     async def get_preferences(self, user_id: UUID) -> Optional[NotificationPreference]:
+        """Load the user's delivery preferences, returning None when uninitialized."""
         result = await self.db.execute(
             select(NotificationPreference).where(NotificationPreference.user_id == user_id)
         )
         return result.scalar_one_or_none()
 
     async def upsert_preferences(self, user_id: UUID, **kwargs) -> NotificationPreference:
+        """Create or update the user's notification-channel preferences."""
         existing = await self.get_preferences(user_id)
         if existing:
             for k, v in kwargs.items():
@@ -100,15 +118,18 @@ class NotificationRepository:
 
 class EmailLogRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind EmailLogRepository to its injected dependencies for subsequent operations."""
         self.db = db
 
     async def create(self, **kwargs) -> EmailLog:
+        """Insert a email delivery log and return it within the caller's transaction."""
         entry = EmailLog(**kwargs)
         self.db.add(entry)
         await self.db.flush()
         return entry
 
     async def get_by_delivery_key(self, delivery_key: str) -> Optional[EmailLog]:
+        """Look up a email delivery log by delivery key; return None when absent."""
         result = await self.db.execute(
             select(EmailLog)
             .where(EmailLog.delivery_key == delivery_key)
@@ -123,6 +144,7 @@ class EmailLogRepository:
         page:            int = 1,
         per_page:        int = 25,
     ) -> tuple[Sequence[EmailLog], int]:
+        """Query email delivery log records for admin reads using the caller's session."""
         q = select(EmailLog)
         if recipient_email:
             q = q.where(EmailLog.recipient_email.ilike(f"%{recipient_email}%"))

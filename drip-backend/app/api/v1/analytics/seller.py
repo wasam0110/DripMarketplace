@@ -1,3 +1,8 @@
+"""api / v1 / analytics / seller.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -23,6 +28,8 @@ async def seller_overview(
     current_seller: CurrentSeller,
     period:         str = Query(default="30d", pattern="^(7d|30d|90d|1y)$"),
 ) -> SellerAnalyticsOverview:
+    # Handle GET /overview at this router boundary. Delegates to
+    # SellerAnalyticsService.get_overview. Access dependency: CurrentSeller.
     return await SellerAnalyticsService(db).get_overview(
         seller_id=UUID(current_seller["seller_id"]), period=period
     )
@@ -35,6 +42,8 @@ async def seller_revenue_series(
     period:         str = Query(default="30d", pattern="^(7d|30d|90d|1y)$"),
     granularity:    str = Query(default="day",  pattern="^(day|week|month)$"),
 ) -> RevenueSeriesResponse:
+    # Handle GET /revenue at this router boundary. Delegates to
+    # SellerAnalyticsService.get_revenue_series. Access dependency: CurrentSeller.
     return await SellerAnalyticsService(db).get_revenue_series(
         seller_id=UUID(current_seller["seller_id"]),
         period=period, granularity=granularity,
@@ -49,6 +58,8 @@ async def seller_top_products(
     sort_by:        str = Query(default="revenue", pattern="^(revenue|units|views)$"),
     limit:          int = Query(default=10, ge=1, le=50),
 ) -> TopProductsResponse:
+    # Handle GET /top-products at this router boundary. Delegates to
+    # SellerAnalyticsService.get_top_products. Access dependency: CurrentSeller.
     return await SellerAnalyticsService(db).get_top_products(
         seller_id=UUID(current_seller["seller_id"]),
         period=period, sort_by=sort_by, limit=limit,
@@ -60,6 +71,8 @@ async def seller_inventory_health(
     db:             DB,
     current_seller: CurrentSeller,
 ) -> InventoryHealthResponse:
+    # Handle GET /inventory-health at this router boundary. Delegates to
+    # SellerAnalyticsService.get_inventory_health. Access dependency: CurrentSeller.
     return await SellerAnalyticsService(db).get_inventory_health(
         seller_id=UUID(current_seller["seller_id"])
     )

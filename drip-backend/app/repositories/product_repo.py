@@ -1,3 +1,8 @@
+"""repositories / product repo.
+
+Database operations used by services within their transaction boundaries.
+"""
+
 from __future__ import annotations
 
 import base64
@@ -7,12 +12,12 @@ from uuid import UUID
 from typing import Optional, Sequence
 from datetime import datetime, timedelta
 
-from sqlalchemy import select, update, func, and_, or_, desc, asc, cast, String
+from sqlalchemy import select, update, func, and_, or_, desc, asc
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload, joinedload
+from sqlalchemy.orm import selectinload
 
 from app.models.product import (
-    Product, ProductImage, ProductVariant, ProductInventory, Category, Tag, product_tags
+    Product, ProductImage, ProductVariant, Category
 )
 from app.models.seller import Seller, SellerStatus
 from app.core.exceptions import BusinessRuleError
@@ -20,11 +25,13 @@ from app.core.exceptions import BusinessRuleError
 
 class ProductRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind ProductRepository to its injected dependencies for subsequent operations."""
         self.db = db
 
     # ── Create ─────────────────────────────────────────────────────────────────
 
     async def create(self, **kwargs) -> Product:
+        """Insert a product and return it within the caller's transaction."""
         product = Product(**kwargs)
         self.db.add(product)
         await self.db.flush()
@@ -32,6 +39,7 @@ class ProductRepository:
         return product
 
     async def add_image(self, product_id: UUID, **kwargs) -> ProductImage:
+        """Attach an image record to the product within the current transaction."""
         image = ProductImage(product_id=product_id, **kwargs)
         self.db.add(image)
         await self.db.flush()
@@ -43,6 +51,7 @@ class ProductRepository:
     async def get_by_id(
         self, product_id: UUID, *, load_full: bool = False, lock: bool = False
     ) -> Optional[Product]:
+        """Look up a product by id; return None when absent."""
         q = select(Product).where(
             Product.id == product_id,
             Product.deleted_at.is_(None),
@@ -63,6 +72,7 @@ class ProductRepository:
         return result.scalar_one_or_none()
 
     async def get_by_slug(self, slug: str) -> Optional[Product]:
+        """Look up a product by slug; return None when absent."""
         result = await self.db.execute(
             select(Product)
             .options(
@@ -82,6 +92,7 @@ class ProductRepository:
         return result.scalar_one_or_none()
 
     async def slug_exists(self, slug: str) -> bool:
+        """Check whether the slug already identifies a product."""
         result = await self.db.execute(
             select(Product.id).where(Product.slug == slug, Product.deleted_at.is_(None))
         )
@@ -94,6 +105,7 @@ class ProductRepository:
         page: int = 1,
         per_page: int = 20,
     ) -> tuple[Sequence[Product], int]:
+        """Load the seller's filtered product page and total count."""
         q = select(Product).where(
             Product.seller_id == seller_id,
             Product.deleted_at.is_(None),
@@ -136,6 +148,9 @@ class ProductRepository:
         limit: int = 20,
         cursor: Optional[str] = None,
     ) -> tuple[Sequence[Product], Optional[str]]:
+        """Apply public visibility, filters, and validated cursor ordering to catalogue
+        queries.
+        """
         query = select(Product).join(Seller).where(
             Seller.status == SellerStatus.active, Seller.deleted_at.is_(None),
             Product.deleted_at.is_(None),
@@ -224,6 +239,7 @@ class ProductRepository:
         return rows, next_cursor
 
     async def search_suggestions(self, q: str, limit: int = 5) -> tuple[Sequence[Product], Sequence[Seller]]:
+        """Query matching public products and brands for search suggestions."""
         search = f"%{q}%"
         products = (
             await self.db.execute(
@@ -254,6 +270,7 @@ class ProductRepository:
     # ── Updates ────────────────────────────────────────────────────────────────
 
     async def update(self, product_id: UUID, **kwargs) -> Optional[Product]:
+        """Apply product fields and reload the product for the service response."""
         kwargs["updated_at"] = datetime.utcnow()
         await self.db.execute(
             update(Product).where(Product.id == product_id).values(**kwargs)
@@ -262,6 +279,7 @@ class ProductRepository:
         return await self.get_by_id(product_id)
 
     async def set_published(self, product_id: UUID, is_published: bool) -> None:
+        """Update product publication state within the caller's transaction."""
         await self.db.execute(
             update(Product)
             .where(Product.id == product_id)
@@ -269,6 +287,7 @@ class ProductRepository:
         )
 
     async def soft_delete(self, product_id: UUID) -> None:
+        """Mark the product deleted while retaining its historical record."""
         await self.db.execute(
             update(Product)
             .where(Product.id == product_id)
@@ -276,6 +295,7 @@ class ProductRepository:
         )
 
     async def increment_view_count(self, product_id: UUID) -> None:
+        """Increment the stored product view counter for analytics."""
         await self.db.execute(
             update(Product)
             .where(Product.id == product_id)
@@ -285,12 +305,14 @@ class ProductRepository:
     # ── Image management ───────────────────────────────────────────────────────
 
     async def get_image_count(self, product_id: UUID) -> int:
+        """Count attached image records before enforcing the upload limit."""
         result = await self.db.execute(
             select(func.count(ProductImage.id)).where(ProductImage.product_id == product_id)
         )
         return result.scalar_one() or 0
 
     async def set_primary_image(self, product_id: UUID, image_id: UUID) -> None:
+        """Clear the previous primary image and select the requested product image."""
         await self.db.execute(
             update(ProductImage)
             .where(ProductImage.product_id == product_id)
@@ -305,6 +327,7 @@ class ProductRepository:
     # ── Category helpers ───────────────────────────────────────────────────────
 
     async def get_category(self, category_id: UUID) -> Optional[Category]:
+        """Look up a category for product validation."""
         result = await self.db.execute(
             select(Category).where(Category.id == category_id, Category.is_active.is_(True))
         )
@@ -313,9 +336,11 @@ class ProductRepository:
 
 class VariantRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind VariantRepository to its injected dependencies for subsequent operations."""
         self.db = db
 
     async def create(self, product_id: UUID, **kwargs) -> ProductVariant:
+        """Insert a product variant and return it within the caller's transaction."""
         variant = ProductVariant(product_id=product_id, **kwargs)
         self.db.add(variant)
         await self.db.flush()
@@ -323,6 +348,7 @@ class VariantRepository:
         return variant
 
     async def get_by_product(self, product_id: UUID) -> Sequence[ProductVariant]:
+        """Look up a product variant by product; return None when absent."""
         result = await self.db.execute(
             select(ProductVariant)
             .options(selectinload(ProductVariant.inventory))
@@ -331,6 +357,7 @@ class VariantRepository:
         return result.scalars().all()
 
     async def sku_exists(self, sku: str) -> bool:
+        """Check whether the sku already identifies a product variant."""
         result = await self.db.execute(
             select(ProductVariant.id).where(ProductVariant.sku == sku)
         )

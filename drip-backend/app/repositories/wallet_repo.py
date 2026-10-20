@@ -1,6 +1,10 @@
+"""repositories / wallet repo.
+
+Database operations used by services within their transaction boundaries.
+"""
+
 from __future__ import annotations
 
-from decimal import Decimal
 from uuid import UUID
 from typing import Optional, Sequence
 from datetime import datetime
@@ -9,20 +13,24 @@ from sqlalchemy import select, update, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.wallet import CommissionLedger, Payout, PayoutStatus, WalletTransaction, WalletTxType
-from app.models.seller import SellerWallet
 
 
 class CommissionRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind CommissionRepository to its injected dependencies for subsequent
+        operations.
+        """
         self.db = db
 
     async def create(self, **kwargs) -> CommissionLedger:
+        """Insert a commission ledger entry and return it within the caller's transaction."""
         entry = CommissionLedger(**kwargs)
         self.db.add(entry)
         await self.db.flush()
         return entry
 
     async def exists_for_seller_order(self, seller_order_id: UUID) -> bool:
+        """Check for an existing commission ledger entry for this seller order."""
         result = await self.db.execute(
             select(CommissionLedger.id).where(
                 CommissionLedger.seller_order_id == seller_order_id
@@ -38,6 +46,9 @@ class CommissionRepository:
         page:      int = 1,
         per_page:  int = 25,
     ) -> tuple[Sequence[CommissionLedger], int, dict]:
+        """Query commission ledger entry records for by seller reads using the caller's
+        session.
+        """
         q = select(CommissionLedger).where(CommissionLedger.seller_id == seller_id)
 
         count_q = select(func.count()).select_from(q.subquery())
@@ -83,9 +94,13 @@ class CommissionRepository:
 
 class WalletTransactionRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind WalletTransactionRepository to its injected dependencies for subsequent
+        operations.
+        """
         self.db = db
 
     async def create(self, **kwargs) -> WalletTransaction:
+        """Insert a wallet transaction and return it within the caller's transaction."""
         tx = WalletTransaction(**kwargs)
         self.db.add(tx)
         await self.db.flush()
@@ -98,6 +113,7 @@ class WalletTransactionRepository:
         page:      int = 1,
         per_page:  int = 25,
     ) -> tuple[Sequence[WalletTransaction], int]:
+        """Query wallet transaction records for by seller reads using the caller's session."""
         q = select(WalletTransaction).where(WalletTransaction.seller_id == seller_id)
         if tx_type:
             q = q.where(WalletTransaction.type == WalletTxType(tx_type))
@@ -112,9 +128,11 @@ class WalletTransactionRepository:
 
 class PayoutRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind PayoutRepository to its injected dependencies for subsequent operations."""
         self.db = db
 
     async def create(self, **kwargs) -> Payout:
+        """Insert a payout and return it within the caller's transaction."""
         payout = Payout(**kwargs)
         self.db.add(payout)
         await self.db.flush()
@@ -122,6 +140,7 @@ class PayoutRepository:
         return payout
 
     async def get_by_id(self, payout_id: UUID, *, for_update: bool = False) -> Optional[Payout]:
+        """Look up a payout by id; return None when absent."""
         query = select(Payout).where(Payout.id == payout_id)
         if for_update:
             query = query.with_for_update().execution_options(populate_existing=True)
@@ -137,6 +156,7 @@ class PayoutRepository:
         page:      int = 1,
         per_page:  int = 25,
     ) -> tuple[Sequence[Payout], int]:
+        """Query payout records for by seller reads using the caller's session."""
         q = select(Payout).where(Payout.seller_id == seller_id)
         if status:
             q = q.where(Payout.status == PayoutStatus(status))
@@ -154,6 +174,7 @@ class PayoutRepository:
         page:     int = 1,
         per_page: int = 25,
     ) -> tuple[Sequence[Payout], int]:
+        """Query payout records for admin reads using the caller's session."""
         q = select(Payout)
         if status:
             q = q.where(Payout.status == PayoutStatus(status))
@@ -172,6 +193,7 @@ class PayoutRepository:
         approved_by: Optional[UUID] = None,
         admin_note:  Optional[str] = None,
     ) -> None:
+        """Apply the payout status change within the caller's transaction."""
         values: dict = {"status": status}
         if approved_by:
             values["approved_by"] = approved_by

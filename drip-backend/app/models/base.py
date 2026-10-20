@@ -35,6 +35,7 @@ class Base(DeclarativeBase):
         }
 
     def __repr__(self) -> str:
+        """Identify an ORM instance by model and primary key when debugging."""
         pk = getattr(self, "id", "?")
         return f"<{self.__class__.__name__} id={pk}>"
 
@@ -80,6 +81,7 @@ class SoftDeleteMixin:
 
     @property
     def is_deleted(self) -> bool:
+        """Expose whether the soft-deletion timestamp is set."""
         return self.deleted_at is not None
 
     def soft_delete(self) -> None:

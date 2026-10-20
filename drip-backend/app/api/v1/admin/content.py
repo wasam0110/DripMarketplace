@@ -1,8 +1,12 @@
+"""api / v1 / admin / content.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
 from typing import Annotated, Optional
-from datetime import datetime
 
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,6 +24,8 @@ VALID_POSITIONS = {"homepage_hero", "homepage_secondary", "category_top"}
 
 @router.get("/banners", response_model=list[BannerResponse])
 async def list_banners(db: DB, current_admin: CurrentAdmin) -> list[BannerResponse]:
+    # Handle GET /banners at this router boundary. Delegates to AdminService.list_banners.
+    # Access dependency: CurrentAdmin.
     return await AdminService(db).list_banners()
 
 
@@ -34,6 +40,9 @@ async def create_banner(
     is_active: bool = Form(default=True),
     image: UploadFile = File(...),
 ) -> BannerResponse:
+    # Handle POST /banners at this router boundary. Delegates to
+    # ImageService.process_and_upload, AdminService.create_banner. Access dependency:
+    # CurrentAdmin.
     if position not in VALID_POSITIONS:
         raise HTTPException(
             status_code=422, detail=f"position must be one of: {', '.join(VALID_POSITIONS)}"
@@ -64,6 +73,8 @@ async def delete_banner(
     db: DB,
     current_admin: CurrentAdmin,
 ) -> Response:
+    # Handle DELETE /banners/{banner_id} at this router boundary. Delegates to
+    # AdminService.delete_banner. Access dependency: CurrentAdmin.
     await AdminService(db).delete_banner(banner_id)
     return Response(status_code=204)
 
@@ -75,6 +86,8 @@ from app.schemas.admin import UpdateBannerRequest
 async def update_banner(
     banner_id: UUID, payload: UpdateBannerRequest, db: DB, current_admin: CurrentAdmin
 ):
+    # Handle PATCH /banners/{banner_id} at this router boundary. Access dependency:
+    # CurrentAdmin.
     from app.models.admin import Banner
     from app.core.exceptions import NotFoundError, BusinessRuleError
 

@@ -1,3 +1,8 @@
+"""services / coupon service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 from decimal import Decimal, ROUND_HALF_UP
@@ -8,13 +13,14 @@ from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BusinessRuleError, NotFoundError
+from app.core.exceptions import BusinessRuleError
 from app.models.coupon import Coupon, CouponUsage, DiscountType
 from app.schemas.order import ValidateCouponRequest, CouponValidationResponse
 
 
 class CouponService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind CouponService to its injected dependencies for subsequent operations."""
         self.db = db
 
     async def validate(
@@ -22,6 +28,7 @@ class CouponService:
         payload: ValidateCouponRequest,
         user_id: Optional[UUID] = None,
     ) -> CouponValidationResponse:
+        """Check coupon eligibility and calculate the preview discount for checkout."""
         coupon = await self._get_valid_coupon(payload.code, payload.subtotal, user_id)
         discount_amount = self._calc_discount(coupon, payload.subtotal)
         return CouponValidationResponse(
@@ -62,6 +69,7 @@ class CouponService:
     async def _get_valid_coupon(
         self, code: str, subtotal: Decimal, user_id: Optional[UUID], *, lock: bool = False
     ) -> Coupon:
+        """Check activation dates, usage limits, and checkout constraints for a coupon."""
         query = select(Coupon).where(Coupon.code == code.upper())
         if lock:
             query = query.with_for_update()
@@ -101,6 +109,7 @@ class CouponService:
 
     @staticmethod
     def _calc_discount(coupon: Coupon, subtotal: Decimal) -> Decimal:
+        """Calculate the coupon's capped, currency-rounded discount."""
         # Round the discount once, in PKR major units, before seller allocation.
         # Explicit half-up matches the ledger money policy and avoids dependence
         # on the caller's Decimal rounding context.

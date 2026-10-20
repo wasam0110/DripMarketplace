@@ -30,6 +30,9 @@ _SENSITIVE = {
 
 
 def redact(value: Any, depth: int = 0) -> Any:  # noqa: ANN401 - accepts heterogeneous log metadata
+    """Recursively mask sensitive log values, limiting recursion depth before
+    serialization.
+    """
     if depth > 12:
         return "[TRUNCATED]"
     if isinstance(value, dict):

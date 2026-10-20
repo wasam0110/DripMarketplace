@@ -1,8 +1,13 @@
+"""api / v1 / sellers.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
-from typing import Annotated, Optional
-from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException, status, Response
+from typing import Annotated
+from fastapi import APIRouter, Depends, Query, UploadFile, File, HTTPException, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_db, CurrentSellerAccount
 from app.schemas.seller import (
@@ -40,6 +45,8 @@ async def get_slot_pricing(
     db: DB,
     extra_slots: int = Query(default=0, ge=0, le=10_000),
 ) -> SlotPricingResponse:
+    # Handle GET /register/slot-price at this router boundary. Delegates to
+    # SlotService.get_pricing.
     return await SlotService(db).get_pricing(extra_slots)
 
 
@@ -48,6 +55,8 @@ async def get_slot_pricing(
 
 @router.get("/me", response_model=SellerProfileResponse)
 async def get_seller_profile(db: DB, current_user: CurrentSellerAccount) -> SellerProfileResponse:
+    # Handle GET /me at this router boundary. Delegates to SellerService.get_profile. Access
+    # dependency: CurrentSellerAccount.
     return await SellerService(db).get_profile(user_id=UUID(current_user["sub"]))
 
 
@@ -55,6 +64,8 @@ async def get_seller_profile(db: DB, current_user: CurrentSellerAccount) -> Sell
 async def update_seller_profile(
     payload: SellerProfileUpdateRequest, db: DB, current_user: CurrentSellerAccount
 ) -> SellerProfileResponse:
+    # Handle PATCH /me at this router boundary. Delegates to SellerService.update_profile.
+    # Access dependency: CurrentSellerAccount.
     return await SellerService(db).update_profile(
         user_id=UUID(current_user["sub"]), payload=payload
     )
@@ -66,6 +77,8 @@ async def upload_logo(
     current_user: CurrentSellerAccount,
     logo: UploadFile = File(...),
 ) -> LogoUploadResponse:
+    # Handle POST /logo at this router boundary. Delegates to ImageService.process_and_upload,
+    # SellerService.update_logo. Access dependency: CurrentSellerAccount.
     from app.repositories.seller_repo import SellerRepository
     from app.services.image_service import ImageService
     from app.core.config import settings
@@ -91,6 +104,8 @@ async def upload_logo(
 async def purchase_slots(
     payload: SlotPurchaseRequest, db: DB, current_user: CurrentSellerAccount
 ) -> SlotPurchaseResponse:
+    # Handle POST /slots/purchase at this router boundary. Delegates to
+    # SlotService.purchase_slots. Access dependency: CurrentSellerAccount.
     return await SlotService(db).purchase_slots(user_id=UUID(current_user["sub"]), payload=payload)
 
 
@@ -103,6 +118,8 @@ async def get_dashboard(
     current_user: CurrentSellerAccount,
     period: str = Query(default="month", pattern="^(today|week|month|quarter|year)$"),
 ) -> SellerDashboardResponse:
+    # Handle GET /dashboard at this router boundary. Delegates to SellerService.get_dashboard.
+    # Access dependency: CurrentSellerAccount.
     return await SellerService(db).get_dashboard(user_id=UUID(current_user["sub"]), period=period)
 
 
@@ -114,6 +131,8 @@ async def get_dashboard(
 
 @router.get("/bank-accounts", response_model=list[BankAccountResponse])
 async def list_bank_accounts(db: DB, current_user: CurrentSellerAccount) -> list[BankAccountResponse]:
+    # Handle GET /bank-accounts at this router boundary. Delegates to
+    # SellerService.list_bank_accounts. Access dependency: CurrentSellerAccount.
     return await SellerService(db).list_bank_accounts(user_id=UUID(current_user["sub"]))
 
 
@@ -121,6 +140,8 @@ async def list_bank_accounts(db: DB, current_user: CurrentSellerAccount) -> list
 async def add_bank_account(
     payload: CreateBankAccountRequest, db: DB, current_user: CurrentSellerAccount
 ) -> BankAccountResponse:
+    # Handle POST /bank-accounts at this router boundary. Delegates to
+    # SellerService.add_bank_account. Access dependency: CurrentSellerAccount.
     return await SellerService(db).add_bank_account(
         user_id=UUID(current_user["sub"]), payload=payload
     )
@@ -128,6 +149,8 @@ async def add_bank_account(
 
 @router.delete("/bank-accounts/{account_id}")
 async def delete_bank_account(account_id: UUID, db: DB, current_user: CurrentSellerAccount) -> Response:
+    # Handle DELETE /bank-accounts/{account_id} at this router boundary. Delegates to
+    # SellerService.delete_bank_account. Access dependency: CurrentSellerAccount.
     await SellerService(db).delete_bank_account(
         user_id=UUID(current_user["sub"]), account_id=account_id
     )

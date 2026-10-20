@@ -1,16 +1,19 @@
+"""services / product service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 import re
 import uuid
 from decimal import Decimal
 from uuid import UUID
-from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete
+from sqlalchemy import select, func
 from app.models.analytics import AnalyticsEvent
-from sqlalchemy.orm import selectinload
-from app.models.product import ProductVariant, ProductImage, Category
+from app.models.product import ProductVariant, Category
 from app.models.seller import Seller
 from app.core.catalogue_policy import MAX_IMAGES_PER_PRODUCT
 
@@ -45,6 +48,7 @@ from app.schemas.product import (
 )
 
 def _slugify(text: str) -> str:
+    """Normalize a product name into the bounded URL slug used by uniqueness checks."""
     text = text.lower().strip().encode("ascii", errors="ignore").decode()
     text = re.sub(r"[^\w\s-]", "", text)
     text = re.sub(r"[\s_]+", "-", text)
@@ -53,6 +57,7 @@ def _slugify(text: str) -> str:
 
 class ProductService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind ProductService to its injected dependencies for subsequent operations."""
         self.db = db
         self.product_repo = ProductRepository(db)
         self.variant_repo = VariantRepository(db)
@@ -64,6 +69,9 @@ class ProductService:
     async def create_product(
         self, seller_id: UUID, payload: CreateProductRequest
     ) -> ProductDetailResponse:
+        """Validate seller capacity and category, then persist the product and its
+        variants.
+        """
         await self.db.execute(select(Seller.id).where(Seller.id == seller_id).with_for_update())
         seller = await self.seller_repo.get_by_id(seller_id)
         if not seller or seller.status != SellerStatus.active:
@@ -119,6 +127,7 @@ class ProductService:
     async def update_product(
         self, seller_id: UUID, product_id: UUID, payload: UpdateProductRequest
     ) -> ProductDetailResponse:
+        """Enforce seller ownership and pricing rules before applying product changes."""
         product = await self._require_owned(seller_id, product_id)
         data = payload.model_dump(exclude_unset=True)
         for required in ("name", "description", "price"):
@@ -142,6 +151,7 @@ class ProductService:
     # ── Publish / Unpublish ────────────────────────────────────────────────────
 
     async def publish_product(self, seller_id: UUID, product_id: UUID) -> dict:
+        """Check listing completeness and capacity before publishing and occupying a slot."""
         product = await self._require_owned(seller_id, product_id)
         seller = await self.seller_repo.get_by_id(seller_id)
 
@@ -163,6 +173,7 @@ class ProductService:
         return {"message": "Product published successfully"}
 
     async def unpublish_product(self, seller_id: UUID, product_id: UUID) -> dict:
+        """Unpublish the seller's product and release its occupied listing slot."""
         product = await self._require_owned(seller_id, product_id)
         if not product.is_published:
             raise BusinessRuleError("Product is already unpublished")
@@ -174,6 +185,7 @@ class ProductService:
     # ── Delete ─────────────────────────────────────────────────────────────────
 
     async def delete_product(self, seller_id: UUID, product_id: UUID) -> None:
+        """Soft-delete the owned product and release its listing slot when necessary."""
         product = await self._require_owned(seller_id, product_id)
         if product.is_published:
             await self.seller_repo.decrement_slots_used(seller_id)
@@ -188,7 +200,9 @@ class ProductService:
         product_id: UUID,
         image_urls: list[str],
     ) -> list[ProductImageResponse]:
-        product = await self._require_owned(seller_id, product_id)
+        """Check product ownership and image limits before attaching uploaded image URLs."""
+        # Ownership must still be checked even though the product value is unused.
+        await self._require_owned(seller_id, product_id)
         current = await self.product_repo.get_image_count(product_id)
         remaining = MAX_IMAGES_PER_PRODUCT - current
 
@@ -212,6 +226,7 @@ class ProductService:
     # ── Public catalogue ───────────────────────────────────────────────────────
 
     async def get_catalogue(self, **filters) -> CataloguePage:
+        """Read visible catalogue cards and record the relevant search analytics."""
         rows, next_cursor = await self.product_repo.list_catalogue(**filters)
         if filters.get("q") and not filters.get("cursor"):
             self.db.add(
@@ -232,6 +247,7 @@ class ProductService:
         )
 
     async def get_product_detail(self, product_id: UUID) -> ProductDetailResponse:
+        """Read a public product by ID and record its view activity."""
         product = await self.product_repo.get_by_id(product_id, load_full=True)
         if not self._is_public(product):
             raise NotFoundError("Product not found")
@@ -241,6 +257,7 @@ class ProductService:
         return self._to_detail(product)
 
     async def get_product_by_slug(self, slug: str) -> ProductDetailResponse:
+        """Read a public product by slug and record its view activity."""
         product = await self.product_repo.get_by_slug(slug)
         if not self._is_public(product):
             raise NotFoundError("Product not found")
@@ -250,12 +267,14 @@ class ProductService:
         return self._to_detail(product)
 
     async def get_variants(self, product_id: UUID) -> list[VariantWithStockResponse]:
+        """Return public variant and stock data only for a visible product."""
         product = await self.product_repo.get_by_id(product_id, load_full=True)
         if not self._is_public(product):
             raise NotFoundError("Product not found")
         return [self._to_variant(v) for v in product.variants if v.is_active]
 
     async def search_suggestions(self, q: str) -> SearchSuggestionsResponse:
+        """Convert repository product and brand matches to search suggestions."""
         products, sellers = await self.product_repo.search_suggestions(q)
         return SearchSuggestionsResponse(
             products=[
@@ -279,6 +298,7 @@ class ProductService:
     async def get_seller_products(
         self, seller_id: UUID, status: str = "all", page: int = 1
     ) -> SellerProductsPage:
+        """Build the seller's product page with listing-capacity information."""
         seller = await self.seller_repo.get_by_id(seller_id)
         if not seller:
             raise NotFoundError("Seller not found")
@@ -311,6 +331,7 @@ class ProductService:
     # ── Helpers ────────────────────────────────────────────────────────────────
 
     async def _require_owned(self, seller_id: UUID, product_id: UUID) -> Product:
+        """Load a product and reject access by a different seller."""
         await self.db.execute(select(Seller.id).where(Seller.id == seller_id).with_for_update())
         product = await self.product_repo.get_by_id(product_id, load_full=True, lock=True)
         if not product:
@@ -320,6 +341,7 @@ class ProductService:
         return product
 
     async def _unique_slug(self, name: str) -> str:
+        """Find a product slug not already assigned in the catalogue."""
         base = _slugify(name)
         candidate = base
         counter = 1
@@ -330,6 +352,7 @@ class ProductService:
 
     @staticmethod
     def _to_card(p: Product) -> ProductCardResponse:
+        """Convert a product into public catalogue-card fields and derived display values."""
         primary_image = next((i.url for i in p.images if i.is_primary), None)
         if not primary_image and p.images:
             primary_image = p.images[0].url
@@ -342,7 +365,7 @@ class ProductService:
             {v.size_value for v in p.variants if v.is_active and v.size_type.value == "numeric"}
         )
 
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timezone
 
         is_new = (datetime.now(timezone.utc) - p.created_at.replace(tzinfo=timezone.utc)).days < 14
 
@@ -367,6 +390,7 @@ class ProductService:
 
     @staticmethod
     def _to_variant(v) -> VariantWithStockResponse:
+        """Convert a variant and its inventory to the stock-aware response contract."""
         inv = v.inventory
         return VariantWithStockResponse(
             id=v.id,
@@ -383,6 +407,7 @@ class ProductService:
         )
 
     def _to_detail(self, p: Product) -> ProductDetailResponse:
+        """Assemble product detail from card data, variants, seller, category, and images."""
         card = self._to_card(p)
         return ProductDetailResponse(
             **card.model_dump(),
@@ -406,6 +431,7 @@ class ProductService:
 
     @staticmethod
     def _is_public(product):
+        """Check the product, category, and seller visibility conditions for public reads."""
         return bool(
             product
             and product.is_published
@@ -417,15 +443,18 @@ class ProductService:
         )
 
     async def _validate_category(self, category_id):
+        """Require a category that is eligible for public catalogue listing."""
         if category_id:
             category = await self.db.get(Category, category_id)
             if not category or not category.is_active:
                 raise BusinessRuleError("Category is not available")
 
     async def get_seller_detail(self, seller_id, product_id):
+        """Return the owned product detail for seller management regardless of publication."""
         return self._to_detail(await self._require_owned(seller_id, product_id))
 
     async def add_variant(self, seller_id, product_id, payload):
+        """Validate ownership and SKU uniqueness before adding variant inventory."""
         product = await self._require_owned(seller_id, product_id)
         sku = payload.sku or f"WHZ-{uuid.uuid4().hex[:16].upper()}"
         exists = await self.db.scalar(select(ProductVariant.id).where(ProductVariant.sku == sku))
@@ -444,6 +473,7 @@ class ProductService:
         return await self.get_seller_detail(seller_id, product.id)
 
     async def update_variant(self, seller_id, product_id, variant_id, payload):
+        """Apply validated changes only to a variant within the seller's product."""
         product = await self._require_owned(seller_id, product_id)
         variant = next((v for v in product.variants if v.id == variant_id), None)
         if not variant:
@@ -456,6 +486,7 @@ class ProductService:
         return self._to_variant(variant)
 
     async def reorder_images(self, seller_id, product_id, image_ids):
+        """Require the complete image set exactly once before changing image order."""
         product = await self._require_owned(seller_id, product_id)
         if len(image_ids) != len(set(image_ids)) or set(image_ids) != {
             i.id for i in product.images
@@ -468,6 +499,7 @@ class ProductService:
         return {"message": "Image order saved"}
 
     async def primary_image(self, seller_id, product_id, image_id):
+        """Select a primary image only from images belonging to the owned product."""
         product = await self._require_owned(seller_id, product_id)
         if image_id not in {i.id for i in product.images}:
             raise NotFoundError("Image not found")
@@ -476,6 +508,7 @@ class ProductService:
         return {"message": "Primary image saved"}
 
     async def delete_image(self, seller_id, product_id, image_id):
+        """Remove an owned product image while preserving publication requirements."""
         product = await self._require_owned(seller_id, product_id)
         image = next((i for i in product.images if i.id == image_id), None)
         if not image:
@@ -497,6 +530,7 @@ class ProductService:
             get_logger(__name__).warning("storage.orphan_cleanup_required", image_id=str(image_id))
 
     async def admin_list(self, seller_id=None, admin_hidden=None, page=1):
+        """Return administrator product rows, including non-public listings."""
         query = select(Product).where(Product.deleted_at.is_(None))
         if seller_id:
             query = query.where(Product.seller_id == seller_id)
@@ -527,6 +561,7 @@ class ProductService:
         }
 
     async def set_hidden(self, product_id, hidden):
+        """Change administrative product visibility without deleting the listing."""
         product = await self.product_repo.get_by_id(product_id, lock=True)
         if not product:
             raise NotFoundError("Product not found")

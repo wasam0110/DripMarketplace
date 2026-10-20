@@ -1,6 +1,10 @@
+"""repositories / order repo.
+
+Database operations used by services within their transaction boundaries.
+"""
+
 from __future__ import annotations
 
-from decimal import Decimal
 from uuid import UUID
 from typing import Optional, Sequence
 from datetime import datetime
@@ -17,9 +21,11 @@ from app.models.order import (
 
 class OrderRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind OrderRepository to its injected dependencies for subsequent operations."""
         self.db = db
 
     async def create(self, **kwargs) -> Order:
+        """Insert a customer order and return it within the caller's transaction."""
         order = Order(**kwargs)
         self.db.add(order)
         await self.db.flush()
@@ -27,12 +33,14 @@ class OrderRepository:
         return order
 
     async def create_address(self, order_id: UUID, **kwargs) -> OrderAddress:
+        """Persist the checkout address snapshot attached to an order."""
         addr = OrderAddress(order_id=order_id, **kwargs)
         self.db.add(addr)
         await self.db.flush()
         return addr
 
     async def create_item(self, **kwargs) -> OrderItem:
+        """Persist a purchased variant and its price snapshot for the order."""
         item = OrderItem(**kwargs)
         self.db.add(item)
         await self.db.flush()
@@ -47,6 +55,7 @@ class OrderRepository:
         changed_by: Optional[UUID] = None,
         note: Optional[str] = None,
     ) -> None:
+        """Append an order-status audit entry within the current transaction."""
         hist = OrderStatusHistory(
             order_id=order_id,
             seller_order_id=seller_order_id,
@@ -60,6 +69,7 @@ class OrderRepository:
     async def get_by_id(
         self, order_id: UUID, *, user_id: Optional[UUID] = None, for_update: bool = False
     ) -> Optional[Order]:
+        """Look up a customer order by id; return None when absent."""
         q = select(Order).options(
             selectinload(Order.address),
             selectinload(Order.items),
@@ -75,6 +85,7 @@ class OrderRepository:
         return result.scalar_one_or_none()
 
     async def get_by_number(self, order_number: str) -> Optional[Order]:
+        """Look up a customer order by number; return None when absent."""
         result = await self.db.execute(
             select(Order)
             .options(
@@ -89,6 +100,7 @@ class OrderRepository:
     async def get_customer_orders(
         self, user_id: UUID, page: int = 1, per_page: int = 10
     ) -> tuple[Sequence[Order], int]:
+        """Load a customer's order page and total count."""
         count_q = select(func.count(Order.id)).where(Order.user_id == user_id)
         total   = (await self.db.execute(count_q)).scalar_one()
 
@@ -110,6 +122,7 @@ class OrderRepository:
         changed_by: Optional[UUID] = None,
         note: Optional[str] = None,
     ) -> None:
+        """Apply the customer order status change within the caller's transaction."""
         old_order = await self.db.execute(
             select(Order.status).where(Order.id == order_id)
         )
@@ -129,6 +142,7 @@ class OrderRepository:
         )
 
     async def number_exists(self, order_number: str) -> bool:
+        """Check whether the number already identifies a customer order."""
         result = await self.db.execute(
             select(Order.id).where(Order.order_number == order_number)
         )
@@ -137,9 +151,13 @@ class OrderRepository:
 
 class SellerOrderRepository:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind SellerOrderRepository to its injected dependencies for subsequent
+        operations.
+        """
         self.db = db
 
     async def create(self, **kwargs) -> SellerOrder:
+        """Insert a seller order and return it within the caller's transaction."""
         so = SellerOrder(**kwargs)
         self.db.add(so)
         await self.db.flush()
@@ -149,6 +167,7 @@ class SellerOrderRepository:
     async def get_by_id(
         self, seller_order_id: UUID, seller_id: UUID
     ) -> Optional[SellerOrder]:
+        """Look up a seller order by id; return None when absent."""
         result = await self.db.execute(
             select(SellerOrder)
             .options(
@@ -170,6 +189,7 @@ class SellerOrderRepository:
         page: int = 1,
         per_page: int = 25,
     ) -> tuple[Sequence[SellerOrder], int]:
+        """Load the seller's fulfilment-order page and total count."""
         q = select(SellerOrder).where(SellerOrder.seller_id == seller_id)
         if status and status != "all":
             q = q.where(SellerOrder.status == SellerOrderStatus(status))
@@ -196,6 +216,7 @@ class SellerOrderRepository:
         tracking_number: Optional[str] = None,
         courier_name: Optional[str] = None,
     ) -> None:
+        """Apply the seller order status change within the caller's transaction."""
         values: dict = {"status": status, "updated_at": datetime.utcnow()}
         if tracking_number:
             values["tracking_number"] = tracking_number

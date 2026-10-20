@@ -1,12 +1,15 @@
+"""schemas / product.
+
+Validated request and response contracts used by API routes and services.
+"""
+
 from __future__ import annotations
 
-from decimal import Decimal
 from uuid import UUID
 from datetime import datetime
 from typing import Optional
-import re
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.money import PKRResponseAmount
 from app.core.catalogue_policy import MIN_PRODUCT_PRICE, MAX_PRODUCT_PRICE, MAX_IMAGES_PER_PRODUCT
@@ -52,6 +55,7 @@ class CreateProductRequest(BaseModel):
 
     @model_validator(mode="after")
     def sale_must_be_less_than_price(self) -> "CreateProductRequest":
+        """Reject a supplied sale price that does not discount the regular price."""
         if self.sale_price and self.sale_price >= self.price:
             raise ValueError("sale_price must be less than price")
         return self
@@ -68,6 +72,7 @@ class UpdateProductRequest(BaseModel):
 
     @model_validator(mode="after")
     def at_least_one(self) -> "UpdateProductRequest":
+        """Reject product updates that contain no explicitly supplied fields."""
         if not self.model_fields_set:
             raise ValueError("At least one field must be provided")
         return self

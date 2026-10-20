@@ -1,3 +1,8 @@
+"""services / order service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 import secrets
@@ -46,12 +51,14 @@ from app.services.notification_outbox import queue_notification
 
 
 def _generate_order_number() -> str:
+    """Generate a human-readable order number for the uniqueness-checked checkout flow."""
     now = datetime.utcnow()
     suffix = "".join([secrets.choice(string.ascii_uppercase + string.digits) for _ in range(9)])
     return f"WHZ-{now.strftime('%Y%m')}-{suffix}"
 
 
 def _whatsapp_url(order_number: str, drip_number: str) -> str:
+    """Build the WhatsApp order-verification link returned by checkout."""
     msg = f"VERIFY+{order_number}"
     return f"https://wa.me/{drip_number}?text={msg}"
 
@@ -83,11 +90,13 @@ class _CheckoutCalculation:
 
     @property
     def total(self) -> Decimal:
+        """Combine calculated checkout components into the final amount due."""
         return self.subtotal + self.shipping_fee
 
 
 class OrderService:
     def __init__(self, db: AsyncSession, redis=None) -> None:
+        """Bind OrderService to its injected dependencies for subsequent operations."""
         self.db = db
         self.redis = redis
         self.order_repo = OrderRepository(db)
@@ -101,6 +110,7 @@ class OrderService:
         user_id: UUID,
         payload: CreateOrderRequest,
     ) -> CreateOrderResponse:
+        """Validate the account and cart before entering the shared checkout transaction."""
         from app.models.user import User
 
         user = await self.db.scalar(
@@ -125,6 +135,7 @@ class OrderService:
     # ── Place Order (guest) ────────────────────────────────────────────────────
 
     async def create_guest_order(self, payload: CreateGuestOrderRequest) -> CreateOrderResponse:
+        """Merge guest line items before entering the shared checkout transaction."""
         variant_qtys = self._merge_items(payload.items)
 
         return await self._build_order(
@@ -206,6 +217,7 @@ class OrderService:
         guest_name: Optional[str] = None,
         guest_phone: Optional[str] = None,
     ) -> CreateOrderResponse:
+        """Persist checkout snapshots, reserve inventory, and queue order work atomically."""
         # 1-2. Validate stock and snapshot current prices/runtime shipping.
         calculation = await self._calculate_checkout(variant_qtys)
         subtotal = calculation.subtotal
@@ -371,6 +383,7 @@ class OrderService:
     # ── Get order ──────────────────────────────────────────────────────────────
 
     async def get_order(self, order_id: UUID, user_id: UUID) -> OrderDetailResponse:
+        """Return order details after enforcing account or guest-token access."""
         order = await self.order_repo.get_by_id(order_id, user_id=user_id)
         if not order:
             raise NotFoundError("Order not found")
@@ -383,6 +396,9 @@ class OrderService:
         user_id: UUID | None = None,
         guest_token: str | None = None,
     ) -> OrderDetailResponse:
+        """Resolve a human-readable order number under account or guest-token
+        authorization.
+        """
         if user_id is None and not guest_token:
             from app.core.exceptions import AuthenticationError
 
@@ -394,6 +410,7 @@ class OrderService:
         return self._to_detail(order)
 
     async def get_customer_orders(self, user_id: UUID, page: int = 1) -> PaginatedOrders:
+        """Return the customer's paginated order summaries."""
         orders, total = await self.order_repo.get_customer_orders(user_id, page)
         total_pages = max(1, (total + 9) // 10)
         return PaginatedOrders(
@@ -420,6 +437,9 @@ class OrderService:
         payload: CancelOrderRequest,
         guest_token: str | None = None,
     ) -> dict:
+        """Validate cancellation eligibility, release stock reservations, and queue the
+        status event.
+        """
         order = await authorized_order(
             self.db, order_id, user_id, guest_token, lock=True
         )
@@ -473,6 +493,7 @@ class OrderService:
         status: str = "all",
         page: int = 1,
     ) -> dict:
+        """Read the seller's fulfilment orders and build portal response rows."""
         seller_orders, total = await self.so_repo.get_by_seller(seller_id, status, page)
         total_pages = max(1, (total + 24) // 25)
         return {
@@ -486,6 +507,7 @@ class OrderService:
         }
 
     async def get_seller_order_detail(self, seller_id: UUID, seller_order_id: UUID) -> dict:
+        """Return a fulfilment order only when it belongs to the seller."""
         so = await self.so_repo.get_by_id(seller_order_id, seller_id)
         if not so:
             raise NotFoundError("Seller order not found")
@@ -497,6 +519,9 @@ class OrderService:
         seller_order_id: UUID,
         payload: UpdateSellerOrderRequest,
     ) -> dict:
+        """Validate fulfilment transitions and coordinate parent-order state and
+        settlement.
+        """
         so = await self.so_repo.get_by_id(seller_order_id, seller_id)
         if not so:
             raise NotFoundError("Seller order not found")
@@ -578,6 +603,7 @@ class OrderService:
 
     @staticmethod
     def _merge_items(items: list[CartItemInput]) -> dict[UUID, int]:
+        """Combine repeated variant entries before checkout validation."""
         quantities: dict[UUID, int] = {}
         for item in items:
             quantities[item.variant_id] = quantities.get(item.variant_id, 0) + item.quantity
@@ -586,6 +612,9 @@ class OrderService:
     async def _calculate_checkout(
         self, variant_qtys: dict[UUID, int]
     ) -> _CheckoutCalculation:
+        """Compute current item totals and shipping from validated variants and runtime
+        policy.
+        """
         variants = await self._fetch_and_validate_variants(variant_qtys)
         lines: list[_CheckoutLine] = []
         seller_subtotals: dict[UUID, Decimal] = {}
@@ -636,6 +665,7 @@ class OrderService:
     async def _fetch_and_validate_variants(
         self, variant_qtys: dict[UUID, int]
     ) -> list[tuple[ProductVariant, int]]:
+        """Enforce checkout quantity, visibility, and variant-availability requirements."""
         if (
             not variant_qtys
             or len(variant_qtys) > 100
@@ -703,6 +733,9 @@ class OrderService:
 
     @staticmethod
     def _to_detail(order: Order) -> OrderDetailResponse:
+        """Build the customer order response from address, item, and seller-order
+        snapshots.
+        """
         return OrderDetailResponse(
             id=order.id,
             order_number=order.order_number,
@@ -756,6 +789,7 @@ class OrderService:
 
     @staticmethod
     def _to_seller_order_response(so, include_items: bool = False) -> dict:
+        """Build the seller fulfilment response from its order and item records."""
         base = {
             "id": str(so.id),
             "order_id": str(so.order_id),

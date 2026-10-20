@@ -13,7 +13,6 @@ Design rules:
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
 from typing import Any, Generic, TypeVar
 
 from sqlalchemy import func, select, update

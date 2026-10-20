@@ -16,11 +16,11 @@ import uuid
 from datetime import UTC, datetime
 from typing import Optional
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.exceptions import BusinessRuleError, NotFoundError, PermissionDeniedError
+from app.core.exceptions import BusinessRuleError, NotFoundError
 from app.core.logging import get_logger
 from app.models.product import Product, ProductVariant, ProductInventory
 from app.repositories.inventory_repo import InventoryRepository
@@ -31,6 +31,7 @@ logger = get_logger(__name__)
 
 class InventoryService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind InventoryService to its injected dependencies for subsequent operations."""
         self.db   = db
         self.repo = InventoryRepository(db)
 
@@ -61,6 +62,7 @@ class InventoryService:
         variant: ProductVariant,
         product: Product,
     ) -> dict:
+        """Flatten variant, product, and inventory records into stock response fields."""
         available = inv.stock - inv.reserved
         return dict(
             variant_id=variant.id,
@@ -90,6 +92,7 @@ class InventoryService:
         page:           int,
         per_page:       int,
     ):
+        """Paginate inventory belonging to the seller with the requested stock filters."""
         from app.api.v1.inventory import PaginatedVariantStock, VariantStockResponse
 
         stmt = (
@@ -125,6 +128,7 @@ class InventoryService:
         )
 
     async def get_low_stock(self, seller_id: uuid.UUID):
+        """List the seller's variants that meet the low-stock threshold."""
         from app.api.v1.inventory import LowStockResponse, VariantStockResponse
 
         stmt = (
@@ -146,6 +150,7 @@ class InventoryService:
         return LowStockResponse(data=data, total=len(data))
 
     async def get_variant_stock(self, variant_id: uuid.UUID, seller_id: uuid.UUID):
+        """Read stock only after verifying the variant belongs to the seller."""
         from app.api.v1.inventory import VariantStockResponse
 
         inv, variant, product = await self._get_inventory_for_seller(variant_id, seller_id)
@@ -158,6 +163,9 @@ class InventoryService:
         stock:         int,
         reorder_point: Optional[int],
     ):
+        """Set owned inventory while preserving reservations and validating reorder
+        thresholds.
+        """
         from app.api.v1.inventory import VariantStockResponse
 
         inv, variant, product = await self._get_inventory_for_seller(variant_id, seller_id)
@@ -185,6 +193,7 @@ class InventoryService:
         delta:      int,
         reason:     str,
     ):
+        """Apply an audited stock delta to inventory owned by the seller."""
         from app.api.v1.inventory import StockAdjustmentResponse
 
         inv, variant, product = await self._get_inventory_for_seller(variant_id, seller_id)
@@ -229,6 +238,7 @@ class InventoryService:
         page:           int,
         per_page:       int,
     ):
+        """Paginate marketplace inventory using administrator search and stock filters."""
         from app.api.v1.inventory import PaginatedVariantStock, VariantStockResponse
 
         stmt = (
@@ -266,6 +276,7 @@ class InventoryService:
         )
 
     async def bulk_update_stock(self, updates: list):
+        """Validate and apply administrator stock updates with per-row results."""
         from app.api.v1.inventory import BulkStockUpdateRequest, BulkStockUpdateResponse
 
         # Validate internal callers too, before any writes or row locks.

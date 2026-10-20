@@ -10,6 +10,7 @@ from app.models.user import User
 
 
 async def lock_active_user(db: AsyncSession, user_id: UUID) -> User:
+    """Lock an undeleted account so profile writes serialize with customer deletion."""
     # Acquire this lock before child rows. Recheck after waiting, including when
     # an earlier auth dependency populated the session identity map.
     user = await db.scalar(

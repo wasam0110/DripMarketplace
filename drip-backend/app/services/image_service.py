@@ -1,8 +1,12 @@
+"""services / image service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 import io
 import uuid
-from typing import Optional
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 from app.core.config import settings
@@ -22,6 +26,7 @@ PRODUCT_IMAGES_BUCKET = settings.SUPABASE_STORAGE_BUCKET_PRODUCTS
 
 class ImageService:
     def __init__(self) -> None:
+        """Initialize the storage adapter used by image upload and deletion operations."""
         self.storage = SupabaseStorage()
 
     # ── Validation ─────────────────────────────────────────────────────────────
@@ -43,6 +48,9 @@ class ImageService:
     # ── Conversion ─────────────────────────────────────────────────────────────
 
     def to_webp(self, data: bytes, quality: int = 85) -> bytes:
+        """Validate and orient the source image, then encode bounded WebP output for
+        upload.
+        """
         try:
             with Image.open(io.BytesIO(data)) as source:
                 if source.width * source.height > 25_000_000:

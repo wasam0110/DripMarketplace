@@ -1,3 +1,8 @@
+"""models / product.
+
+SQLAlchemy persistence definitions shared by repositories and services.
+"""
+
 from __future__ import annotations
 
 from sqlalchemy import Index as SchemaIndex
@@ -102,10 +107,12 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
 
     @property
     def effective_price(self) -> Decimal:
+        """Choose the product sale price when set, otherwise its regular price."""
         return self.sale_price if self.sale_price else self.price
 
     @property
     def has_stock(self) -> bool:
+        """Check active variants for positive stock after reservations."""
         return any(
             (v.inventory.available_stock > 0)
             for v in self.variants
@@ -157,6 +164,7 @@ class ProductVariant(Base):
 
     @property
     def effective_price(self) -> Decimal:
+        """Choose a variant override when set, otherwise the product's regular price."""
         return self.price_override if self.price_override else self.product.price
 
 
@@ -182,6 +190,7 @@ class ProductInventory(Base):
 
     @property
     def available_stock(self) -> int:
+        """Subtract reserved units from on-hand stock for availability checks."""
         return self.stock - self.reserved
 
 

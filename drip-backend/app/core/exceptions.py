@@ -31,6 +31,7 @@ class DRIPException(Exception):
         fields: dict[str, str] | None = None,
         detail: str | None = None,        # Internal detail — logs only, never sent to client
     ) -> None:
+        """Initialize DRIPException details for the shared HTTP exception handler."""
         self.message = message or self.default_message
         self.code    = code    or self.default_code
         self.fields  = fields  or {}
@@ -61,6 +62,7 @@ class ValidationError(DRIPException):
     default_message = "Request validation failed. Please check the highlighted fields."
 
     def __init__(self, fields: dict[str, str]) -> None:
+        """Initialize ValidationError details for the shared HTTP exception handler."""
         super().__init__(
             message=self.default_message,
             code=self.default_code,
@@ -139,6 +141,7 @@ class NotFoundError(DRIPException):
     default_message = "The requested resource was not found."
 
     def __init__(self, resource: str = "Resource", resource_id: str | None = None) -> None:
+        """Initialize NotFoundError details for the shared HTTP exception handler."""
         msg = f"{resource} not found."
         if resource_id:
             msg = f"{resource} '{resource_id}' not found."
@@ -180,6 +183,7 @@ class InsufficientStockError(BusinessRuleError):
     default_message = "One or more items in your cart are out of stock."
 
     def __init__(self, product_name: str | None = None, variant_label: str | None = None) -> None:
+        """Initialize InsufficientStockError details for the shared HTTP exception handler."""
         msg = self.default_message
         if product_name:
             label = f" ({variant_label})" if variant_label else ""
@@ -196,6 +200,9 @@ class InvalidStatusTransitionError(BusinessRuleError):
     default_code    = "INVALID_STATUS_TRANSITION"
 
     def __init__(self, from_status: str, to_status: str) -> None:
+        """Initialize InvalidStatusTransitionError details for the shared HTTP exception
+        handler.
+        """
         super().__init__(
             message=f"Cannot transition from '{from_status}' to '{to_status}'.",
             code=self.default_code,
@@ -241,6 +248,7 @@ class RateLimitError(DRIPException):
     default_message = "Too many requests. Please wait a moment and try again."
 
     def __init__(self, retry_after_seconds: int = 60) -> None:
+        """Initialize RateLimitError details for the shared HTTP exception handler."""
         super().__init__(message=self.default_message, code=self.default_code)
         self.retry_after = retry_after_seconds
 

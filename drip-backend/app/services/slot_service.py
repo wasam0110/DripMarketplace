@@ -1,3 +1,8 @@
+"""services / slot service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -20,11 +25,13 @@ EXTRA_SLOT_PRICE = 50
 
 class SlotService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind SlotService to its injected dependencies for subsequent operations."""
         self.db          = db
         self.seller_repo = SellerRepository(db)
         self.wallet_repo = WalletRepository(db)
 
     async def get_pricing(self, extra_slots: int) -> SlotPricingResponse:
+        """Load effective listing-slot pricing from runtime platform settings."""
         from app.services.platform_settings import get_platform_settings
         policy = await get_platform_settings(self.db)
         return SlotPricingResponse(
@@ -39,6 +46,7 @@ class SlotService:
 
     @staticmethod
     def calculate_pricing(extra_slots: int) -> SlotPricingResponse:
+        """Calculate legacy default slot pricing; live API pricing uses get_pricing."""
         extra_cost = extra_slots * EXTRA_SLOT_PRICE
         return SlotPricingResponse(
             registration_fee = REGISTRATION_FEE,
@@ -53,6 +61,7 @@ class SlotService:
     async def purchase_slots(
         self, user_id: UUID, payload: SlotPurchaseRequest
     ) -> SlotPurchaseResponse:
+        """Validate seller eligibility, debit wallet funds, and increase listing capacity."""
         seller = await self.seller_repo.get_by_user_id(user_id)
         if not seller:
             raise NotFoundError("Seller profile not found")
@@ -88,6 +97,7 @@ class SlotService:
     # ── Guard used by Product service (Block 4) ────────────────────────────────
 
     async def assert_slot_available(self, seller_id: UUID) -> None:
+        """Check active seller status and unused capacity before listing publication."""
         seller = await self.seller_repo.get_by_id(seller_id)
         if not seller:
             raise NotFoundError("Seller not found")
@@ -100,6 +110,7 @@ class SlotService:
     # ── Internal ───────────────────────────────────────────────────────────────
 
     async def _charge_wallet(self, seller_id: UUID, amount: Decimal) -> None:
+        """Debit available wallet funds and record the listing-slot purchase transaction."""
         wallet = await self.wallet_repo.get_by_seller_id(seller_id, for_update=True)
         if not wallet:
             raise NotFoundError("Seller wallet not found")

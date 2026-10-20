@@ -1,3 +1,8 @@
+"""api / v1 / returns.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from typing import Annotated, Optional
@@ -34,6 +39,8 @@ async def request_guest_return(
     db: DB,
     guest_token: str | None = Header(default=None, alias="X-Guest-Token"),
 ) -> ReturnDetailResponse:
+    # Handle POST /returns/guest at this router boundary. Delegates to
+    # ReturnService.request_guest_return.
     return await ReturnService(db).request_guest_return(guest_token, payload)
 
 
@@ -43,6 +50,8 @@ async def get_guest_return(
     db: DB,
     guest_token: str | None = Header(default=None, alias="X-Guest-Token"),
 ) -> ReturnDetailResponse:
+    # Handle GET /returns/guest/{return_id} at this router boundary. Delegates to
+    # ReturnService.get_guest_return.
     return await ReturnService(db).get_guest_return(return_id, guest_token)
 
 
@@ -52,6 +61,8 @@ async def request_return(
     db:           DB,
     current_user: CurrentUser,
 ) -> ReturnDetailResponse:
+    # Handle POST /returns at this router boundary. Delegates to ReturnService.request_return.
+    # Access dependency: CurrentUser.
     return await ReturnService(db).request_return(UUID(current_user["sub"]), payload)
 
 
@@ -61,6 +72,8 @@ async def list_returns(
     current_user: CurrentUser,
     page:         int = Query(default=1, ge=1),
 ) -> PaginatedReturns:
+    # Handle GET /returns at this router boundary. Delegates to ReturnService.list_returns.
+    # Access dependency: CurrentUser.
     return await ReturnService(db).list_returns(UUID(current_user["sub"]), page)
 
 
@@ -70,6 +83,8 @@ async def get_return(
     db:           DB,
     current_user: CurrentUser,
 ) -> ReturnDetailResponse:
+    # Handle GET /returns/{return_id} at this router boundary. Delegates to
+    # ReturnService.get_return. Access dependency: CurrentUser.
     return await ReturnService(db).get_return(return_id, UUID(current_user["sub"]))
 
 
@@ -80,6 +95,8 @@ async def open_dispute(
     db:           DB,
     current_user: CurrentUser,
 ) -> DisputeDetailResponse:
+    # Handle POST /returns/{return_id}/dispute at this router boundary. Delegates to
+    # ReturnService.open_dispute. Access dependency: CurrentUser.
     return await ReturnService(db).open_dispute(return_id, UUID(current_user["sub"]), payload)
 
 
@@ -89,6 +106,8 @@ async def get_dispute(
     db:           DB,
     current_user: CurrentUser,
 ) -> DisputeDetailResponse:
+    # Handle GET /returns/{return_id}/dispute at this router boundary. Delegates to
+    # ReturnService.get_dispute. Access dependency: CurrentUser.
     return await ReturnService(db).get_dispute(return_id, UUID(current_user["sub"]))
 
 
@@ -99,6 +118,8 @@ async def add_dispute_message(
     db:           DB,
     current_user: CurrentUser,
 ) -> DisputeMessageResponse:
+    # Handle POST /returns/{return_id}/dispute/messages at this router boundary. Delegates to
+    # ReturnService.add_message. Access dependency: CurrentUser.
     return await ReturnService(db).add_message(return_id, UUID(current_user["sub"]), payload)
 
 
@@ -114,6 +135,8 @@ async def seller_list_returns(
     ),
     page: int = Query(default=1, ge=1),
 ) -> PaginatedReturns:
+    # Handle GET /seller/returns at this router boundary. Delegates to
+    # ReturnService.seller_list_returns. Access dependency: CurrentSeller.
     return await ReturnService(db).seller_list_returns(
         UUID(current_seller["seller_id"]), status, page
     )
@@ -125,6 +148,8 @@ async def seller_get_return(
     db: DB,
     current_seller: CurrentSeller,
 ) -> SellerReturnDetailResponse:
+    # Handle GET /seller/returns/{return_id} at this router boundary. Delegates to
+    # ReturnService.get_seller_return. Access dependency: CurrentSeller.
     return await ReturnService(db).get_seller_return(
         return_id, UUID(current_seller["seller_id"])
     )
@@ -137,6 +162,8 @@ async def seller_approve_return(
     db: DB,
     current_seller: CurrentSeller,
 ) -> dict:
+    # Handle POST /seller/returns/{return_id}/approve at this router boundary. Delegates to
+    # ReturnService.seller_approve_return. Access dependency: CurrentSeller.
     return await ReturnService(db).seller_approve_return(
         return_id, UUID(current_seller["seller_id"]), payload
     )
@@ -149,6 +176,8 @@ async def seller_reject_return(
     db: DB,
     current_seller: CurrentSeller,
 ) -> dict:
+    # Handle POST /seller/returns/{return_id}/reject at this router boundary. Delegates to
+    # ReturnService.seller_reject_return. Access dependency: CurrentSeller.
     return await ReturnService(db).seller_reject_return(
         return_id, UUID(current_seller["seller_id"]), payload
     )
@@ -161,6 +190,8 @@ async def seller_mark_received(
     db: DB,
     current_seller: CurrentSeller,
 ) -> dict:
+    # Handle POST /seller/returns/{return_id}/received at this router boundary. Delegates to
+    # ReturnService.seller_mark_received. Access dependency: CurrentSeller.
     return await ReturnService(db).seller_mark_received(
         return_id, UUID(current_seller["seller_id"]), payload
     )
@@ -176,6 +207,8 @@ async def admin_list_returns(
     ),
     page: int = Query(default=1, ge=1),
 ) -> PaginatedReturns:
+    # Handle GET /admin/returns at this router boundary. Delegates to
+    # ReturnService.admin_list_returns. Access dependency: CurrentAdmin.
     return await ReturnService(db).admin_list_returns(status, page)
 
 
@@ -185,6 +218,8 @@ async def admin_get_return(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> AdminReturnDetailResponse:
+    # Handle GET /admin/returns/{return_id} at this router boundary. Delegates to
+    # ReturnService.get_admin_return. Access dependency: CurrentAdmin.
     return await ReturnService(db).get_admin_return(return_id)
 
 
@@ -195,6 +230,8 @@ async def admin_approve_return(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> dict:
+    # Handle POST /admin/returns/{return_id}/approve at this router boundary. Delegates to
+    # ReturnService.approve_return. Access dependency: CurrentAdmin.
     return await ReturnService(db).approve_return(return_id, UUID(current_admin["sub"]), payload)
 
 
@@ -205,6 +242,8 @@ async def admin_reject_return(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> dict:
+    # Handle POST /admin/returns/{return_id}/reject at this router boundary. Delegates to
+    # ReturnService.reject_return. Access dependency: CurrentAdmin.
     return await ReturnService(db).reject_return(return_id, UUID(current_admin["sub"]), payload)
 
 
@@ -215,6 +254,8 @@ async def admin_mark_received(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> dict:
+    # Handle POST /admin/returns/{return_id}/received at this router boundary. Delegates to
+    # ReturnService.mark_received. Access dependency: CurrentAdmin.
     return await ReturnService(db).mark_received(return_id, UUID(current_admin["sub"]), payload)
 
 
@@ -225,6 +266,8 @@ async def admin_process_refund(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> dict:
+    # Handle POST /admin/returns/{return_id}/refund at this router boundary. Delegates to
+    # ReturnService.process_refund. Access dependency: CurrentAdmin.
     return await ReturnService(db).process_refund(return_id, UUID(current_admin["sub"]), payload)
 
 
@@ -238,6 +281,8 @@ async def admin_list_disputes(
     ),
     page: int = Query(default=1, ge=1),
 ) -> dict:
+    # Handle GET /admin/disputes at this router boundary. Delegates to
+    # ReturnService.admin_list_disputes. Access dependency: CurrentAdmin.
     return await ReturnService(db).admin_list_disputes(status, page)
 
 
@@ -247,6 +292,8 @@ async def admin_get_dispute(
     db: DB,
     current_admin: CurrentAdmin,
 ) -> DisputeDetailResponse:
+    # Handle GET /admin/disputes/{dispute_id} at this router boundary. Delegates to
+    # ReturnService.get_admin_dispute. Access dependency: CurrentAdmin.
     return await ReturnService(db).get_admin_dispute(dispute_id)
 
 
@@ -261,6 +308,8 @@ async def admin_add_dispute_message(
     db: DB,
     current_admin: CurrentAdmin,
 ) -> DisputeMessageResponse:
+    # Handle POST /admin/disputes/{dispute_id}/messages at this router boundary. Delegates to
+    # ReturnService.add_admin_message. Access dependency: CurrentAdmin.
     return await ReturnService(db).add_admin_message(
         dispute_id, UUID(current_admin["sub"]), payload
     )
@@ -273,4 +322,6 @@ async def admin_resolve_dispute(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> DisputeDetailResponse:
+    # Handle POST /admin/disputes/{dispute_id}/resolve at this router boundary. Delegates to
+    # ReturnService.resolve_dispute. Access dependency: CurrentAdmin.
     return await ReturnService(db).resolve_dispute(dispute_id, UUID(current_admin["sub"]), payload)

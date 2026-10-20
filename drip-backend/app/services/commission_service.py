@@ -27,6 +27,7 @@ WALLET_HOLD_DAYS = 3
 
 class CommissionService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind CommissionService to its injected dependencies for subsequent operations."""
         self.db          = db
         self.comm_repo   = CommissionRepository(db)
         self.tx_repo     = WalletTransactionRepository(db)
@@ -396,6 +397,7 @@ class CommissionService:
         return True
 
     async def _refresh_refund_accounting(self, refund_id: UUID) -> None:
+        """Recalculate refund reconciliation totals from the seller allocation records."""
         accounting = await self.db.scalar(
             select(RefundAccounting)
             .where(RefundAccounting.refund_id == refund_id)
@@ -437,6 +439,7 @@ class CommissionService:
 
     @staticmethod
     def _money(value: Decimal) -> Decimal:
+        """Quantize monetary calculations to PKR's two decimal places."""
         return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     async def release_mature(self, *, now: datetime | None = None) -> int:
@@ -791,10 +794,11 @@ class CommissionService:
         return from_pending + from_available
 
     async def _enqueue_release(self, seller_id: UUID, amount: Decimal) -> None:
+        """Schedule wallet release work; the periodic worker sweep provides recovery."""
         try:
-            from datetime import timedelta
             from arq import create_pool
             from arq.connections import RedisSettings
+
             from app.core.config import settings
 
             pool = await create_pool(RedisSettings.from_dsn(str(settings.REDIS_URL)))

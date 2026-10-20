@@ -1,3 +1,8 @@
+"""services / return service.
+
+Business operations connecting API handlers, persistence, and provider integrations.
+"""
+
 from __future__ import annotations
 
 from decimal import Decimal
@@ -49,6 +54,7 @@ RETURNABLE_STATUSES = {OrderStatus.delivered, OrderStatus.completed}
 
 class ReturnService:
     def __init__(self, db: AsyncSession) -> None:
+        """Bind ReturnService to its injected dependencies for subsequent operations."""
         self.db          = db
         self.return_repo = ReturnRepository(db)
         self.dispute_repo= DisputeRepository(db)
@@ -59,6 +65,7 @@ class ReturnService:
     async def request_return(
         self, user_id: UUID, payload: CreateReturnRequest
     ) -> ReturnDetailResponse:
+        """Verify customer ownership before creating an eligible return request."""
         from app.services.account_lifecycle import lock_active_user
         await lock_active_user(self.db, user_id)
         # Verify seller_order belongs to user
@@ -80,6 +87,7 @@ class ReturnService:
     async def request_guest_return(
         self, guest_token: str | None, payload: CreateReturnRequest
     ) -> ReturnDetailResponse:
+        """Verify the guest token and seller order before creating a return request."""
         if not guest_token:
             raise AuthenticationError("Provide a guest order token")
         seller_order = await self.db.scalar(
@@ -107,6 +115,7 @@ class ReturnService:
         user_id: UUID | None,
         payload: CreateReturnRequest,
     ) -> ReturnDetailResponse:
+        """Validate returned quantities and persist the request and its item rows."""
         if order.status not in RETURNABLE_STATUSES:
             raise BusinessRuleError(
                 f"Returns are only accepted for delivered orders. Current status: {order.status.value}"
@@ -136,6 +145,7 @@ class ReturnService:
         return self._to_detail(return_)  # type: ignore[arg-type]
 
     async def get_return(self, return_id: UUID, user_id: UUID) -> ReturnDetailResponse:
+        """Return details only for a return owned by the customer."""
         return_ = await self.return_repo.get_by_id(return_id, user_id)
         if not return_:
             raise NotFoundError("Return not found")
@@ -144,6 +154,7 @@ class ReturnService:
     async def get_guest_return(
         self, return_id: UUID, guest_token: str | None
     ) -> ReturnDetailResponse:
+        """Return guest return details only with the matching order token."""
         if not guest_token:
             raise AuthenticationError("Provide a guest order token")
         return_ = await self.return_repo.get_by_id(return_id)
@@ -156,6 +167,7 @@ class ReturnService:
         return self._to_detail(return_)
 
     async def list_returns(self, user_id: UUID, page: int = 1) -> PaginatedReturns:
+        """Build the customer's paginated return history."""
         rows, total = await self.return_repo.list_by_user(user_id, page)
         total_pages = max(1, (total + 9) // 10)
         return PaginatedReturns(
@@ -168,6 +180,7 @@ class ReturnService:
     async def open_dispute(
         self, return_id: UUID, user_id: UUID, payload: OpenDisputeRequest
     ) -> DisputeDetailResponse:
+        """Create a single dispute for an eligible rejected return owned by the customer."""
         from app.services.account_lifecycle import lock_active_user
         await lock_active_user(self.db, user_id)
         return_ = await self.return_repo.get_by_id(return_id, user_id)
@@ -198,6 +211,7 @@ class ReturnService:
         return self._to_dispute(dispute)  # type: ignore[arg-type]
 
     async def get_dispute(self, return_id: UUID, user_id: UUID) -> DisputeDetailResponse:
+        """Read the dispute attached to a return owned by the customer."""
         return_ = await self.return_repo.get_by_id(return_id, user_id)
         if not return_:
             raise NotFoundError("Return not found")
@@ -208,6 +222,7 @@ class ReturnService:
     async def add_message(
         self, return_id: UUID, sender_id: UUID, payload: AddDisputeMessageRequest
     ) -> DisputeMessageResponse:
+        """Append a customer message to an owned, unresolved return dispute."""
         # Match the owner-only policy of get_dispute/open_dispute. Check before
         # looking up the dispute so other users cannot probe its existence/state.
         return_ = await self.return_repo.get_by_id(return_id, sender_id)
@@ -233,6 +248,7 @@ class ReturnService:
     async def seller_list_returns(
         self, seller_id: UUID, status: Optional[str] = None, page: int = 1
     ) -> PaginatedReturns:
+        """Paginate return requests belonging to the seller's fulfilment orders."""
         rows, total = await self.return_repo.list_seller(seller_id, status, page)
         return PaginatedReturns(
             data=[self._to_row(row) for row in rows],
@@ -244,14 +260,12 @@ class ReturnService:
     async def get_seller_return(
         self, return_id: UUID, seller_id: UUID
     ) -> SellerReturnDetailResponse:
+        """Assemble owned return items, refund estimate, status, and seller actions."""
         return_ = await self._get_return_seller(return_id, seller_id)
         order = await self.db.get(Order, return_.order_id)
         if not order:
             raise BusinessRuleError("Return order is missing")
         order_items = await self._load_order_items(return_)
-        payment = await self.db.scalar(
-            select(Payment).where(Payment.order_id == return_.order_id)
-        )
         refund = await self.db.scalar(
             select(Refund)
             .where(Refund.return_id == return_.id)
@@ -276,6 +290,7 @@ class ReturnService:
     async def seller_approve_return(
         self, return_id: UUID, seller_id: UUID, payload: AdminReturnActionRequest
     ) -> dict:
+        """Approve a requested return after verifying seller ownership and state."""
         return_ = await self._get_return_seller(return_id, seller_id, lock=True)
         if return_.status != ReturnStatus.requested:
             raise BusinessRuleError("Can only approve requested returns")
@@ -288,6 +303,7 @@ class ReturnService:
     async def seller_reject_return(
         self, return_id: UUID, seller_id: UUID, payload: AdminReturnActionRequest
     ) -> dict:
+        """Reject a requested return after verifying seller ownership and state."""
         return_ = await self._get_return_seller(return_id, seller_id, lock=True)
         if return_.status != ReturnStatus.requested:
             raise BusinessRuleError("Can only reject requested returns")
@@ -300,6 +316,7 @@ class ReturnService:
     async def seller_mark_received(
         self, return_id: UUID, seller_id: UUID, payload: AdminReturnActionRequest
     ) -> dict:
+        """Mark an approved owned return received for later refund processing."""
         return_ = await self._get_return_seller(return_id, seller_id, lock=True)
         if return_.status != ReturnStatus.approved:
             raise BusinessRuleError("Can only mark approved returns as received")
@@ -314,6 +331,7 @@ class ReturnService:
     async def admin_list_returns(
         self, status: Optional[str] = None, page: int = 1
     ) -> PaginatedReturns:
+        """Paginate all return requests for administrator review."""
         rows, total = await self.return_repo.list_admin(status, page)
         total_pages = max(1, (total + 24) // 25)
         return PaginatedReturns(
@@ -322,6 +340,9 @@ class ReturnService:
         )
 
     async def get_admin_return(self, return_id: UUID) -> AdminReturnDetailResponse:
+        """Assemble customer, seller, item, refund, and permitted-action context for
+        administrators.
+        """
         return_ = await self._get_return_admin(return_id)
         order = await self.db.get(Order, return_.order_id)
         customer = await self.db.get(User, return_.user_id) if return_.user_id else None
@@ -400,6 +421,7 @@ class ReturnService:
     async def approve_return(
         self, return_id: UUID, admin_id: UUID, payload: AdminReturnActionRequest
     ) -> dict:
+        """Approve a requested return through the administrator workflow."""
         return_ = await self._get_return_admin(return_id, lock=True)
         if return_.status != ReturnStatus.requested:
             raise BusinessRuleError("Can only approve requested returns")
@@ -410,6 +432,7 @@ class ReturnService:
     async def reject_return(
         self, return_id: UUID, admin_id: UUID, payload: AdminReturnActionRequest
     ) -> dict:
+        """Reject a requested return through the administrator workflow."""
         return_ = await self._get_return_admin(return_id, lock=True)
         if return_.status != ReturnStatus.requested:
             raise BusinessRuleError("Can only reject requested returns")
@@ -420,6 +443,7 @@ class ReturnService:
     async def mark_received(
         self, return_id: UUID, admin_id: UUID, payload: AdminReturnActionRequest
     ) -> dict:
+        """Mark an approved return received through the administrator workflow."""
         return_ = await self._get_return_admin(return_id, lock=True)
         if return_.status != ReturnStatus.approved:
             raise BusinessRuleError("Can only mark approved returns as received")
@@ -430,6 +454,9 @@ class ReturnService:
     async def process_refund(
         self, return_id: UUID, admin_id: UUID, payload: AdminReturnActionRequest
     ) -> dict:
+        """Calculate an eligible received return's refund and delegate its request to
+        PaymentService.
+        """
         return_ = await self._get_return_admin(return_id, lock=True)
         if return_.status != ReturnStatus.received:
             raise BusinessRuleError("Can only refund received returns")
@@ -470,6 +497,7 @@ class ReturnService:
     async def admin_list_disputes(
         self, status: Optional[str] = None, page: int = 1
     ) -> dict:
+        """List disputes for administrative review and resolution."""
         rows, total = await self.dispute_repo.list_admin(status, page)
         return {
             "data":  [self._to_dispute(d) for d in rows],
@@ -478,6 +506,7 @@ class ReturnService:
         }
 
     async def get_admin_dispute(self, dispute_id: UUID) -> DisputeDetailResponse:
+        """Read a dispute with its messages for the administrator."""
         dispute = await self.dispute_repo.get_by_id(dispute_id)
         if not dispute:
             raise NotFoundError("Dispute not found")
@@ -486,6 +515,7 @@ class ReturnService:
     async def add_admin_message(
         self, dispute_id: UUID, admin_id: UUID, payload: AddDisputeMessageRequest
     ) -> DisputeMessageResponse:
+        """Append an administrator message only while the dispute remains unresolved."""
         dispute = await self.dispute_repo.get_by_id(dispute_id, for_update=True)
         if not dispute:
             raise NotFoundError("Dispute not found")
@@ -513,6 +543,9 @@ class ReturnService:
     async def resolve_dispute(
         self, dispute_id: UUID, admin_id: UUID, payload: ResolveDisputeRequest
     ) -> DisputeDetailResponse:
+        """Validate and persist the dispute outcome, coordinating any resulting return
+        transition.
+        """
         dispute = await self.dispute_repo.get_by_id(dispute_id, for_update=True)
         if not dispute:
             raise NotFoundError("Dispute not found")
@@ -608,6 +641,7 @@ class ReturnService:
                 )
 
     async def _get_return_admin(self, return_id: UUID, *, lock: bool = False) -> Return:
+        """Load a return for administrator actions or raise not found."""
         return_ = await self.return_repo.get_by_id(return_id, for_update=lock)
         if not return_:
             raise NotFoundError("Return not found")
@@ -616,6 +650,7 @@ class ReturnService:
     async def _get_return_seller(
         self, return_id: UUID, seller_id: UUID, *, lock: bool = False
     ) -> Return:
+        """Load a return scoped to the acting seller or raise not found."""
         return_ = await self.return_repo.get_by_seller(
             return_id, seller_id, for_update=lock
         )
@@ -624,6 +659,7 @@ class ReturnService:
         return return_
 
     async def _load_order_items(self, return_: Return) -> dict[UUID, OrderItem]:
+        """Resolve every return item to its original order-item snapshot."""
         ids = [item.order_item_id for item in return_.items]
         rows = (
             (await self.db.execute(select(OrderItem).where(OrderItem.id.in_(ids))))
@@ -639,6 +675,7 @@ class ReturnService:
     def _calculate_refund_amount(
         return_: Return, order: Order, order_items: dict[UUID, OrderItem]
     ) -> Decimal:
+        """Prorate the return's item quantities against the original order amounts."""
         if order.subtotal <= 0:
             raise BusinessRuleError("Order subtotal must be positive")
         item_total = sum(
@@ -653,6 +690,7 @@ class ReturnService:
     def _available_admin_actions(
         status: ReturnStatus, payment: Optional[Payment], refund: Optional[Refund]
     ) -> list[str]:
+        """Derive allowed administrator actions from the current return state."""
         if status == ReturnStatus.requested:
             return ["approve", "reject"]
         if status == ReturnStatus.approved:
@@ -668,6 +706,7 @@ class ReturnService:
 
     @staticmethod
     def _available_seller_actions(status: ReturnStatus) -> list[str]:
+        """Derive allowed seller actions from the current return state."""
         if status == ReturnStatus.requested:
             return ["approve", "reject"]
         if status == ReturnStatus.approved:
@@ -678,6 +717,7 @@ class ReturnService:
     def _to_admin_items(
         return_: Return, order_items: dict[UUID, OrderItem]
     ) -> list[AdminReturnItemResponse]:
+        """Combine returned quantities and order-item snapshots for detailed return reads."""
         return [
             AdminReturnItemResponse(
                 id=item.id,
@@ -697,6 +737,7 @@ class ReturnService:
 
     @staticmethod
     def _to_row(r: Return) -> ReturnRowResponse:
+        """Convert a return to the common list-row response."""
         return ReturnRowResponse(
             id              = r.id,
             order_id        = r.order_id,
@@ -710,6 +751,7 @@ class ReturnService:
 
     @staticmethod
     def _to_detail(r: Return) -> ReturnDetailResponse:
+        """Build return detail with its requested item quantities."""
         return ReturnDetailResponse(
             id              = r.id,
             order_id        = r.order_id,
@@ -730,6 +772,7 @@ class ReturnService:
 
     @staticmethod
     def _to_dispute(d: Dispute) -> DisputeDetailResponse:
+        """Build dispute detail with its resolution and message history."""
         return DisputeDetailResponse(
             id              = d.id,
             return_id       = d.return_id,

@@ -1,3 +1,8 @@
+"""integrations / supabase storage.
+
+Provider adapter used by services and queued background work.
+"""
+
 from __future__ import annotations
 
 import httpx
@@ -13,10 +18,12 @@ class SupabaseStorage:
     """
 
     def __init__(self) -> None:
+        """Store the configuration and dependencies used by SupabaseStorage."""
         self.base_url = str(settings.SUPABASE_URL).rstrip("/")
         self.service_key = settings.SUPABASE_SERVICE_ROLE_KEY
 
     def _headers(self, content_type: str | None = None) -> dict:
+        """Build server-side storage authentication headers and optional content type."""
         h = {
             "Authorization": f"Bearer {self.service_key}",
             "apikey": self.service_key,
@@ -49,6 +56,7 @@ class SupabaseStorage:
         return self.get_public_url(bucket, path)
 
     def get_public_url(self, bucket: str, path: str) -> str:
+        """Construct the public object URL returned after an upload."""
         return f"{self.base_url}/storage/v1/object/public/{bucket}/{path}"
 
     async def delete(self, bucket: str, path: str) -> None:

@@ -1,3 +1,8 @@
+"""models / coupon.
+
+SQLAlchemy persistence definitions shared by repositories and services.
+"""
+
 from __future__ import annotations
 
 from sqlalchemy import UniqueConstraint, text as sql_text
@@ -6,7 +11,6 @@ import enum
 from decimal import Decimal
 from uuid import UUID, uuid4
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     String, Numeric, Boolean, Integer,

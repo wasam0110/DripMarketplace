@@ -1,3 +1,8 @@
+"""api / v1 / admin / settings.
+
+HTTP handlers connect validated requests and access dependencies to backend services.
+"""
+
 from __future__ import annotations
 
 from uuid import UUID
@@ -16,6 +21,8 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 
 @router.get("/settings", response_model=PlatformSettingsResponse)
 async def get_settings(db: DB, current_admin: CurrentAdmin) -> PlatformSettingsResponse:
+    # Handle GET /settings at this router boundary. Delegates to AdminService.get_settings.
+    # Access dependency: CurrentAdmin.
     return await AdminService(db).get_settings()
 
 
@@ -25,5 +32,7 @@ async def update_settings(
     db:            DB,
     current_admin: CurrentAdmin,
 ) -> PlatformSettingsResponse:
+    # Handle PATCH /settings at this router boundary. Delegates to AdminService.update_settings.
+    # Access dependency: CurrentAdmin.
     updates = {k: v for k, v in payload.model_dump().items() if v is not None}
     return await AdminService(db).update_settings(updates, UUID(current_admin["sub"]))
