@@ -11,7 +11,7 @@ from decimal import Decimal
 from typing import Literal, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
+from pydantic import UUID4, BaseModel, EmailStr, Field, field_validator, model_validator
 
 from app.models.order import PaymentMethod
 
@@ -129,6 +129,29 @@ class GuestCheckoutQuoteRequest(BaseModel):
 
     items: list[CartItemInput] = Field(min_length=1, max_length=100)
     coupon_code: str | None = Field(default=None, max_length=30)
+    payment_method: PaymentMethod = PaymentMethod.cod
+
+
+class AccountCheckoutQuoteRequest(BaseModel):
+    """Quote the current account cart, including any coupon, before acceptance."""
+
+    coupon_code: str | None = Field(default=None, max_length=30)
+    payment_method: PaymentMethod = PaymentMethod.cod
+
+
+class CheckoutRecoveryRequest(BaseModel):
+    # Send only in JSON, never a URL. Guests must protect this like an order token.
+    checkout_key: UUID4 = Field(repr=False)
+
+
+class CheckoutOrderRequest(CreateOrderRequest, CheckoutRecoveryRequest):
+    """HTTP order creation requires a client-generated key and accepted signed quote."""
+
+    quote_token: str = Field(min_length=1, max_length=4096, repr=False)
+
+
+class GuestCheckoutOrderRequest(CreateGuestOrderRequest, CheckoutRecoveryRequest):
+    quote_token: str = Field(min_length=1, max_length=4096, repr=False)
 
 
 class PaymentMethodAvailability(BaseModel):
@@ -150,6 +173,10 @@ class GuestCheckoutQuoteResponse(BaseModel):
     coupon_requires_sign_in: bool = True
     payment_methods: list[PaymentMethodAvailability]
     will_revalidate_on_order: bool = True
+    quote_token: str = Field(
+        description="Accept this 15-minute quote in order creation.", repr=False,
+    )
+    quote_expires_at: datetime
 
 
 class CreateOrderResponse(BaseModel):

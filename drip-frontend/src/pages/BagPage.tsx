@@ -73,8 +73,8 @@ export function BagPage() {
           <div><dt>Delivery</dt><dd>{formatPrice(bag.cart.shipping_fee)}</dd></div>
           <div className="bag-total"><dt>Total</dt><dd>{formatPrice(bag.cart.total)}</dd></div></dl>
         <p>Each label ships separately. Prices, availability and delivery are rechecked before ordering.</p>
-        <Button disabled aria-describedby="checkout-build-note">Continue to checkout</Button>
-        <small id="checkout-build-note">Checkout is the next build step. No orders or payments can be made from this preview.</small>
+        {disabled ? <Button disabled>Continue to checkout</Button> : <Link className="button" to="/checkout">Continue to checkout</Link>}
+        <small>Preview delivery details and payment options. Order submission and payments remain disabled.</small>
       </aside>}
     </div>
   </section>

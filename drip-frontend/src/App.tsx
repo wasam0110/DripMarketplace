@@ -7,6 +7,7 @@ import { BrandPage, BrandsPageView, CataloguePageView, HomePage } from './pages/
 import { ProductPage } from './pages/ProductPage'
 import { BagPage } from './pages/BagPage'
 import { CartProvider } from './cart/CartProvider'
+import { CheckoutPage } from './pages/CheckoutPage'
 
 export default function App() {
   return <ErrorBoundary><AuthProvider><CartProvider><Routes>
@@ -17,6 +18,7 @@ export default function App() {
       <Route path="brands/:slug" element={<BrandPage />} />
       <Route path="products/:id" element={<ProductPage />} />
       <Route path="bag" element={<BagPage />} />
+      <Route path="checkout" element={<CheckoutPage />} />
       <Route path="login" element={<AuthPage key="login" mode="login" />} />
       <Route path="register" element={<AuthPage key="register" mode="register" />} />
       <Route path="forgot-password" element={<AuthPage key="forgot" mode="forgot" />} />

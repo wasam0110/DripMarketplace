@@ -5,29 +5,36 @@ SQLAlchemy persistence definitions shared by repositories and services.
 
 from __future__ import annotations
 
-from sqlalchemy import Index as SchemaIndex
-
-from sqlalchemy import text as sql_text
-
 import enum
-from decimal import Decimal
-from uuid import UUID, uuid4
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
+from uuid import UUID, uuid4
 
 from sqlalchemy import (
-    String, Text, Numeric, Integer, DateTime, Enum as SAEnum, ForeignKey,
-    CheckConstraint, Index,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Index,
+    Integer,
+    Numeric,
+    String,
+    Text,
 )
+from sqlalchemy import (
+    Enum as SAEnum,
+)
+from sqlalchemy import Index as SchemaIndex
+from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import Base, TimestampMixin
 
 if TYPE_CHECKING:
-    from app.models.seller import Seller
-    from app.models.user import User
     from app.models.coupon import Coupon
     from app.models.product import Product, ProductVariant
+    from app.models.seller import Seller
+    from app.models.user import User
 
 
 class OrderStatus(str, enum.Enum):
@@ -73,6 +80,11 @@ class Order(Base, TimestampMixin):
         Index("ix_orders_user_id",     "user_id"),
         Index("ix_orders_status",      "status"),
         Index("ix_orders_order_number","order_number"),
+        Index("uq_orders_checkout_key_hash", "checkout_key_hash", unique=True),
+        CheckConstraint(
+            "(checkout_key_hash IS NULL) = (checkout_request_hash IS NULL)",
+            name="ck_orders_checkout_hash_pair",
+        ),
     )
 
     id:              Mapped[UUID]           = mapped_column(primary_key=True, default=uuid4, server_default=sql_text("gen_random_uuid()"))
@@ -94,6 +106,9 @@ class Order(Base, TimestampMixin):
                      )
     coupon_id:       Mapped[UUID | None]    = mapped_column(ForeignKey("coupons.id"))
     notes:           Mapped[str | None]     = mapped_column(Text)
+    # Only hashes are durable; the guest checkout key is a recovery capability.
+    checkout_key_hash: Mapped[str | None] = mapped_column(String(64))
+    checkout_request_hash: Mapped[str | None] = mapped_column(String(64))
 
     user:         Mapped["User | None"]        = relationship(back_populates="orders")
     address:      Mapped["OrderAddress"]        = relationship(

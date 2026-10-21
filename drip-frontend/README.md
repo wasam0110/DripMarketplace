@@ -36,7 +36,7 @@ The browser-test launcher uses a fresh temporary transform cache per run and
 removes only that cache afterward; this avoids stale shared-cache discovery on
 this Windows workspace.
 
-Verified on 20 October 2026: production build and strict TypeScript checks passed;
+Previous checkpoint, 20 October 2026: production build and strict TypeScript checks passed;
 35 unit/component tests and 28 Edge desktop/mobile browser tests passed. The
 scanned home, login, registration, catalogue, product and bag pages had no automated
 WCAG 2 A/AA or WCAG 2.1 AA violations. This is not a complete accessibility
@@ -59,10 +59,12 @@ Runtime dependency audit reported no known vulnerabilities.
 - In-memory access token, HttpOnly-cookie refresh, deduplicated refresh requests.
 - Account session summary and sign-out; no tokens in local/session storage.
 - Admin-only authenticator input, not customer two-factor setup.
+- Guest/account checkout preview: contact and delivery, COD availability, review.
+- Signed-in coupon previews with exact decimal totals; personal details stay in page memory.
 
 This is not the complete frontend or a production-readiness claim. Still needed:
 full reviews, filters/categories, wishlist,
-checkout/payment flows, customer account features, seller portal and admin portal.
+order submission/confirmation and online payment flows, customer account features, seller portal and admin portal.
 Brand collection pagination and role-specific landing pages also remain.
 
 ## Product and bag verification scope
@@ -75,9 +77,41 @@ Only identifiers and quantities are stored locally; tokens, prices and totals
 are not persisted. Stock is not reserved by adding to the bag.
 
 These tests do not establish a real-account purchase journey: the local catalogue
-is empty, signed-in bag writes use isolated browser fixtures, and checkout remains
+is empty, signed-in bag writes use isolated browser fixtures, and order submission remains
 disabled. No orders, charges, customer emails, backend edits or deployments were
 performed for this slice.
+
+## Checkout preview and submission blockers
+
+Verified on 21 October 2026: production build/TypeScript and 44 unit/component
+tests passed. The full browser run had 34 passing tests (including all 8 checkout
+checks) and 2 failed live-proxy smoke checks: the backend at `127.0.0.1:8000` was
+offline (`ECONNREFUSED`). The live integration is therefore not reverified at this
+checkpoint. Checkout details/review passed automated WCAG 2 A/AA and 2.1 AA scans;
+desktop/mobile screenshots were inspected. No backend services were started.
+
+The `/checkout` route follows the approved Canva Details → Payment → Review flow.
+The public quote endpoint prices guest selections or a freshly read account bag;
+coupon validation is available only to signed-in users. Coupon amounts come from
+the server and are combined with quoted shipping using exact integer-paisa math.
+Refreshing the quote invalidates the coupon preview and restarts review. COD
+availability currently reflects the undiscounted quote; a coupon does not override
+an unavailable COD option. Saved addresses and online-payment initiation are not
+implemented in this slice.
+
+Order submission is deliberately disabled, with no create-order call in the UI.
+The inspected `CreateOrderRequest` / `CreateGuestOrderRequest` contracts and order
+routes do not expose an idempotency/recovery key or accepted-price/quote version.
+The order service recalculates prices during creation. Before enabling submission,
+the backend needs a reviewed contract for safe retries/recovery and explicit
+re-acceptance of changed totals, followed by frontend confirmation/recovery wiring.
+These are implementation gaps, not merely production credentials. Backend edits
+were not authorized for this frontend step and no backend source was changed.
+
+Guest contact and shipping details exist only in component memory: preview calls
+send variant IDs/quantities, not the entered email/address/phone. Reload or an
+account change discards those details. The UI neither reserves stock nor creates
+an order, payment, verification message or fictional success confirmation.
 
 Email delivery and real-account journeys have not been exercised by this build.
 The local database currently has no products or approved labels; the UI shows

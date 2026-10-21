@@ -26,12 +26,15 @@ from app.models.seller import Seller, SellerStatus
 from app.repositories.inventory_repo import InventoryRepository
 from app.repositories.order_repo import OrderRepository, SellerOrderRepository
 from app.schemas.order import (
+    AccountCheckoutQuoteRequest,
     CancelOrderRequest,
     CartItemInput,
     CartItemResponse,
+    CheckoutOrderRequest,
     CreateGuestOrderRequest,
     CreateOrderRequest,
     CreateOrderResponse,
+    GuestCheckoutOrderRequest,
     GuestCheckoutQuoteRequest,
     GuestCheckoutQuoteResponse,
     OrderDetailResponse,
@@ -45,9 +48,16 @@ from app.schemas.order import (
     UpdateSellerOrderRequest,
 )
 from app.services.cart_service import CartService
+from app.services.checkout_safety import (
+    CheckoutGuard,
+    begin_checkout,
+    find_order,
+    price_fingerprint,
+    sign_quote,
+)
 from app.services.coupon_service import CouponService
-from app.services.order_access import authorized_order, create_guest_token
 from app.services.notification_outbox import queue_notification
+from app.services.order_access import authorized_order, create_guest_token
 
 
 def _generate_order_number() -> str:
@@ -103,12 +113,56 @@ class OrderService:
         self.so_repo = SellerOrderRepository(db)
         self.inv_repo = InventoryRepository(db)
 
+    async def create_checkout(
+        self, payload: CheckoutOrderRequest | GuestCheckoutOrderRequest,
+        user_id: UUID | None = None,
+    ) -> CreateOrderResponse:
+        """Only HTTP creation entry point: serialize, replay or accept exact prices."""
+        try:
+            previous, guard = await begin_checkout(self.db, payload, user_id)
+            if previous is not None:
+                return self._checkout_response(previous)
+            if user_id is None:
+                if not isinstance(payload, GuestCheckoutOrderRequest):
+                    raise BusinessRuleError("Guest checkout details are required")
+                return await self.create_guest_order(payload, guard=guard)
+            return await self.create_order(user_id, payload, guard=guard)
+        except BaseException:
+            # Roll back pre-commit work, including partial stock reservations. A
+            # response failure after commit leaves the successful key recoverable.
+            await self.db.rollback()
+            raise
+
+    async def recover_checkout(
+        self, checkout_key: UUID, user_id: UUID | None = None,
+    ) -> CreateOrderResponse:
+        """Read a committed result without repeating reservations, coupons or jobs."""
+        previous = await find_order(self.db, checkout_key, user_id, lock=True)
+        if previous is None:
+            raise NotFoundError("Checkout")
+        return self._checkout_response(previous)
+
+    @staticmethod
+    def _checkout_response(order: Order) -> CreateOrderResponse:
+        pending_cod = order.status == OrderStatus.pending_cod_verification
+        return CreateOrderResponse(
+            order_id=order.id, order_number=order.order_number, status=order.status.value,
+            total=order.total, payment_method=order.payment_method.value,
+            guest_token=create_guest_token(order.id) if order.user_id is None else None,
+            whatsapp_url=_whatsapp_url(order.order_number, settings.DRIP_WHATSAPP_NUMBER)
+            if pending_cod else None,
+            payment_url=None,
+        )
+
+    # Internal order builder helpers remain usable by trusted service callers;
+    # public HTTP routes MUST use create_checkout, never these helpers directly.
     # ── Place Order (authenticated) ────────────────────────────────────────────
 
     async def create_order(
         self,
         user_id: UUID,
         payload: CreateOrderRequest,
+        *, guard: CheckoutGuard | None = None,
     ) -> CreateOrderResponse:
         """Validate the account and cart before entering the shared checkout transaction."""
         from app.models.user import User
@@ -130,11 +184,14 @@ class OrderService:
             variant_qtys=raw_cart,
             user_id=user_id,
             cart_svc=cart_svc,
+            guard=guard,
         )
 
     # ── Place Order (guest) ────────────────────────────────────────────────────
 
-    async def create_guest_order(self, payload: CreateGuestOrderRequest) -> CreateOrderResponse:
+    async def create_guest_order(
+        self, payload: CreateGuestOrderRequest, *, guard: CheckoutGuard | None = None,
+    ) -> CreateOrderResponse:
         """Merge guest line items before entering the shared checkout transaction."""
         variant_qtys = self._merge_items(payload.items)
 
@@ -146,6 +203,7 @@ class OrderService:
             guest_email=payload.guest_email,
             guest_name=payload.guest_name,
             guest_phone=payload.guest_phone,
+            guard=guard,
         )
 
     async def quote_guest_checkout(
@@ -155,8 +213,34 @@ class OrderService:
         if payload.coupon_code:
             raise BusinessRuleError("Sign in to use a coupon")
 
-        calculation = await self._calculate_checkout(self._merge_items(payload.items))
-        total = calculation.total
+        return await self._quote_checkout(
+            self._merge_items(payload.items), payload.payment_method, None, None,
+        )
+
+    async def quote_account_checkout(
+        self, payload: AccountCheckoutQuoteRequest, user_id: UUID,
+    ) -> GuestCheckoutQuoteResponse:
+        items = await CartService(self.db, self.redis).get_raw_items(user_id)
+        if not items:
+            raise BusinessRuleError("Your cart is empty")
+        return await self._quote_checkout(
+            items, payload.payment_method, payload.coupon_code, user_id,
+        )
+
+    async def _quote_checkout(
+        self, items: dict[UUID, int], payment_method: PaymentMethod,
+        coupon_code: str | None, user_id: UUID | None,
+    ) -> GuestCheckoutQuoteResponse:
+        calculation = await self._calculate_checkout(items)
+        discount = Decimal("0")
+        if coupon_code:
+            service = CouponService(self.db)
+            coupon = await service._get_valid_coupon(coupon_code, calculation.subtotal, user_id)
+            discount = service._calc_discount(coupon, calculation.subtotal)
+        total = calculation.total - discount
+        token, expires = sign_quote(
+            price_fingerprint(calculation, discount, coupon_code, payment_method), user_id,
+        )
         cod_available = total <= Decimal(settings.MAX_COD_ORDER_AMOUNT)
         payment_methods = [
             PaymentMethodAvailability(
@@ -195,7 +279,7 @@ class OrderService:
             ],
             item_count=sum(line.quantity for line in calculation.lines),
             subtotal=calculation.subtotal,
-            discount_amount=Decimal("0"),
+            discount_amount=discount,
             shipping_fee=calculation.shipping_fee,
             total=total,
             free_shipping_threshold=calculation.free_shipping_threshold,
@@ -203,6 +287,9 @@ class OrderService:
                 calculation.free_shipping_threshold - calculation.subtotal, Decimal("0")
             ),
             payment_methods=payment_methods,
+            coupon_requires_sign_in=user_id is None,
+            quote_token=token,
+            quote_expires_at=expires,
         )
 
     # ── Core order builder ─────────────────────────────────────────────────────
@@ -216,6 +303,7 @@ class OrderService:
         guest_email: Optional[str] = None,
         guest_name: Optional[str] = None,
         guest_phone: Optional[str] = None,
+        guard: CheckoutGuard | None = None,
     ) -> CreateOrderResponse:
         """Persist checkout snapshots, reserve inventory, and queue order work atomically."""
         # 1-2. Validate stock and snapshot current prices/runtime shipping.
@@ -251,6 +339,8 @@ class OrderService:
             )
 
         total = subtotal - discount + shipping_fee
+        if guard is not None:
+            guard.accept(price_fingerprint(calculation, discount, payload.coupon_code, pm))
 
         # 6. Unique order number
         order_number = _generate_order_number()
@@ -278,6 +368,8 @@ class OrderService:
             payment_method=pm,
             coupon_id=coupon_id,
             notes=payload.notes,
+            checkout_key_hash=guard.key_hash if guard else None,
+            checkout_request_hash=guard.request_hash if guard else None,
         )
 
         # 9. Address
@@ -693,6 +785,7 @@ class OrderService:
                 Product.deleted_at.is_(None),
                 Seller.status == SellerStatus.active,
             )
+            .execution_options(populate_existing=True)
         )
         variants = {variant.id: variant for variant in result.scalars().all()}
 

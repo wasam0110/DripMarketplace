@@ -136,7 +136,17 @@ def guest_payload(shop, quantity=2):
 
 async def create_order(client, shop, *, guest=False, coupon=False):
     if guest:
-        response = await client.post("/api/v1/orders/guest", json=guest_payload(shop))
+        payload = guest_payload(shop)
+        quote = await client.post("/api/v1/orders/guest/quote", json={"items": payload["items"]})
+        assert quote.status_code == 200, quote.text
+        response = await client.post(
+            "/api/v1/orders/guest",
+            json={
+                **payload,
+                "checkout_key": str(uuid4()),
+                "quote_token": quote.json()["quote_token"],
+            },
+        )
     else:
         response = await client.post(
             "/api/v1/cart",
@@ -144,10 +154,19 @@ async def create_order(client, shop, *, guest=False, coupon=False):
             json={"variant_id": str(shop["variant"].id), "quantity": 2},
         )
         assert response.status_code == 200, response.text
+        payload = {**ORDER_PAYLOAD, **({"coupon_code": "SAVE10"} if coupon else {})}
+        quote = await client.post(
+            "/api/v1/orders/quote", headers=shop["headers"]["buyer"], json=payload
+        )
+        assert quote.status_code == 200, quote.text
         response = await client.post(
             "/api/v1/orders",
             headers=shop["headers"]["buyer"],
-            json={**ORDER_PAYLOAD, **({"coupon_code": "SAVE10"} if coupon else {})},
+            json={
+                **payload,
+                "checkout_key": str(uuid4()),
+                "quote_token": quote.json()["quote_token"],
+            },
         )
     assert response.status_code == 201, response.text
     return response.json()
@@ -366,13 +385,39 @@ async def test_guest_quote_has_no_order_or_stock_side_effects(client, db, shop):
 
 async def test_empty_cart_and_disabled_payfast_fail_without_writes(client, db, shop):
     before = await snapshot(db)
+    payload = {**guest_payload(shop), "payment_method": "payfast"}
+    auth = shop["headers"]["buyer"]
+    await client.post(
+        "/api/v1/cart",
+        headers=auth,
+        json={
+            "variant_id": str(shop["variant"].id),
+            "quantity": 1,
+        },
+    )
+    quote = await client.post("/api/v1/orders/quote", headers=auth, json={})
+    assert quote.status_code == 200, quote.text
+    await client.post("/api/v1/cart/clear", headers=auth)
     response = await client.post(
-        "/api/v1/orders", headers=shop["headers"]["buyer"], json=ORDER_PAYLOAD
+        "/api/v1/orders",
+        headers=auth,
+        json={
+            **ORDER_PAYLOAD,
+            "checkout_key": str(uuid4()),
+            "quote_token": quote.json()["quote_token"],
+        },
     )
     error(response, 422, "BUSINESS_RULE_VIOLATION")
     assert await snapshot(db) == before
+    quote = await client.post("/api/v1/orders/guest/quote", json=payload)
+    assert quote.status_code == 200, quote.text
     response = await client.post(
-        "/api/v1/orders/guest", json={**guest_payload(shop), "payment_method": "payfast"}
+        "/api/v1/orders/guest",
+        json={
+            **payload,
+            "checkout_key": str(uuid4()),
+            "quote_token": quote.json()["quote_token"],
+        },
     )
     error(response, 422, "BUSINESS_RULE_VIOLATION")
     assert await snapshot(db) == before

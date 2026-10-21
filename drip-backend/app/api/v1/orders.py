@@ -13,11 +13,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentSeller, CurrentUser, OptionalUser, get_db
 from app.schemas.order import (
+    AccountCheckoutQuoteRequest,
     CancelOrderRequest,
+    CheckoutOrderRequest,
+    CheckoutRecoveryRequest,
     CouponValidationResponse,
-    CreateGuestOrderRequest,
-    CreateOrderRequest,
     CreateOrderResponse,
+    GuestCheckoutOrderRequest,
     GuestCheckoutQuoteRequest,
     GuestCheckoutQuoteResponse,
     OrderDetailResponse,
@@ -46,26 +48,46 @@ async def _get_redis():
 
 @router.post("/orders", response_model=CreateOrderResponse, status_code=201)
 async def place_order(
-    payload: CreateOrderRequest,
+    payload: CheckoutOrderRequest,
     db: DB,
     current_user: CurrentUser,
 ) -> CreateOrderResponse:
-    # Handle POST /orders at this router boundary. Delegates to OrderService.create_order.
+    # Handle POST /orders through quote acceptance and replay protection.
     # Access dependency: CurrentUser.
     redis = await _get_redis()
-    return await OrderService(db, redis).create_order(
+    return await OrderService(db, redis).create_checkout(
         user_id=UUID(current_user["sub"]), payload=payload
     )
 
 
 @router.post("/orders/guest", response_model=CreateOrderResponse, status_code=201)
 async def place_guest_order(
-    payload: CreateGuestOrderRequest,
+    payload: GuestCheckoutOrderRequest,
     db: DB,
 ) -> CreateOrderResponse:
     # Handle POST /orders/guest at this router boundary. Delegates to
-    # OrderService.create_guest_order.
-    return await OrderService(db).create_guest_order(payload)
+    # OrderService.create_checkout (quote acceptance and replay protection).
+    return await OrderService(db).create_checkout(payload)
+
+
+@router.post("/orders/quote", response_model=GuestCheckoutQuoteResponse)
+async def quote_account_checkout(
+    payload: AccountCheckoutQuoteRequest, db: DB, current_user: CurrentUser,
+) -> GuestCheckoutQuoteResponse:
+    redis = await _get_redis()
+    return await OrderService(db, redis).quote_account_checkout(payload, UUID(current_user["sub"]))
+
+
+@router.post("/orders/recover", response_model=CreateOrderResponse)
+async def recover_account_checkout(
+    payload: CheckoutRecoveryRequest, db: DB, current_user: CurrentUser,
+) -> CreateOrderResponse:
+    return await OrderService(db).recover_checkout(payload.checkout_key, UUID(current_user["sub"]))
+
+
+@router.post("/orders/guest/recover", response_model=CreateOrderResponse)
+async def recover_guest_checkout(payload: CheckoutRecoveryRequest, db: DB) -> CreateOrderResponse:
+    return await OrderService(db).recover_checkout(payload.checkout_key)
 
 
 @router.post("/orders/guest/quote", response_model=GuestCheckoutQuoteResponse)

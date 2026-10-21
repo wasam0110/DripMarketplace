@@ -941,9 +941,14 @@ async def test_http_guest_checkout_and_browser_token_header(db, market):
                 },
             )
             assert preflight.status_code == 200
-            created = await client.post(
-                "/api/v1/orders/guest", json=guest_payload(market).model_dump(mode="json")
+            payload = guest_payload(market).model_dump(mode="json")
+            quote = await client.post(
+                "/api/v1/orders/guest/quote", json={"items": payload["items"]}
             )
+            assert quote.status_code == 200, quote.text
+            created = await client.post("/api/v1/orders/guest", json={
+                **payload, "checkout_key": str(uuid4()), "quote_token": quote.json()["quote_token"],
+            })
             assert created.status_code == 201, created.text
             data = created.json()
             order_path = f"/api/v1/orders/{data['order_id']}"

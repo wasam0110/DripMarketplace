@@ -22,6 +22,7 @@ interface BagContext {
   update: (variantId: string, quantity: number) => Promise<void>
   clear: () => Promise<void>
   merge: () => Promise<void>
+  completeCheckout: (sent: GuestSelection[]) => void
 }
 
 const CartContext = createContext<BagContext | null>(null)
@@ -192,6 +193,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
     cart, guest, loading, busy, error, storageError, needsReview, notice,
     count: user ? (cart?.item_count ?? 0) : guest.reduce((sum, item) => sum + item.quantity, 0),
     reload: () => setAttempt((value) => value + 1), add, update, clear, merge,
+    completeCheckout: (sent) => {
+      if (ownerRef.current !== owner) return
+      if (user) { setAttempt((value) => value + 1); return }
+      try {
+        save(remainingAfterMerge(readGuestBag(), sent, new Set(sent.map((item) => item.variant_id))))
+      } catch (reason) { setStorageError(reason) }
+    },
   }}>{children}</CartContext.Provider>
 }
 

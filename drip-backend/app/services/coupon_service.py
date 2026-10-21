@@ -70,7 +70,10 @@ class CouponService:
         self, code: str, subtotal: Decimal, user_id: Optional[UUID], *, lock: bool = False
     ) -> Coupon:
         """Check activation dates, usage limits, and checkout constraints for a coupon."""
-        query = select(Coupon).where(Coupon.code == code.upper())
+        query = (
+            select(Coupon).where(Coupon.code == code.upper())
+            .execution_options(populate_existing=True)
+        )
         if lock:
             query = query.with_for_update()
         result = await self.db.execute(query)

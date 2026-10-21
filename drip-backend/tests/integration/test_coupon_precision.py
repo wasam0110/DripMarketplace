@@ -1,7 +1,7 @@
 """Exact coupon previews agree with authoritative native checkout amounts."""
 
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import func, select
@@ -46,6 +46,14 @@ async def preview(client, market, subtotal):
 
 async def checkout(client, redis, market):
     await redis.hset(f"cart:{market.buyer.id}", str(market.variant.id), 1)
+    quote = await client.post(
+        "/api/v1/orders/quote",
+        headers=headers(market.buyer),
+        json={"coupon_code": "fraction"},
+    )
+    if quote.status_code != 200:
+        # An invalid coupon is rejected during the authoritative checkout quote.
+        return quote
     return await client.post(
         "/api/v1/orders",
         headers=headers(market.buyer),
@@ -53,6 +61,8 @@ async def checkout(client, redis, market):
             "shipping_address": ADDRESS,
             "payment_method": "cod",
             "coupon_code": "fraction",
+            "checkout_key": str(uuid4()),
+            "quote_token": quote.json()["quote_token"],
         },
     )
 

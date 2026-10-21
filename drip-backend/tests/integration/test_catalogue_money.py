@@ -1,7 +1,7 @@
 """Catalogue money agrees with stored prices and authoritative checkout."""
 
 from decimal import Decimal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import select
@@ -121,10 +121,21 @@ async def test_variant_display_matches_checkout(
     cart = await client.get("/api/v1/cart", headers=headers(market.buyer))
     assert cart.status_code == 200, cart.text
     assert Decimal(cart.json()["items"][0]["unit_price"]) == Decimal(shown)
+    account_quote = await client.post(
+        "/api/v1/orders/quote",
+        headers=headers(market.buyer),
+        json={},
+    )
+    assert account_quote.status_code == 200, account_quote.text
     created = await client.post(
         "/api/v1/orders",
         headers=headers(market.buyer),
-        json={"shipping_address": ADDRESS, "payment_method": "cod"},
+        json={
+            "shipping_address": ADDRESS,
+            "payment_method": "cod",
+            "checkout_key": str(uuid4()),
+            "quote_token": account_quote.json()["quote_token"],
+        },
     )
     assert created.status_code == 201, created.text
     order = await db.get(Order, UUID(created.json()["order_id"]))
