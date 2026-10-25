@@ -147,6 +147,11 @@ async def test_orphan_cleanup_retains_recent_and_referenced_files(worker_db, mon
         {"name": "recent.webp", "url": "recent", "updated_at": now.isoformat()},
         {"name": "used.webp", "url": "used", "updated_at": (now - timedelta(days=2)).isoformat()},
         {
+            "name": "review.webp",
+            "url": "review-used",
+            "updated_at": (now - timedelta(days=2)).isoformat(),
+        },
+        {
             "name": "orphan.webp",
             "url": "orphan",
             "updated_at": (now - timedelta(days=2)).isoformat(),
@@ -161,6 +166,7 @@ async def test_orphan_cleanup_retains_recent_and_referenced_files(worker_db, mon
     monkeypatch.setattr(SupabaseStorage, "delete", delete)
     worker_db.scalars.side_effect = [
         SimpleNamespace(all=lambda: ["used"]),
+        SimpleNamespace(all=lambda: ["review-used"]),
         SimpleNamespace(all=lambda: []),
         SimpleNamespace(all=lambda: []),
         SimpleNamespace(all=lambda: []),
@@ -191,7 +197,7 @@ async def test_orphan_cleanup_skips_unverifiable_timestamps(worker_db, monkeypat
     )
     delete = AsyncMock()
     monkeypatch.setattr(SupabaseStorage, "delete", delete)
-    worker_db.scalars.side_effect = [SimpleNamespace(all=lambda: []) for _ in range(5)]
+    worker_db.scalars.side_effect = [SimpleNamespace(all=lambda: []) for _ in range(6)]
 
     await cleanup_tasks.cleanup_orphaned_images({})
 

@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router'
 import { useAuth } from '../auth/AuthProvider'
 import { useCart } from '../cart/CartProvider'
 import { Arrow, Icon } from './ui'
+import { SavedFeedback } from '../saved/SavedProvider'
 
 export function Layout() {
   const { user } = useAuth()
@@ -43,6 +44,7 @@ export function Layout() {
           <NavLink to="/clothing?sort=newest">New arrivals</NavLink>
           <NavLink to="/clothing">Clothing</NavLink>
           <NavLink to="/brands">Brands</NavLink>
+          <NavLink to="/saved">Saved pieces</NavLink>
         </nav>
         <div className="header-actions">
           <Link className="icon-button bag-link" to="/bag" aria-label={`Bag, ${count} items`}><Icon name="bag" />{count > 0 && <span className="bag-count">{count}</span>}</Link>
@@ -58,6 +60,7 @@ export function Layout() {
         <Link to="/clothing?sort=newest">New arrivals <Arrow /></Link>
         <Link to="/clothing">Clothing <Arrow /></Link>
         <Link to="/brands">Brands <Arrow /></Link>
+        <Link to="/saved">Saved pieces <Arrow /></Link>
         <Link to={user ? '/account' : '/login'}>Your account <Arrow /></Link>
       </nav>}
       {searchOpen && <form id="site-search" className="search-panel container" onSubmit={search}
@@ -67,10 +70,10 @@ export function Layout() {
         <button className="button" type="submit">Search <Arrow /></button>
       </form>}
     </header>
-    <main ref={main} id="main" tabIndex={-1}><Outlet /></main>
+    <main ref={main} id="main" tabIndex={-1}><SavedFeedback /><Outlet /></main>
     <footer className="site-footer container">
       <div><Link to="/" className="footer-wordmark">WearHowZ</Link><p>Independent style, all in one place.</p></div>
-      <nav aria-label="Footer"><Link to="/help">Help & returns</Link><Link to="/login">Your account</Link><Link to="/brands">Discover the labels <Arrow /></Link></nav>
+      <nav aria-label="Footer"><Link to="/help">Help & returns</Link><Link to="/track">Track a guest order</Link><Link to="/saved">Saved pieces</Link><Link to="/account">Your account</Link><Link to="/brands">Discover the labels <Arrow /></Link></nav>
       <small>© {new Date().getFullYear()} WearHowZ</small>
     </footer>
   </div>

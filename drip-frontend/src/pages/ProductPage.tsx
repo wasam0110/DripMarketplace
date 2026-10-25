@@ -4,6 +4,8 @@ import { formatPrice, type ProductDetail } from '../api/types'
 import { useCart } from '../cart/CartProvider'
 import { Button, ErrorNotice } from '../components/ui'
 import { useResource } from '../hooks/useResource'
+import { SaveButton } from '../saved/SavedProvider'
+import { ProductReviews } from '../reviews/ProductReviews'
 
 export function ProductPage() {
   const { id = '' } = useParams()
@@ -11,7 +13,7 @@ export function ProductPage() {
   return <section className="container page">
     <Link className="text-link" to="/clothing">Back to clothing</Link>
     {loading ? <p role="status">Loading this piece…</p> : error ? <><ErrorNotice error={error} /><Button onClick={retry}>Try again</Button></>
-      : data && <ProductSelection key={data.id} product={data} />}
+      : data && <><ProductSelection key={data.id} product={data} /><ProductReviews key={`reviews:${data.id}`} productId={data.id} /></>}
   </section>
 }
 
@@ -42,6 +44,7 @@ function ProductSelection({ product }: { product: ProductDetail }) {
     <div>
       <Link className="eyebrow" to={`/brands/${encodeURIComponent(product.seller.slug)}`}>{product.brand_name}</Link>
       <h1>{product.name}</h1>
+      <SaveButton id={product.id} name={product.name} />
       <p className="lead">{formatPrice(selected?.price ?? product.sale_price ?? product.price)}</p>
       {product.review_count > 0 && <p>{product.avg_rating} / 5 · {product.review_count} reviews</p>}
       <p className="product-description">{product.description}</p>

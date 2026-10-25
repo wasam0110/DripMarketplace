@@ -6,34 +6,66 @@ import base64
 import hashlib
 import hmac
 import json
+import logging
 import secrets
 from datetime import UTC, datetime, timedelta
 from urllib.parse import urlencode
 
 import httpx
 import jwt
-from jwt import PyJWTError as JWTError
+from fastapi import Request, Response
 from fastapi.responses import RedirectResponse
+from jwt import PyJWTError as JWTError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.exceptions import (
+    AuthenticationError,
+    BusinessRuleError,
+    DRIPException,
+    ExternalServiceError,
+)
 from app.core.public_urls import api_url, frontend_url
-from app.core.exceptions import AuthenticationError, BusinessRuleError, ExternalServiceError
 from app.core.redis import get_redis
-from app.core.security import generate_refresh_token, hash_refresh_token, get_cookie_params
+from app.core.security import generate_refresh_token, get_cookie_params, hash_refresh_token
 from app.models.user import UserRole
-from app.repositories.user_repo import UserRepository, SessionRepository
+from app.repositories.user_repo import SessionRepository, UserRepository
 
 STATE_COOKIE = "wearhowz_oauth_state"
 CALLBACK_PATH = "/api/v1/auth/google/callback"
 
 
-def require_configuration():
+async def google_callback_response(request: Request, db: AsyncSession) -> RedirectResponse:
+    """Keep browser failures on a fixed frontend route without reflecting provider data."""
+    outcome = "failed"
+    try:
+        return await finish_google_login(request, db)
+    except DRIPException as exc:
+        if exc.code == "GOOGLE_CANCELLED":
+            outcome = "cancelled"
+    except Exception:
+        # Do not log the request URL, authorization code, tokens or provider payload.
+        logging.getLogger(__name__).error("google.callback_failed")
+    try:
+        await db.rollback()
+    except Exception:
+        logging.getLogger(__name__).error("google.callback_rollback_failed")
+    response = RedirectResponse(
+        frontend_url("/auth/callback") + "?error=" + outcome, status_code=303
+    )
+    response.delete_cookie(STATE_COOKIE, path=CALLBACK_PATH)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
+
+
+def require_configuration() -> None:
     """Reject Google sign-in until client credentials are configured."""
     if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
         raise ExternalServiceError("Google sign-in is not configured")
 
 
-async def start_google_login(response):
+async def start_google_login(response: Response) -> dict[str, str]:
     """Create the OAuth state and redirect target for the Google authorization flow."""
     require_configuration()
     state, nonce, verifier = (secrets.token_urlsafe(32) for _ in range(3))
@@ -70,23 +102,24 @@ async def start_google_login(response):
     }
 
 
-async def finish_google_login(request, db):
+async def finish_google_login(request: Request, db: AsyncSession) -> RedirectResponse:
     """Validate OAuth state and identity, create a session, and redirect with auth cookies."""
     require_configuration()
     state = request.query_params.get("state", "")
     cookie = request.cookies.get(STATE_COOKIE, "")
     code = request.query_params.get("code", "")
-    if (
-        not state
-        or not cookie
-        or len(state) > 128
-        or not hmac.compare_digest(state, cookie)
-        or not code
-    ):
+    if not state or not cookie or len(state) > 128 or not hmac.compare_digest(state, cookie):
         raise AuthenticationError("Google sign-in state is invalid")
     stored = await get_redis().getdel("google-state:" + state)
     if not stored:
         raise AuthenticationError("Google sign-in expired; please try again")
+    # Cancellation is accepted only after browser binding and single-use state checks.
+    if request.query_params.get("error"):
+        if request.query_params.get("error") == "access_denied":
+            raise AuthenticationError("Google sign-in cancelled", code="GOOGLE_CANCELLED")
+        raise AuthenticationError("Google sign-in could not be completed")
+    if not code:
+        raise AuthenticationError("Google authorization code is missing")
     try:
         flow = json.loads(stored)
         if not isinstance(flow, dict) or not flow.get("nonce") or not flow.get("verifier"):
@@ -108,8 +141,11 @@ async def finish_google_login(request, db):
             keys.raise_for_status()
         id_token = token_response.json()["id_token"]
         header = jwt.get_unverified_header(id_token)
-        matching_keys = [key for key in jwt.PyJWKSet.from_dict(keys.json()).keys
-                         if key.key_id == header.get("kid")]
+        matching_keys = [
+            key
+            for key in jwt.PyJWKSet.from_dict(keys.json()).keys
+            if key.key_id == header.get("kid")
+        ]
         if header.get("alg") != "RS256" or len(matching_keys) != 1:
             raise AuthenticationError("Google identity signing key is invalid")
         claims = jwt.decode(

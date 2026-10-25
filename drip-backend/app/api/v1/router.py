@@ -16,6 +16,7 @@ from app.api.v1 import notifications
 from app.api.v1 import returns
 from app.api.v1 import customers
 from app.api.v1 import inventory
+from app.api.v1.review_photos import router as review_photos_router
 from app.api.v1.admin import (
     dashboard as admin_dashboard,
     brands as admin_brands,
@@ -47,6 +48,7 @@ api_router.include_router(notifications.router)
 api_router.include_router(returns.router)
 api_router.include_router(customers.router)
 api_router.include_router(inventory.router)
+api_router.include_router(review_photos_router)
 
 from app.api.v1 import storefront
 from app.api.v1.analytics import admin as analytics_admin, seller as analytics_seller

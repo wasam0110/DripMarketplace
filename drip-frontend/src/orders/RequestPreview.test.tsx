@@ -1,0 +1,62 @@
+import { fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { expect, it, vi } from 'vitest'
+import type { OrderDetail } from './api'
+import { RequestPreview } from './RequestPreview'
+
+const order = { id: 'order-1', order_number: 'WHZ-1', items: [{ id: 'item-1', product_name: 'Linen shirt', variant_label: 'M / Ivory', quantity: 2 }] } as OrderDetail
+it('requires review and explicit confirmation before calling cancellation', async () => {
+  const submit = vi.fn()
+  const user = userEvent.setup()
+  const view = render(<RequestPreview order={order} cancellation={{ disabled: false, submit }} />)
+  await user.click(screen.getByRole('button', { name: 'Preview cancellation' }))
+  await user.type(screen.getByLabelText('Reason for your cancellation draft'), '  Changed my mind  ')
+  await user.click(screen.getByRole('button', { name: 'Review draft' }))
+  expect(submit).not.toHaveBeenCalled()
+  await user.click(screen.getByRole('button', { name: 'Yes, cancel the whole order' }))
+  expect(submit).toHaveBeenCalledWith('Changed my mind')
+  view.rerender(<RequestPreview order={order} cancellation={{ disabled: true, busy: true, submit }} />)
+  expect(screen.getByRole('button', { name: 'Yes, cancel the whole order' })).toBeDisabled()
+  expect(screen.getByRole('button', { name: 'Discard draft' })).toBeDisabled()
+})
+it('reviews a return without sending or persisting a draft', async () => {
+  const fetch = vi.fn(); vi.stubGlobal('fetch', fetch)
+  const user = userEvent.setup()
+  render(<RequestPreview order={order} />)
+  await user.click(screen.getByRole('button', { name: 'Preview a return' }))
+  await user.click(screen.getByRole('checkbox'))
+  fireEvent.change(screen.getByRole('spinbutton'), { target: { value: '2' } })
+  await user.type(screen.getByLabelText('Reason for your return draft'), 'The fit is different.')
+  await user.click(screen.getByRole('button', { name: 'Review draft' }))
+  expect(screen.getByText(/Quantity: 2/)).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: /Submit return/ })).toBeDisabled()
+  expect(screen.getByRole('heading', { name: 'Review your draft' })).toHaveFocus()
+  expect(fetch).not.toHaveBeenCalled()
+  expect(localStorage.length).toBe(0)
+})
+it('requires an item selection and a meaningful reason', async () => {
+  const user = userEvent.setup()
+  render(<RequestPreview order={order} />)
+  await user.click(screen.getByRole('button', { name: 'Preview a return' }))
+  await user.type(screen.getByLabelText('Reason for your return draft'), 'Not the expected fit')
+  await user.click(screen.getByRole('button', { name: 'Review draft' }))
+  expect(screen.getByRole('alert')).toHaveTextContent('Select at least one')
+  await user.click(screen.getByRole('checkbox'))
+  fireEvent.change(screen.getByLabelText('Reason for your return draft'), { target: { value: '   ' } })
+  await user.click(screen.getByRole('button', { name: 'Review draft' }))
+  expect(screen.getByRole('alert')).toHaveTextContent('Describe the reason')
+})
+it('discards cancellation details and never reports a completed cancellation', async () => {
+  const user = userEvent.setup()
+  render(<RequestPreview order={order} />)
+  await user.click(screen.getByRole('button', { name: 'Preview cancellation' }))
+  await user.type(screen.getByLabelText('Reason for your cancellation draft'), 'Changed my mind')
+  await user.click(screen.getByRole('button', { name: 'Review draft' }))
+  expect(screen.getByRole('button', { name: /Submit cancellation/ })).toBeDisabled()
+  await user.click(screen.getByRole('button', { name: 'Edit draft' }))
+  expect(screen.getByLabelText('Reason for your cancellation draft')).toHaveValue('Changed my mind')
+  await user.click(screen.getByRole('button', { name: 'Discard draft' }))
+  expect(screen.getByRole('button', { name: 'Preview cancellation' })).toHaveFocus()
+  await user.click(screen.getByRole('button', { name: 'Preview cancellation' }))
+  expect(screen.getByLabelText('Reason for your cancellation draft')).toHaveValue('')
+})

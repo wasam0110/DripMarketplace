@@ -3,6 +3,9 @@ import { useState } from 'react'
 import { formatPrice, type Brand, type BrandsPage, type CataloguePage, type Product } from '../api/types'
 import { Arrow, Button, EmptyState, ErrorNotice } from '../components/ui'
 import { useResource } from '../hooks/useResource'
+import { SaveButton } from '../saved/SavedProvider'
+import { Filters } from '../catalogue/FilterPanel'
+import { readFilters } from '../catalogue/filters'
 
 function ProductImage({ product }: { product: Product }) {
   const [failed, setFailed] = useState(false)
@@ -24,11 +27,15 @@ export function ProductCard({ product }: { product: Product }) {
         {product.sale_price && <del>{formatPrice(product.price)}</del>}
       </p>
     </Link>
+    <SaveButton id={product.id} name={product.name} />
   </article>
 }
 
 function ProductGrid({ path, paginate = false }: { path: string; paginate?: boolean }) {
   const [params, setParams] = useSearchParams()
+  const firstPage = () => {
+    const next = new URLSearchParams(params); next.delete('cursor'); setParams(next)
+  }
   const { data, loading, error, retry } = useResource<CataloguePage>(path)
   if (loading) return <div className="product-grid" role="status" aria-label="Loading clothing">
     {[1, 2, 3, 4].map((key) => <div className="skeleton-card" key={key}><div /><span /><span /></div>)}
@@ -36,15 +43,17 @@ function ProductGrid({ path, paginate = false }: { path: string; paginate?: bool
   if (error) return <div className="resource-error"><ErrorNotice error={error} /><Button onClick={retry}>Try again</Button></div>
   if (!data?.data.length) return <EmptyState title="Room for something good.">
     <p>No pieces are available in this edit yet. Try another search or come back soon.</p>
-    {params.toString() && <Link className="text-link" to="/clothing">Clear filters <Arrow /></Link>}
+    {paginate && params.has('cursor')
+      ? <Button className="button-secondary" onClick={firstPage}>Back to first page</Button>
+      : params.has('q') && <Button className="button-secondary" onClick={() => {
+        const next = new URLSearchParams(params); next.delete('q'); next.delete('cursor'); setParams(next)
+      }}>Clear search</Button>}
   </EmptyState>
   return <>
     <div className="product-grid">{data.data.map((product) => <ProductCard key={product.id} product={product} />)}</div>
     {paginate && <div className="pagination">
-      {params.has('cursor') && <Button className="button-secondary" onClick={() => {
-        const next = new URLSearchParams(params); next.delete('cursor'); setParams(next)
-      }}>Back to first page</Button>}
-      {data.pagination.has_next && data.pagination.next_cursor && <Button onClick={() => {
+      {params.has('cursor') && <Button className="button-secondary" onClick={firstPage}>Back to first page</Button>}
+      {data.pagination.has_next && data.pagination.next_cursor && data.pagination.next_cursor !== params.get('cursor') && <Button onClick={() => {
         const next = new URLSearchParams(params); next.set('cursor', data.pagination.next_cursor!); setParams(next)
       }}>Next pieces <Arrow /></Button>}
     </div>}
@@ -87,6 +96,9 @@ export function CataloguePageView() {
   const allowedSorts = ['newest', 'price_asc', 'price_desc', 'rating', 'trending']
   const sort = allowedSorts.includes(params.get('sort') ?? '') ? params.get('sort')! : 'newest'
   const query = new URLSearchParams({ sort, limit: '20' })
+  let filterError: unknown = null
+  try { readFilters(params).forEach((value, key) => query.append(key, value)) }
+  catch (error) { filterError = error }
   if (q) query.set('q', q)
   if (params.get('cursor')) query.set('cursor', params.get('cursor')!)
   return <section className="container page">
@@ -96,7 +108,10 @@ export function CataloguePageView() {
       <form className="inline-search" onSubmit={(event) => {
         event.preventDefault()
         const value = String(new FormData(event.currentTarget).get('q') ?? '').trim()
-        setParams(value ? { q: value, sort } : { sort })
+        const next = new URLSearchParams(params)
+        next.delete('cursor'); next.set('sort', sort)
+        if (value) next.set('q', value); else next.delete('q')
+        setParams(next)
       }}>
         <label className="sr-only" htmlFor="catalogue-query">Search clothing</label>
         <input key={q} id="catalogue-query" type="search" name="q" defaultValue={q} maxLength={200} placeholder="Search the clothing edit" />
@@ -111,7 +126,8 @@ export function CataloguePageView() {
         </select>
       </label>
     </div>
-    <ProductGrid path={`/products?${query}`} paginate />
+    <Filters />
+    {filterError ? <ErrorNotice error={filterError} /> : <ProductGrid path={`/products?${query}`} paginate />}
   </section>
 }
 
@@ -142,7 +158,10 @@ export function BrandsPageView() {
 
 export function BrandPage() {
   const { slug = '' } = useParams()
+  const [params] = useSearchParams()
   const path = `/brands/${encodeURIComponent(slug)}`
+  const query = new URLSearchParams({ limit: '20' })
+  if (params.get('cursor')) query.set('cursor', params.get('cursor')!)
   const { data, error, loading, retry } = useResource<Brand>(path)
   return <section className="container page">
     <Link className="text-link" to="/brands">← All labels</Link>
@@ -150,7 +169,7 @@ export function BrandPage() {
       : data && <>
         <p className="eyebrow page-eyebrow">Independent label</p><h1>{data.brand_name}</h1><p className="lead">{data.description}</p>
         <details className="policy"><summary>Brand return policy</summary><p>{data.return_policy || 'Return policy details have not been provided by this brand.'}</p></details>
-        <ProductGrid path={`${path}/products?limit=20`} />
+        <ProductGrid path={`${path}/products?${query}`} paginate />
       </>}
   </section>
 }

@@ -10,6 +10,7 @@ interface AuthContextValue {
   signOut: () => Promise<void>
   acceptSession: (session: AuthResponse) => void
   clearSession: () => void
+  updateProfileNames: (profile: Pick<User, 'id' | 'first_name' | 'last_name'>) => void
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -61,7 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     clearSession()
   }
 
-  return <AuthContext.Provider value={{ user, loading, error, signIn, signOut, acceptSession, clearSession }}>
+  function updateProfileNames(profile: Pick<User, 'id' | 'first_name' | 'last_name'>) {
+    setUser((current) => current?.id === profile.id ? { ...current, first_name: profile.first_name, last_name: profile.last_name } : current)
+  }
+
+  return <AuthContext.Provider value={{ user, loading, error, signIn, signOut, acceptSession, clearSession, updateProfileNames }}>
     {children}
   </AuthContext.Provider>
 }

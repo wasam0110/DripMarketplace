@@ -360,11 +360,11 @@ async def google_login(response: Response) -> dict:
 
 
 @router.get("/google/callback")
-async def google_callback(request: Request, db: DBSession):
+async def google_callback(request: Request, db: DBSession) -> Response:
     # Handle GET /google/callback at this router boundary.
-    from app.services.google_oauth import finish_google_login
+    from app.services.google_oauth import google_callback_response
 
-    return await finish_google_login(request, db)
+    return await google_callback_response(request, db)
 
 
 @router.post("/resend-verification", response_model=MessageResponse)

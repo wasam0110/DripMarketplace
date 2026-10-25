@@ -204,6 +204,7 @@ async def deliver_notification_outbox(ctx: dict, event_id: str) -> None:
     from app.core.database import AsyncSessionLocal
     from app.models.notification import NotificationOutbox
     from app.services.customer_privacy import cleanup_deleted_customer
+    from app.services.review_photo_service import cleanup_review_photo
 
     allowed = {
         "send_order_confirmation": send_order_confirmation,
@@ -212,6 +213,7 @@ async def deliver_notification_outbox(ctx: dict, event_id: str) -> None:
         "notify_seller_decision": notify_seller_decision,
         "broadcast_notification": broadcast_notification,
         "cleanup_deleted_customer": cleanup_deleted_customer,
+        "cleanup_review_photo": cleanup_review_photo,
     }
     async with AsyncSessionLocal() as db:
         row = await db.scalar(select(NotificationOutbox).where(

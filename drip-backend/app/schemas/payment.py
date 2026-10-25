@@ -30,6 +30,7 @@ class PayFastCheckoutResponse(BaseModel):
 class PaymentInitResponse(BaseModel):
     payment_id: UUID
     method: str
+    attempt_id: UUID | None = None
     # PayFast fields
     checkout_url: str | None = None
     payfast_payload: dict | None = None

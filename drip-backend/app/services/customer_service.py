@@ -407,10 +407,17 @@ class CustomerService:
 
     async def delete_review(self, user_id: uuid.UUID, review_id: uuid.UUID) -> None:
         """Delete an owned review and refresh the product's rating aggregate."""
-        review = await self.db.scalar(select(Review).where(Review.id == review_id, Review.user_id == user_id))
+        from app.services.review_photo_service import queue_photo_cleanup
+
+        await lock_active_user(self.db, user_id)
+        review = await self.db.scalar(
+            select(Review).where(Review.id == review_id, Review.user_id == user_id).with_for_update()
+        )
         if not review:
             raise NotFoundError("Review not found")
         product_id = review.product_id
+        for image in review.images:
+            await queue_photo_cleanup(self.db, review_id, image)
         await self.db.delete(review)
         await self.db.flush()
         await self.refresh_product_rating(product_id)

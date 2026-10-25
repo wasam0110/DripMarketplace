@@ -3,6 +3,7 @@ import { Link, Navigate, useSearchParams } from 'react-router'
 import { ApiError, request } from '../api/client'
 import type { AuthResponse } from '../api/types'
 import { useAuth } from '../auth/AuthProvider'
+import { googleAuthorizationUrl } from '../auth/google'
 import { Arrow, Button, EmptyState, ErrorNotice, Field } from '../components/ui'
 
 type Mode = 'login' | 'register' | 'forgot' | 'reset'
@@ -94,9 +95,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
             setBusy(true); setError(null)
             try {
               const result = await request<{ authorization_url: string }>('/auth/google')
-              const target = new URL(result.authorization_url)
-              if (target.protocol !== 'https:' || target.hostname !== 'accounts.google.com') throw new Error('The sign-in provider returned an unexpected address.')
-              window.location.assign(target.href)
+              window.location.assign(googleAuthorizationUrl(result.authorization_url))
             } catch (reason) { setError(reason); setBusy(false) }
           }}>Continue with Google</Button>
         {import.meta.env.VITE_ENABLE_GOOGLE_AUTH !== 'true' && <small className="muted google-note">Google sign-in awaits local provider and callback configuration.</small>}
@@ -148,7 +147,17 @@ export function AccountPage() {
     <p className="eyebrow">Your WearHowZ account</p><h1>Welcome, {user.first_name || 'back'}.</h1>
     <div className="account-card"><h2>Your account</h2><dl><dt>Email</dt><dd>{user.email}</dd><dt>Account type</dt><dd>{user.role}</dd>
       <dt>Email status</dt><dd>{user.has_verified_email ? 'Verified' : 'Verification needed'}</dd></dl>
-      <p className="muted">The account dashboard, orders and role-specific portals are part of the next build steps.</p>
+      <p><Link className="text-link" to="/orders">View your order history</Link></p>
+      <p><Link className="text-link" to="/returns">View your return history</Link></p>
+      <p><Link className="text-link" to="/account/reviews">Manage your reviews</Link></p>
+      <p><Link className="text-link" to="/account/profile">Edit your profile</Link></p>
+      <p><Link className="text-link" to="/account/addresses">Manage your addresses</Link></p>
+      <p><Link className="text-link" to="/account/notifications">Notification preferences</Link></p>
+      <p><Link className="text-link" to="/account/inbox">View your notifications</Link></p>
+      <p><Link className="text-link" to="/account/password">Change your password</Link></p>
+      <p><Link className="text-link" to="/account/photo">Manage your profile photo</Link></p>
+      {user.role === 'customer' && <p><Link className="text-link" to="/account/delete">Delete your account</Link></p>}
+      <p className="muted">Additional account settings and role-specific portals are still being built.</p>
       {error ? <ErrorNotice error={error} /> : null}
       <Button disabled={busy} onClick={async () => {
         setBusy(true); setError(null)

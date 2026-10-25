@@ -4,6 +4,7 @@ import { paisa, previewTotal, validateQuote, type CheckoutQuote } from './previe
 const quote = {
   currency: 'PKR', subtotal: '100.10', shipping_fee: '25.25', discount_amount: '0', total: '125.35',
   items: [{ quantity: 1, available_stock: 2 }], payment_methods: [],
+  quote_token: 'signed-quote', quote_expires_at: '2030-01-01T00:00:00Z',
 } as unknown as CheckoutQuote
 
 it('combines exact server decimal amounts without floating-point rounding', () => {
@@ -21,6 +22,8 @@ it('rejects a stale or inconsistent coupon response', () => {
 it('checks quote totals and stock before enabling review', () => {
   expect(validateQuote(quote)).toBe(quote)
   expect(() => validateQuote({ ...quote, total: '1' })).toThrow()
+  expect(() => validateQuote({ ...quote, quote_token: '' })).toThrow()
+  expect(() => validateQuote({ ...quote, quote_expires_at: 'invalid' })).toThrow()
   expect(() => validateQuote({ ...quote, items: [] })).toThrow()
   expect(() => validateQuote({ ...quote, items: [{ ...quote.items[0], quantity: 3 }] })).toThrow()
 })

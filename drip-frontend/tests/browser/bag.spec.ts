@@ -124,7 +124,7 @@ test('ambiguous signed-in add is never replayed and requires a fresh read', asyn
   const add = page.getByRole('button', { name: 'Add to bag', exact: true })
   await expect(add).toBeEnabled()
   await add.click()
-  await expect(page.getByRole('alert')).toBeVisible()
+  await expect(page.locator('.product-detail').getByRole('alert')).toBeVisible()
   await expect(add).toBeDisabled()
   expect(calls.writes()).toBe(1)
   await page.getByRole('link', { name: 'Review your bag before another change' }).click()

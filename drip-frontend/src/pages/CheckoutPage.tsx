@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { refreshSession, request } from '../api/client'
 import { formatPrice } from '../api/types'
 import { useAuth } from '../auth/AuthProvider'
@@ -9,6 +9,10 @@ import { safeWhatsapp } from '../checkout/submission'
 import { useSubmission } from '../checkout/useSubmission'
 import type { GuestSelection } from '../cart/guestStorage'
 import { Button, EmptyState, ErrorNotice, Field } from '../components/ui'
+import { useOrderAccess } from '../orders/access'
+import { SavedAddressPicker } from '../checkout/SavedAddressPicker'
+import { PayFastHandoff } from '../payments/PayFastHandoff'
+import { payfastEnabled } from '../payments/payfast'
 
 const provinces = ['Sindh', 'Punjab', 'Islamabad', 'Khyber Pakhtunkhwa', 'Balochistan', 'Gilgit-Baltistan', 'Azad Kashmir']
 const emptyDetails = { recipient_name: '', email: '', phone: '', street: '', city: '', province: '', note: '' }
@@ -22,6 +26,8 @@ export function CheckoutPage() {
 }
 
 function CheckoutPreview() {
+  const navigate = useNavigate()
+  const orderAccess = useOrderAccess()
   const { user } = useAuth()
   const bag = useCart()
   const [step, setStep] = useState(1)
@@ -31,6 +37,7 @@ function CheckoutPreview() {
   const [error, setError] = useState<unknown>(null)
   const [retry, setRetry] = useState(0)
   const [payment, setPayment] = useState('')
+  const [quoteMethod, setQuoteMethod] = useState('cod')
   const [couponCode, setCouponCode] = useState('')
   const [coupon, setCoupon] = useState<string | null>(null)
   const [couponError, setCouponError] = useState<unknown>(null)
@@ -60,7 +67,7 @@ function CheckoutPreview() {
       if (controller.signal.aborted) return
       const result = await request<CheckoutQuote>(user ? '/orders/quote' : '/orders/guest/quote', {
         method: 'POST', authenticated: Boolean(user), signal: controller.signal,
-        body: JSON.stringify(user ? { payment_method: 'cod' } : { items: JSON.parse(selection), payment_method: 'cod' }),
+        body: JSON.stringify(user ? { payment_method: quoteMethod } : { items: JSON.parse(selection), payment_method: quoteMethod }),
       })
       if (!controller.signal.aborted && ticket === generation.current) setQuote(validateQuote(result))
     }
@@ -68,9 +75,11 @@ function CheckoutPreview() {
       if (!controller.signal.aborted && ticket === generation.current) setError(reason)
     }).finally(() => { if (!controller.signal.aborted && ticket === generation.current) setLoading(false) })
     return () => { controller.abort(); couponRequest.current?.abort() }
-  }, [selection, ready, retry, user, bag.loading, bag.busy, submission.blocked, submission.result])
+  }, [selection, ready, retry, user, bag.loading, bag.busy, submission.blocked, submission.result, quoteMethod])
 
   const cod = quote?.payment_methods.find((method) => method.method === 'cod')
+  const payfast = quote?.payment_methods.find((method) => method.method === 'payfast')
+  const chosenAvailable = payment === quoteMethod && (payment === 'cod' ? cod?.available === true : payment === 'payfast' && payfastEnabled && payfast?.available === true)
   const total = quote?.total ?? null
   const disabled = loading || !quote || !ready || couponBusy || submission.busy
   function update(field: keyof typeof details, value: string) { setDetails((current) => ({ ...current, [field]: value })) }
@@ -95,7 +104,7 @@ function CheckoutPreview() {
       if (controller.signal.aborted) return
       const result = await request<CheckoutQuote>('/orders/quote', {
         method: 'POST', authenticated: true, signal: controller.signal,
-        body: JSON.stringify({ coupon_code: couponCode.trim(), payment_method: 'cod' }),
+        body: JSON.stringify({ coupon_code: couponCode.trim(), payment_method: quoteMethod }),
       })
       validateQuote(result)
       if (!controller.signal.aborted && ticket === generation.current) {
@@ -106,7 +115,7 @@ function CheckoutPreview() {
   }
 
   function placeOrder() {
-    if (disabled || !quote || payment !== 'cod' || !cod?.available || step !== 3) return
+    if (disabled || !quote || !chosenAvailable || step !== 3) return
     if (Date.parse(quote.quote_expires_at) <= Date.now()) {
       setError(new Error('Your quote expired. Review refreshed prices before placing your order.'))
       setRetry((value) => value + 1); return
@@ -114,7 +123,7 @@ function CheckoutPreview() {
     const { email, ...shipping_address } = details
     sentBag.current = bag.guest.map((item) => ({ ...item }))
     submission.submit({
-      shipping_address, payment_method: 'cod', quote_token: quote.quote_token,
+      shipping_address, payment_method: payment, quote_token: quote.quote_token,
       ...(coupon ? { coupon_code: coupon } : {}),
       ...(!user ? { guest_email: email, guest_name: details.recipient_name, guest_phone: details.phone,
         items: quote.items.map(({ variant_id, quantity }) => ({ variant_id, quantity })) } : {}),
@@ -127,13 +136,18 @@ function CheckoutPreview() {
     return <section className="container page checkout-page">
       <p className="eyebrow">Order received</p><h1>Your order: {order.order_number}</h1>
       <p role="status">Status: {order.status.replaceAll('_', ' ')}</p>
-      <p>Total: {formatPrice(order.total)} · Cash on delivery</p>
+      <p>Total: {formatPrice(order.total)} · {order.payment_method === 'cod' ? 'Cash on delivery' : 'PayFast'}</p>
       {order.status === 'pending_cod_verification' && <p>Verification is required before your order can be processed. No online payment was taken.</p>}
-      {whatsapp && <a className="button" href={whatsapp} target="_blank" rel="noopener noreferrer">Continue verification on WhatsApp</a>}
+      {order.payment_method === 'cod' && whatsapp && <a className="button" href={whatsapp} target="_blank" rel="noopener noreferrer">Continue verification on WhatsApp</a>}
+      {order.payment_method === 'payfast' && <PayFastHandoff key={order.order_id} order={order} account={Boolean(user)} recovered={submission.recovered} />}
+      <Button className="button-secondary" disabled={!user && !order.guest_token} onClick={() => {
+        if (!user && order.guest_token) orderAccess.remember({ id: order.order_id, token: order.guest_token })
+        navigate(`/orders/${encodeURIComponent(order.order_id)}`)
+      }}>View order details</Button>
       <p>Keep your order number. This tab can recover your order; guest recovery is available for 24 hours. Do not share this tab’s saved checkout key.</p>
       {!user && <p>Review your saved bag before another order, especially if this order was recovered after a reload.</p>}
       {Boolean(bag.storageError || submission.error) && <ErrorNotice error={submission.error || bag.storageError} />}
-      <Button className="button-secondary" onClick={submission.startAnother}>Review bag for another order</Button>
+      {order.payment_method === 'cod' && <Button className="button-secondary" onClick={submission.startAnother}>Review bag for another order</Button>}
     </section>
   }
   if (submission.blocked) return <section className="container page checkout-page">
@@ -152,7 +166,7 @@ function CheckoutPreview() {
     <p className="lead">{user ? 'Contact and delivery for your account bag.' : 'Guest checkout, with your own point of view.'}</p>
     <ol className="checkout-steps" aria-label="Checkout progress">{['Details', 'Payment', 'Review'].map((label, index) =>
       <li key={label} aria-current={step === index + 1 ? 'step' : undefined}>{index + 1} · {label}</li>)}</ol>
-    <p className="notice">Place a cash-on-delivery order after reviewing the final total. Online payments remain disabled.</p>
+    <p className="notice">{payfastEnabled ? 'Review the final total before creating an order. PayFast payment requires a separate explicit handoff. Changing payment method refreshes the quote and restarts review; reapply any coupon.' : 'Place a cash-on-delivery order after reviewing the final total. Online payments remain disabled.'}</p>
     {Boolean(submission.error) && <ErrorNotice error={submission.error} />}
     {Boolean(error || bag.error || (!user && bag.storageError)) && <ErrorNotice error={error || bag.error || bag.storageError} />}
     {bag.needsReview && <p role="alert">Review the last bag update before checkout. <Link to="/bag">Return to your bag</Link></p>}
@@ -166,12 +180,13 @@ function CheckoutPreview() {
           {!user && <><Field label="Email address" type="email" autoComplete="email" required maxLength={254} value={details.email} onChange={(event) => update('email', event.target.value)} />
             <Link className="text-link" to="/login">Sign in instead</Link></>}
           {user && <p>Signed in as {user.email}</p>}
+          {user && <SavedAddressPicker disabled={disabled} onUse={(address) => { setDetails((current) => ({ ...current, ...address })); setError(null) }} />}
           <Field label="Recipient name" autoComplete="shipping name" required minLength={2} maxLength={200} value={details.recipient_name} onChange={(event) => update('recipient_name', event.target.value)} />
           <Field label="Mobile number" type="tel" autoComplete="shipping tel" required maxLength={20} pattern="(\+92|0)?3[0-9]{9}" hint="Use 03001234567 or +923001234567, without spaces." value={details.phone} onChange={(event) => update('phone', event.target.value)} />
           <Field label="Street address" autoComplete="shipping street-address" required minLength={5} maxLength={500} value={details.street} onChange={(event) => update('street', event.target.value)} />
           <div className="name-fields"><Field label="City" autoComplete="shipping address-level2" required minLength={2} maxLength={100} value={details.city} onChange={(event) => update('city', event.target.value)} />
             <div className="field"><label htmlFor="checkout-province">Province</label><select id="checkout-province" required autoComplete="shipping address-level1" value={details.province} onChange={(event) => update('province', event.target.value)}>
-              <option value="">Choose province</option>{provinces.map((province) => <option key={province}>{province}</option>)}
+              <option value="">Choose province</option>{details.province && !provinces.includes(details.province) && <option value={details.province}>{details.province}</option>}{provinces.map((province) => <option key={province}>{province}</option>)}
             </select></div></div>
           <Field label="Delivery note (optional)" maxLength={500} value={details.note} onChange={(event) => update('note', event.target.value)} />
           <p className="muted">These details stay in this page’s memory. They are not saved or sent while previewing.</p>
@@ -179,19 +194,19 @@ function CheckoutPreview() {
         </form>}
         {step === 2 && <div className="checkout-form"><h2>Choose how to pay</h2>
           <fieldset className="payment-options"><legend className="sr-only">Payment method</legend>
-            <label className="payment-option"><input type="radio" name="payment" value="cod" disabled={!cod?.available} checked={payment === 'cod'} onChange={() => setPayment('cod')} />
+            <label className="payment-option"><input type="radio" name="payment" value="cod" disabled={disabled || !cod?.available} checked={payment === 'cod'} onChange={() => { if (quoteMethod !== 'cod') { setQuote(null); setLoading(true); setQuoteMethod('cod') } else setPayment('cod') }} />
               <span>Cash on delivery<small>{cod?.available ? 'Verification is required before processing. Pay on delivery.' : cod?.unavailable_reason || 'Cash on delivery is unavailable.'}</small></span></label>
-            <label className="payment-option"><input type="radio" name="payment" value="payfast" disabled /><span>Pay online · PayFast<small>Online payment initiation is not enabled in this frontend.</small></span></label>
+            <label className="payment-option"><input type="radio" name="payment" value="payfast" disabled={disabled || !payfastEnabled || payfast?.available !== true} checked={payment === 'payfast'} onChange={() => { if (quoteMethod !== 'payfast') { setQuote(null); setLoading(true); setQuoteMethod('payfast') } else setPayment('payfast') }} /><span>Pay online · PayFast<small>{!payfastEnabled ? 'Online payment initiation is not enabled in this frontend.' : payfast?.available ? 'Create the order, then explicitly continue to PayFast. Changing method refreshes your quote.' : payfast?.unavailable_reason || 'PayFast is unavailable.'}</small></span></label>
           </fieldset>
-          <Button disabled={!payment || disabled} onClick={() => setStep(3)}>Review your order</Button>
+          <Button disabled={!chosenAvailable || disabled} onClick={() => setStep(3)}>Review your order</Button>
           <Button className="button-secondary" onClick={() => setStep(1)}>Back to details</Button>
         </div>}
         {step === 3 && <div className="checkout-form"><h2>Your pieces</h2>
           {quote.items.map((item) => <article className="checkout-review-item" key={item.variant_id}><p className="eyebrow">{item.brand_name}</p><h3>{item.product_name}</h3><p>{item.size} · {item.colour} · Qty {item.quantity}</p><p>{formatPrice(item.subtotal)}</p></article>)}
           <h2>Delivery & payment</h2><address>{details.recipient_name}<br />{details.street}<br />{details.city}, {details.province}<br />{details.phone}<br />{user?.email || details.email}</address>
-          {details.note && <p>{details.note}</p>}<p>Cash on delivery · verification pending until an order is placed.</p>
+          {details.note && <p>{details.note}</p>}<p>{payment === 'payfast' ? 'PayFast · order creation does not confirm payment.' : 'Cash on delivery · verification pending until an order is placed.'}</p>
           <div className="option-row"><Button className="button-secondary" onClick={() => setStep(1)}>Edit details</Button><Button className="button-secondary" onClick={() => setStep(2)}>Change payment</Button></div>
-          <Button disabled={disabled || !cod?.available} onClick={placeOrder}>Place order · {formatPrice(total!)}</Button>
+          <Button disabled={disabled || !chosenAvailable} onClick={placeOrder}>Place order · {formatPrice(total!)}</Button>
           <p className="notice">By placing this order, you accept the displayed items and total. Changed prices require a fresh review.</p>
         </div>}
       </div>

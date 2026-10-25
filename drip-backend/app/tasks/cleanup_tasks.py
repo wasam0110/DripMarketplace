@@ -168,6 +168,7 @@ async def cleanup_orphaned_images(ctx: dict) -> None:
     from app.integrations.supabase_storage import SupabaseStorage
     from app.models.admin import Banner
     from app.models.product import Category, ProductImage
+    from app.models.review import ReviewImage
     from app.models.seller import Seller
     from app.models.user import User
 
@@ -184,7 +185,7 @@ async def cleanup_orphaned_images(ctx: dict) -> None:
     for bucket, columns in (
         (
             settings.SUPABASE_STORAGE_BUCKET_PRODUCTS,
-            [ProductImage.url, Category.image_url, Banner.image_url],
+            [ProductImage.url, ReviewImage.url, Category.image_url, Banner.image_url],
         ),
         (settings.SUPABASE_STORAGE_BUCKET_AVATARS, [User.avatar_url]),
         (settings.SUPABASE_STORAGE_BUCKET_BRANDS, [Seller.logo_url]),

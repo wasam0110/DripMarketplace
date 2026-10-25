@@ -1,8 +1,9 @@
 """Display-only PKR formatting; never use this to calculate ledger amounts."""
 
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from typing import TypeAlias
 
-type MoneyDisplayValue = Decimal | int | str | float
+MoneyDisplayValue: TypeAlias = Decimal | int | str | float
 
 
 def format_pkr(value: MoneyDisplayValue) -> str:

@@ -74,7 +74,7 @@ export function BagPage() {
           <div className="bag-total"><dt>Total</dt><dd>{formatPrice(bag.cart.total)}</dd></div></dl>
         <p>Each label ships separately. Prices, availability and delivery are rechecked before ordering.</p>
         {disabled ? <Button disabled>Continue to checkout</Button> : <Link className="button" to="/checkout">Continue to checkout</Link>}
-        <small>Preview delivery details and payment options. Order submission and payments remain disabled.</small>
+        <small>Review delivery details and place a cash-on-delivery order. Online payments remain disabled.</small>
       </aside>}
     </div>
   </section>

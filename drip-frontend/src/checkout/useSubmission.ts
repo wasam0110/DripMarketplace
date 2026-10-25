@@ -15,15 +15,17 @@ export function useSubmission(owner: string, onSuccess: () => void, onRejected: 
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<unknown>(initial.error)
   const [result, setResult] = useState<OrderResult | null>(null)
+  const [recovered, setRecovered] = useState(false)
   useEffect(() => { alive.current = true; return () => { alive.current = false } }, [])
 
   async function run(recovery: boolean) {
     if (lock.current || !key.current || (!recovery && !payload.current)) return
     lock.current = true; setBusy(true); setError(null); setBlocked(true)
     try {
-      const order = await checkoutRequest(owner, recovery ? key.current : payload.current!)
+      const order = await checkoutRequest(owner, recovery ? key.current : payload.current!, () => alive.current)
       if (!alive.current) return
       setResult(order)
+      setRecovered(recovery)
       // Recovery after reload has no item snapshot; do not erase a possibly changed guest bag.
       if (payload.current) onSuccess()
     } catch (reason) {
@@ -34,7 +36,11 @@ export function useSubmission(owner: string, onSuccess: () => void, onRejected: 
         setError(new Error('No committed order was found. Review your details again; the same checkout key will be reused.'))
       } else if (!recovery && rejectedBeforeCreation(reason)) {
         payload.current = null; setBlocked(false); onRejected(); setError(reason)
-      } else setError(reason)
+      } else {
+        // This key belongs to an earlier payload, so recovery must not clear the new bag.
+        if (reason instanceof ApiError && reason.code === 'CHECKOUT_KEY_REUSED') payload.current = null
+        setError(reason)
+      }
     } finally {
       lock.current = false
       if (alive.current) setBusy(false)
@@ -57,6 +63,6 @@ export function useSubmission(owner: string, onSuccess: () => void, onRejected: 
       window.location.assign('/bag')
     } catch (reason) { setError(reason) }
   }
-  return { result, busy, blocked, error, submit, recover: () => void run(true),
+  return { result, recovered, busy, blocked, error, submit, recover: () => void run(true),
     retry: () => void run(false), canRecover: Boolean(key.current), canRetry: Boolean(payload.current), startAnother }
 }

@@ -214,7 +214,9 @@ async def test_retry_invalid_or_retired_method_is_validated_with_access(
     assert await snapshot(db) == before
 
 
-async def test_failed_online_payment_can_retry_as_cod(client, db, checkout, offline_boundaries):
+async def test_legacy_failed_online_payment_cannot_retry_as_cod(
+    client, db, checkout, offline_boundaries
+):
     checkout.order.status = OrderStatus.pending_payment
     checkout.order.payment_method = PaymentMethod.payfast
     checkout.payment.method = "payfast"
@@ -222,20 +224,10 @@ async def test_failed_online_payment_can_retry_as_cod(client, db, checkout, offl
     checkout.payment.failure_reason = "Synthetic failure"
     checkout.payment.gateway_payload = {"synthetic_failed_attempt": True}
     await db.commit()
+    before = await snapshot(db)
     response = await payment_request(client, "retry", checkout.order.id, capability(checkout))
-    assert response.status_code == 200, response.text
-    assert response.json()["payment_id"] == str(checkout.payment.id)
-    assert response.json()["method"] == "cod"
-    await db.refresh(checkout.order)
-    await db.refresh(checkout.payment)
-    assert checkout.order.status == OrderStatus.pending_cod_verification
-    assert checkout.order.payment_method == PaymentMethod.cod
-    assert checkout.payment.method == "cod"
-    assert checkout.payment.status == PaymentStatus.pending
-    assert checkout.payment.failure_reason is None
-    assert checkout.payment.gateway_payload is None
-    assert checkout.payment.amount == Decimal("2600.50")
-    assert await db.scalar(select(func.count(Payment.id))) == 1
+    assert_error(response, 422, "BUSINESS_RULE_VIOLATION")
+    assert await snapshot(db) == before
     offline_boundaries.assert_not_awaited()
 
 

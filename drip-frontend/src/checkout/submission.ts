@@ -28,7 +28,8 @@ export function rememberKey(owner: string, key: string) {
 export function validateOrder(result: OrderResult): OrderResult {
   if (!result || typeof result.order_id !== 'string' || !result.order_id
     || typeof result.order_number !== 'string' || !result.order_number
-    || typeof result.status !== 'string' || result.payment_method !== 'cod') {
+    || typeof result.status !== 'string' || !['cod', 'payfast'].includes(result.payment_method)
+    || (result.payment_method === 'payfast' && (!uuid4.test(result.order_id) || result.status === 'pending_cod_verification'))) {
     throw new Error('The order response was incomplete. Check the order status before retrying.')
   }
   paisa(result.total)
@@ -46,12 +47,17 @@ export function rejectedBeforeCreation(error: unknown): boolean {
     error.status === 422 || ['CHECKOUT_QUOTE_CHANGED', 'CHECKOUT_QUOTE_INVALID'].includes(error.code)
   )
 }
-export async function checkoutRequest(owner: string, payload: OrderPayload | string): Promise<OrderResult> {
+export async function checkoutRequest(owner: string, payload: OrderPayload | string, stillCurrent = () => true): Promise<OrderResult> {
   const account = owner !== 'guest'
   if (account) await refreshSession()
+  if (!stillCurrent()) throw new Error('Your checkout session changed. Recover it from the original account.')
   const recovery = typeof payload === 'string'
-  return validateOrder(await request<OrderResult>(`/orders${account ? '' : '/guest'}${recovery ? '/recover' : ''}`, {
+  const result = validateOrder(await request<OrderResult>(`/orders${account ? '' : '/guest'}${recovery ? '/recover' : ''}`, {
     method: 'POST', authenticated: account,
     body: JSON.stringify(recovery ? { checkout_key: payload } : payload),
   }))
+  if (typeof payload !== 'string' && result.payment_method !== payload.payment_method) {
+    throw new Error('The returned payment method differs from your order. Recover the checkout before proceeding.')
+  }
+  return result
 }
