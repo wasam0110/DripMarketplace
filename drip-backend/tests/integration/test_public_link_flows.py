@@ -89,11 +89,13 @@ async def test_payfast_form_uses_canonical_separate_origins(
     initialized = await PaymentService(db).initiate(order.id, guest_token=created.guest_token)
     form = initialized.payfast_payload
     assert form["SUCCESS_URL"] == f"https://shop.example.test/order/success/{order.id}"
-    assert form["FAILURE_URL"] == "https://shop.example.test/checkout?payment=failed"
+    assert form["FAILURE_URL"] == f"https://shop.example.test/payments/{order.id}?payment=failed"
     assert form["CHECKOUT_URL"] == "https://api.example.test/api/v1/payments/callback/payfast"
     assert form["TXNAMT"] == f"{order.total:.2f}"
     assert form["CURRENCY_CODE"] == "PKR"
-    token.assert_awaited_once_with(basket_id=str(order.id), amount=order.total)
+    assert initialized.attempt_id is not None and initialized.attempt_id != order.id
+    assert form["BASKET_ID"] == str(initialized.attempt_id)
+    token.assert_awaited_once_with(basket_id=str(initialized.attempt_id), amount=order.total)
     payment = await db.get(Payment, initialized.payment_id)
     assert payment.amount == order.total and payment.status == PaymentStatus.pending
     assert "synthetic-token" not in str(payment.gateway_payload)

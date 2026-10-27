@@ -116,7 +116,10 @@ class PayFastClient:
             raise PayFastProtocolError("PayFast token response was not JSON") from exc
         if not isinstance(payload, dict):
             raise PayFastProtocolError("PayFast token response was not an object")
-        token = str(payload.get("ACCESS_TOKEN") or payload.get("access_token") or "").strip()
+        token_value = payload.get("ACCESS_TOKEN") or payload.get("access_token") or ""
+        if not isinstance(token_value, str):
+            raise PayFastProtocolError("PayFast checkout token was not a string")
+        token = token_value.strip()
         returned_merchant = str(
             payload.get("MERCHANT_ID") or payload.get("merchant_id") or self.merchant_id
         ).strip()
@@ -232,7 +235,12 @@ class PayFastClient:
             token_payload = token_response.json()
         except ValueError as exc:
             raise PayFastProtocolError("PayFast API token response was not JSON") from exc
-        access_token = str(token_payload.get("access_token") or "").strip()
+        if not isinstance(token_payload, dict):
+            raise PayFastProtocolError("PayFast API token response was not an object")
+        token_value = token_payload.get("access_token") or ""
+        if not isinstance(token_value, str):
+            raise PayFastProtocolError("PayFast API token was not a string")
+        access_token = token_value.strip()
         if not access_token:
             raise PayFastProtocolError("PayFast API token response did not contain a token")
         if transaction_id:

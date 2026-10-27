@@ -384,16 +384,21 @@ async def test_concurrent_payment_callbacks_preserve_one_transition(
     monkeypatch.setattr(gateway, "get_checkout_token", AsyncMock(return_value="test-token"))
     monkeypatch.setattr(module, "_build_payfast", lambda: gateway)
     initiated = await PaymentService(db).initiate(order.id, guest_token=created.guest_token)
+    assert initiated.attempt_id is not None and initiated.attempt_id != order.id
     data = {
-        "basket_id": str(order.id),
+        "basket_id": str(initiated.attempt_id),
         "txnamt": "2600.00",
         "currency_code": "PKR",
         "err_code": "000",
         "err_msg": "Approved",
         "transaction_id": "race-txn",
     }
-    monkeypatch.setattr(gateway, "check_status", AsyncMock(return_value={**data, "status_code": "00"}))
-    data["validation_hash"] = gateway.callback_hash(basket_id=str(order.id), error_code="000")
+    monkeypatch.setattr(
+        gateway, "check_status", AsyncMock(return_value={**data, "status_code": "00"})
+    )
+    data["validation_hash"] = gateway.callback_hash(
+        basket_id=str(initiated.attempt_id), error_code="000"
+    )
     assert await race(
         test_engine, lambda session: PaymentService(session).handle_payfast_callback(data)
     ) == [None, None]

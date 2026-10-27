@@ -443,14 +443,51 @@ async def test_callback_hash_does_not_override_monetary_checks(
 
 @pytest.mark.parametrize("method", ["GET", "POST"])
 async def test_valid_failed_callback_control_reaches_verified_handler(
-    client, db, online_payment, offline_services, method
+    client, db, online_payment, offline_services, monkeypatch, method
 ):
-    response = await callback_request(client, method, callback_payload(online_payment, "001"))
+    # A signed failure is insufficient: a matching terminal provider result is required.
+    payload = callback_payload(online_payment, "101")
+    lookup = AsyncMock(return_value={**payload, "status": "FAILED"})
+    monkeypatch.setattr(PayFastClient, "check_status", lookup)
+    response = await callback_request(client, method, payload)
     assert response.status_code == 200, response.text
     assert response.json() == {"status": "ok"}
     await db.refresh(online_payment)
     assert online_payment.status == PaymentStatus.failed
-    assert (await db.scalars(select(PaymentCallback))).one().is_verified is True
+    audits = (await db.scalars(select(PaymentCallback))).all()
+    assert {audit.gateway for audit in audits} == {"payfast", "payfast_reconciliation"}
+    assert len(audits) == 2 and all(audit.is_verified for audit in audits)
+    lookup.assert_awaited_once()
+    assert lookup.await_args.kwargs["basket_id"] == str(online_payment.order_id)
+    assert lookup.await_args.kwargs["transaction_id"] == payload["transaction_id"]
+    offline_services.transport.assert_not_awaited()
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+@pytest.mark.parametrize("provider_status", ["001", "002"])
+async def test_signed_failure_cannot_turn_pending_or_timed_out_provider_state_into_failure(
+    client, db, online_payment, offline_services, monkeypatch, method, provider_status
+):
+    payload = callback_payload(online_payment, "101")
+    lookup = AsyncMock(return_value={**payload, "status_code": provider_status})
+    monkeypatch.setattr(PayFastClient, "check_status", lookup)
+    before = await snapshot(db)
+    before.pop(Payment.__tablename__)
+    # Reconciliation records evidence, but must not change payment business fields.
+    payment_before = {
+        column.name: getattr(online_payment, column.name)
+        for column in Payment.__table__.columns
+        if column.name not in {"gateway_payload", "updated_at"}
+    }
+    response = await callback_request(client, method, payload)
+    assert_error(response, 422, "BUSINESS_RULE_VIOLATION")
+    after = await snapshot(db)
+    after.pop(Payment.__tablename__)
+    assert after == before
+    await db.refresh(online_payment)
+    assert {name: getattr(online_payment, name) for name in payment_before} == payment_before
+    assert online_payment.status == PaymentStatus.pending
+    lookup.assert_awaited_once()
     offline_services.transport.assert_not_awaited()
 
 

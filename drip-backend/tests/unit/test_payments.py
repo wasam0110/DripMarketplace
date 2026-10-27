@@ -37,6 +37,48 @@ class TestPaymentSchemas:
 
 
 class TestPayFastHostedCheckout:
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("status_lookup", [False, True])
+    @pytest.mark.parametrize("response_payload", [
+        None, [], "unexpected", 42,
+        {"ACCESS_TOKEN": ["token"], "access_token": ["token"]},
+        {"ACCESS_TOKEN": {"value": "token"}, "access_token": {"value": "token"}},
+        {"ACCESS_TOKEN": True, "access_token": True},
+        {"ACCESS_TOKEN": "   ", "access_token": "   "},
+    ])
+    async def test_invalid_token_payload_stops_before_provider_followup(
+        self, status_lookup, response_payload
+    ):
+        import json
+        from datetime import date
+
+        import httpx
+
+        from app.integrations.payfast import PayFastProtocolError
+
+        requests = []
+
+        def handler(request):
+            requests.append(request)
+            return httpx.Response(
+                200, content=json.dumps(response_payload),
+                headers={"Content-Type": "application/json"},
+            )
+
+        client, http = self.make_client(handler, api_base_url="https://api.test")
+        try:
+            with pytest.raises(PayFastProtocolError):
+                if status_lookup:
+                    await client.check_status(
+                        basket_id="ORDER-1", order_date=date(2026, 10, 25),
+                        customer_ip="192.0.2.1",
+                    )
+                else:
+                    await client.get_checkout_token(basket_id="ORDER-1", amount=100)
+        finally:
+            await http.aclose()
+        assert len(requests) == 1
+
     def make_client(self, handler, *, sandbox=True, api_base_url=""):
         import httpx
 

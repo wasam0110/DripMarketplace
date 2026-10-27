@@ -155,6 +155,7 @@ async def test_guest_cod_initiation_is_idempotent_and_status_is_exact(client, db
     body = first.json()
     assert body == {
         "payment_id": body["payment_id"],
+        "attempt_id": None,
         "method": "cod",
         "checkout_url": None,
         "payfast_payload": None,

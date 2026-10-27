@@ -540,22 +540,27 @@ async def test_payment_callback_amount_signature_and_replay(db, market, monkeypa
     initialized = await service.initiate(order.id, guest_token=created.guest_token)
     assert initialized.payfast_payload["TXNAMT"] == "2600.00"
     assert initialized.payfast_payload["TOKEN"] == "test-token"
-    data = dict(
-        basket_id=str(order.id),
-        txnamt="2600.00",
-        currency_code="PKR",
-        err_code="000",
-        err_msg="Approved",
-        transaction_id="test-txn-001",
+    basket_id = str(initialized.attempt_id)
+    assert initialized.attempt_id is not None and initialized.attempt_id != order.id
+    assert initialized.payfast_payload["BASKET_ID"] == basket_id
+    data = {
+        "basket_id": basket_id,
+        "txnamt": "2600.00",
+        "currency_code": "PKR",
+        "err_code": "000",
+        "err_msg": "Approved",
+        "transaction_id": "test-txn-001",
+    }
+    monkeypatch.setattr(
+        gateway, "check_status", AsyncMock(return_value={**data, "status_code": "00"})
     )
-    monkeypatch.setattr(gateway, "check_status", AsyncMock(return_value={**data, "status_code": "00"}))
     with pytest.raises(BusinessRuleError):
         await service.handle_payfast_callback({**data, "validation_hash": "forged"})
     wrong = {**data, "txnamt": "26.00"}
-    wrong["validation_hash"] = gateway.callback_hash(basket_id=str(order.id), error_code="000")
+    wrong["validation_hash"] = gateway.callback_hash(basket_id=basket_id, error_code="000")
     with pytest.raises(BusinessRuleError):
         await service.handle_payfast_callback(wrong)
-    data["validation_hash"] = gateway.callback_hash(basket_id=str(order.id), error_code="000")
+    data["validation_hash"] = gateway.callback_hash(basket_id=basket_id, error_code="000")
     # A valid callback hash cannot substitute for provider monetary/reference evidence.
     gateway.check_status.return_value = {**data, "status_code": "00", "txnamt": "26.00"}
     with pytest.raises(BusinessRuleError, match="could not be confirmed"):
@@ -583,7 +588,7 @@ async def test_payment_callback_amount_signature_and_replay(db, market, monkeypa
     await service.handle_payfast_callback(data)
     assert order.status == OrderStatus.delivered
     failed = {**data, "err_code": "101", "err_msg": "Declined"}
-    failed["validation_hash"] = gateway.callback_hash(basket_id=str(order.id), error_code="101")
+    failed["validation_hash"] = gateway.callback_hash(basket_id=basket_id, error_code="101")
     await service.handle_payfast_callback(failed)
     assert (await db.get(Payment, initialized.payment_id)).status == PaymentStatus.completed
 
@@ -613,10 +618,11 @@ async def test_payfast_status_reconciliation_is_verified_and_idempotent(
     initialized = await service.initiate(
         order.id, guest_token=created.guest_token, customer_ip="203.0.113.7"
     )
+    assert initialized.attempt_id is not None and initialized.attempt_id != order.id
     status = {
         "status_code": "00",
         "status_msg": "Approved",
-        "basket_id": str(order.id),
+        "basket_id": str(initialized.attempt_id),
         "transaction_id": "reconciled-txn-1",
         "amount": "2600.00",
         "currency": "PKR",

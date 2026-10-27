@@ -57,6 +57,8 @@ PUBLIC = (
 )
 PUBLIC |= {("GET", "/payments/callback/payfast"), ("POST", "/payments/callback/payfast")}
 CAPABILITY = {
+    # Guest checkout recovery is authorized by its private checkout key in the body.
+    ("POST", "/orders/guest/recover"),
     ("GET", "/orders/number/{order_number}"),
     ("GET", "/orders/{order_id}"),
     ("POST", "/orders/{order_id}/cancel"),
@@ -65,6 +67,12 @@ CAPABILITY = {
     ("GET", "/payments/{order_id}/status"),
     ("POST", "/returns/guest"),
     ("GET", "/returns/guest/{return_id}"),
+}
+ACCOUNT_CHECKOUT = {("POST", "/orders/quote"), ("POST", "/orders/recover")}
+REVIEW_PHOTOS = {
+    ("GET", "/me/reviews/{review_id}/images"),
+    ("POST", "/me/reviews/{review_id}/images"),
+    ("DELETE", "/me/reviews/{review_id}/images/{image_id}"),
 }
 ONBOARDING = {
     "/seller/me",
@@ -82,6 +90,8 @@ def policy(method, path):
         return "public"
     if (method, path) in CAPABILITY:
         return "capability"
+    if (method, path) in ACCOUNT_CHECKOUT | REVIEW_PHOTOS:
+        return "authenticated"
     if path.startswith(("/admin/", "/payments")) or path in (
         "/auth/setup-2fa",
         "/auth/setup-2fa/verify",
@@ -131,7 +141,25 @@ def test_every_operation_has_the_reviewed_guard():
         seen.add((method, path.removeprefix("/api/v1")))
         if required in guards:
             assert guards[required] in dependencies(context.dependant), (method, path, required)
-    assert seen >= PUBLIC | CAPABILITY
+    assert seen >= PUBLIC | CAPABILITY | ACCOUNT_CHECKOUT | REVIEW_PHOTOS
+
+
+@pytest.mark.parametrize("path,required", [
+    ("/orders/quote", "authenticated"),
+    ("/orders/recover", "authenticated"),
+    ("/orders/guest/recover", "capability"),
+])
+def test_checkout_policy_is_explicit_and_method_scoped(path, required):
+    assert policy("POST", "/api/v1" + path) == required
+    with pytest.raises(AssertionError, match="Unreviewed route policy"):
+        policy("DELETE", "/api/v1" + path)
+
+
+@pytest.mark.parametrize("method,path", sorted(REVIEW_PHOTOS))
+def test_review_photo_policy_is_authenticated_and_method_scoped(method, path):
+    assert policy(method, "/api/v1" + path) == "authenticated"
+    with pytest.raises(AssertionError, match="Unreviewed route policy"):
+        policy("PUT", "/api/v1" + path)
 
 
 @pytest.mark.parametrize(
