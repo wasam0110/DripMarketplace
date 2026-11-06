@@ -4,6 +4,7 @@ import { ApiError, request } from '../api/client'
 import type { AuthResponse } from '../api/types'
 import { useAuth } from '../auth/AuthProvider'
 import { googleAuthorizationUrl } from '../auth/google'
+import { accountDestination } from '../auth/destination'
 import { Arrow, Button, EmptyState, ErrorNotice, Field } from '../components/ui'
 
 type Mode = 'login' | 'register' | 'forgot' | 'reset'
@@ -25,7 +26,7 @@ export function AuthPage({ mode }: { mode: Mode }) {
   const [title, description, submitLabel] = headings[mode]
   const fields = error instanceof ApiError ? error.fields : {}
   const token = params.get('token')
-  if (auth.user && mode === 'login') return <Navigate to="/account" replace />
+  if (!auth.loading && auth.user && !auth.error && mode === 'login') return <Navigate to={accountDestination(auth.user.role)} replace />
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -103,12 +104,13 @@ export function AuthPage({ mode }: { mode: Mode }) {
       {mode === 'login' && <p className="auth-switch">New to WearHowZ? <Link className="text-link" to="/register">Create an account</Link></p>}
       {mode !== 'login' && !message && <p className="auth-switch"><Link className="text-link" to="/login">Back to sign in</Link></p>}
       <p className="auth-footnote">One account. Your favourite labels, saved pieces and orders.</p>
+      {(mode === 'register' || mode === 'login') && <p className="auth-switch">Have an independent label? <Link className="text-link" to="/seller/register">Apply to sell</Link></p>}
     </div>
   </section>
 }
 
 export function VerifyEmailPage() {
-  const { acceptSession, loading } = useAuth()
+  const { acceptSession, loading, user } = useAuth()
   const [params] = useSearchParams()
   const [busy, setBusy] = useState(false)
   const [complete, setComplete] = useState(false)
@@ -120,7 +122,7 @@ export function VerifyEmailPage() {
     </EmptyState>
     <div className="verification-actions">
       {error ? <ErrorNotice error={error} /> : null}
-      {complete ? <Link className="button" to="/account">Continue to your account <Arrow /></Link>
+      {complete ? <Link className="button" to={accountDestination(user?.role)}>Continue to your account <Arrow /></Link>
         : token ? <Button disabled={busy || loading} onClick={async () => {
           setBusy(true); setError(null)
           try {
@@ -147,6 +149,7 @@ export function AccountPage() {
     <p className="eyebrow">Your WearHowZ account</p><h1>Welcome, {user.first_name || 'back'}.</h1>
     <div className="account-card"><h2>Your account</h2><dl><dt>Email</dt><dd>{user.email}</dd><dt>Account type</dt><dd>{user.role}</dd>
       <dt>Email status</dt><dd>{user.has_verified_email ? 'Verified' : 'Verification needed'}</dd></dl>
+      {(user.role === 'seller' || user.role === 'admin') && <p><Link className="text-link" to={accountDestination(user.role)}>Open your {user.role} workspace</Link></p>}
       <p><Link className="text-link" to="/orders">View your order history</Link></p>
       <p><Link className="text-link" to="/returns">View your return history</Link></p>
       <p><Link className="text-link" to="/account/reviews">Manage your reviews</Link></p>
@@ -157,7 +160,7 @@ export function AccountPage() {
       <p><Link className="text-link" to="/account/password">Change your password</Link></p>
       <p><Link className="text-link" to="/account/photo">Manage your profile photo</Link></p>
       {user.role === 'customer' && <p><Link className="text-link" to="/account/delete">Delete your account</Link></p>}
-      <p className="muted">Additional account settings and role-specific portals are still being built.</p>
+      <p className="muted">Seller and administrator operational tools are still being built.</p>
       {error ? <ErrorNotice error={error} /> : null}
       <Button disabled={busy} onClick={async () => {
         setBusy(true); setError(null)

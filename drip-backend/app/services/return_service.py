@@ -16,6 +16,7 @@ from sqlalchemy.orm import selectinload
 from app.core.exceptions import (
     AuthenticationError,
     BusinessRuleError,
+    ConflictError,
     NotFoundError,
     PermissionDeniedError,
 )
@@ -392,6 +393,7 @@ class ReturnService:
                 total=order.total,
                 payment_id=payment.id if payment else None,
                 payment_status=payment.status.value if payment else None,
+                payment_currency=payment.currency if payment else None,
             ),
             items=self._to_admin_items(return_, order_items),
             estimated_refund_amount=self._calculate_refund_amount(
@@ -423,6 +425,7 @@ class ReturnService:
     ) -> dict:
         """Approve a requested return through the administrator workflow."""
         return_ = await self._get_return_admin(return_id, lock=True)
+        self._check_return_review(return_, payload)
         if return_.status != ReturnStatus.requested:
             raise BusinessRuleError("Can only approve requested returns")
         await self.return_repo.update_status(return_id, ReturnStatus.approved, notes=payload.admin_note)
@@ -434,6 +437,7 @@ class ReturnService:
     ) -> dict:
         """Reject a requested return through the administrator workflow."""
         return_ = await self._get_return_admin(return_id, lock=True)
+        self._check_return_review(return_, payload)
         if return_.status != ReturnStatus.requested:
             raise BusinessRuleError("Can only reject requested returns")
         await self.return_repo.update_status(return_id, ReturnStatus.rejected, notes=payload.admin_note)
@@ -445,6 +449,7 @@ class ReturnService:
     ) -> dict:
         """Mark an approved return received through the administrator workflow."""
         return_ = await self._get_return_admin(return_id, lock=True)
+        self._check_return_review(return_, payload)
         if return_.status != ReturnStatus.approved:
             raise BusinessRuleError("Can only mark approved returns as received")
         await self.return_repo.update_status(return_id, ReturnStatus.received, notes=payload.admin_note)
@@ -472,6 +477,9 @@ class ReturnService:
             raise BusinessRuleError("Return order is missing")
         order_items = await self._load_order_items(return_)
         total = self._calculate_refund_amount(return_, order, order_items)
+        self._check_return_review(return_, payload)
+        if payload.expected_refund_amount is not None and total != payload.expected_refund_amount:
+            raise ConflictError("Refund estimate changed. Refresh the return before requesting it.")
         response = await PaymentService(self.db).refund(
             payment.id,
             admin_id,
@@ -519,6 +527,9 @@ class ReturnService:
         dispute = await self.dispute_repo.get_by_id(dispute_id, for_update=True)
         if not dispute:
             raise NotFoundError("Dispute not found")
+        self._check_dispute_review(dispute, payload)
+        if not payload.body.strip():
+            raise BusinessRuleError("A message must contain text")
         if dispute.status in (
             DisputeStatus.resolved_customer,
             DisputeStatus.resolved_seller,
@@ -549,6 +560,9 @@ class ReturnService:
         dispute = await self.dispute_repo.get_by_id(dispute_id, for_update=True)
         if not dispute:
             raise NotFoundError("Dispute not found")
+        self._check_dispute_review(dispute, payload)
+        if len(payload.resolution_note.strip()) < 10:
+            raise BusinessRuleError("A resolution note requires at least 10 meaningful characters")
         if dispute.status in (DisputeStatus.resolved_customer, DisputeStatus.resolved_seller, DisputeStatus.closed):
             raise BusinessRuleError("Dispute is already resolved")
 
@@ -640,6 +654,29 @@ class ReturnService:
                     f"Cannot return more than purchased quantity for {order_item.product_name}"
                 )
 
+    @staticmethod
+    def _check_return_review(return_: Return, payload: AdminReturnActionRequest) -> None:
+        """Compare the reviewed state after acquiring the return row lock."""
+        if (
+            payload.expected_status is not None and payload.expected_status != return_.status.value
+        ) or (
+            "expected_notes" in payload.model_fields_set and payload.expected_notes != return_.notes
+        ):
+            raise ConflictError("Return changed. Refresh and review it again.")
+
+    @staticmethod
+    def _check_dispute_review(
+        dispute: Dispute, payload: AddDisputeMessageRequest | ResolveDisputeRequest,
+    ) -> None:
+        """Prevent decisions or replies based on an outdated conversation."""
+        if (
+            payload.expected_status is not None and payload.expected_status != dispute.status.value
+        ) or (
+            payload.expected_message_count is not None
+            and payload.expected_message_count != len(dispute.messages)
+        ):
+            raise ConflictError("Dispute changed. Read the latest conversation first.")
+
     async def _get_return_admin(self, return_id: UUID, *, lock: bool = False) -> Return:
         """Load a return for administrator actions or raise not found."""
         return_ = await self.return_repo.get_by_id(return_id, for_update=lock)
@@ -700,6 +737,7 @@ class ReturnService:
             and refund is None
             and payment is not None
             and payment.status == PaymentStatus.completed
+            and payment.currency == "PKR"
         ):
             return ["request_refund"]
         return []

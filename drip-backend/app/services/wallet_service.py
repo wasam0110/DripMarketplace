@@ -13,8 +13,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import BusinessRuleError, NotFoundError
-from app.models.wallet import WalletTxType, PayoutStatus
+from app.core.exceptions import BusinessRuleError, ConflictError, NotFoundError
+from app.models.wallet import WalletTxType, PayoutStatus, Payout
 from app.models.seller import SellerBankAccount
 from app.repositories.wallet_repo import (
     WalletTransactionRepository, PayoutRepository, CommissionRepository
@@ -25,6 +25,7 @@ from app.schemas.wallet import (
     WithdrawalRequest, PayoutResponse, PaginatedPayouts,
     CommissionEntryResponse, CommissionSummary, CommissionBreakdownResponse,
     AdminWalletOverviewResponse,
+    AdminPayoutDetailResponse, PayoutReview,
 )
 from app.services.notification_outbox import queue_notification
 
@@ -50,6 +51,8 @@ class WalletService:
             pending_balance   = wallet.pending_balance,
             total_earned      = wallet.total_earned,
             total_commission  = wallet.total_commission,
+            minimum_withdrawal_amount=Decimal(settings.MIN_WITHDRAWAL_AMOUNT),
+            maximum_withdrawal_amount=Decimal(settings.MAX_WITHDRAWAL_AMOUNT),
         )
 
     # ── Transactions ───────────────────────────────────────────────────────────
@@ -255,8 +258,52 @@ class WalletService:
             total_payouts_completed = done_count,
         )
 
+    async def admin_get_payout(self, payout_id: UUID) -> AdminPayoutDetailResponse:
+        """Expose saved destination and current action eligibility to administrators."""
+        payout = await self.payout_repo.get_by_id(payout_id)
+        if not payout:
+            raise NotFoundError("Payout not found")
+        actions = []
+        if payout.transfer_reference is None and payout.completed_at is None:
+            if payout.status == PayoutStatus.requested:
+                actions = ["approve", "reject"]
+            elif payout.status == PayoutStatus.approved:
+                actions = ["reject", "complete"]
+            elif payout.status == PayoutStatus.processing:
+                actions = ["complete"]
+        return AdminPayoutDetailResponse(
+            **PayoutResponse.model_validate(payout).model_dump(),
+            seller_id=payout.seller_id, last_action_by=payout.approved_by,
+            available_actions=actions,
+        )
+
+    @staticmethod
+    def _check_payout_review(payout: Payout, review: PayoutReview | None) -> None:
+        """Check the saved financial snapshot while holding its payout row lock."""
+        if payout.transfer_reference is not None or payout.completed_at is not None:
+            raise BusinessRuleError("Existing transfer evidence requires reconciliation")
+        if review and (
+            payout.status.value != review.expected_status
+            or payout.amount != review.expected_amount
+            or payout.seller_id != review.expected_seller_id
+            or payout.payment_method != review.expected_payment_method
+            or payout.payment_detail != review.expected_payment_detail
+            or payout.admin_note != review.expected_admin_note
+        ):
+            raise ConflictError("Payout changed. Refresh and review the saved details again.")
+
+    @staticmethod
+    def _payout_note(note: str | None, *, required: bool = False) -> str | None:
+        text = note.strip() if note is not None else None
+        if (required and not text) or (text and (len(text) > 500 or any(
+            ord(char) < 32 and char not in "\n\r\t" or ord(char) == 127 for char in text
+        ))):
+            raise BusinessRuleError("Use a meaningful payout note of up to 500 characters")
+        return text or None
+
     async def admin_approve_payout(
-        self, payout_id: UUID, admin_id: UUID, note: Optional[str] = None
+        self, payout_id: UUID, admin_id: UUID, note: Optional[str] = None,
+        *, review: PayoutReview | None = None,
     ) -> PayoutResponse:
         """Approve an eligible payout request and queue its status notification."""
         payout = await self.payout_repo.get_by_id(payout_id, for_update=True)
@@ -264,6 +311,8 @@ class WalletService:
             raise NotFoundError("Payout not found")
         if payout.status != PayoutStatus.requested:
             raise BusinessRuleError(f"Payout is already '{payout.status.value}'")
+        self._check_payout_review(payout, review)
+        note = self._payout_note(note)
 
         await self.payout_repo.update_status(
             payout_id,
@@ -283,12 +332,13 @@ class WalletService:
         return PayoutResponse(
             id=payout.id, amount=payout.amount,
             payment_method=payout.payment_method, payment_detail=payout.payment_detail,
-            status=PayoutStatus.approved.value, admin_note=note,
+            status=PayoutStatus.approved.value, admin_note=payout.admin_note,
             requested_at=payout.requested_at, completed_at=None,
         )
 
     async def admin_reject_payout(
-        self, payout_id: UUID, admin_id: UUID, note: str
+        self, payout_id: UUID, admin_id: UUID, note: str,
+        *, review: PayoutReview | None = None,
     ) -> PayoutResponse:
         """Reject an eligible payout, restore reserved funds, and queue its notification."""
         payout = await self.payout_repo.get_by_id(payout_id, for_update=True)
@@ -296,13 +346,18 @@ class WalletService:
             raise NotFoundError("Payout not found")
         if payout.status not in (PayoutStatus.requested, PayoutStatus.approved):
             raise BusinessRuleError(f"Cannot reject payout at status '{payout.status.value}'")
+        self._check_payout_review(payout, review)
+        note = self._payout_note(note, required=True)
 
         # Refund available balance
+        wallet = await self.wallet_repo.get_by_seller_id(payout.seller_id, for_update=True)
+        if wallet is None:
+            raise BusinessRuleError("Seller wallet is missing; reconcile before rejecting payout")
         await self.wallet_repo.credit_available(payout.seller_id, payout.amount)
 
         # Log reversal transaction
         updated = await self.wallet_repo.get_by_seller_id(payout.seller_id, for_update=True)
-        balance_after = updated.available_balance if updated else Decimal("0")
+        balance_after = updated.available_balance
         await self.tx_repo.create(
             seller_id     = payout.seller_id,
             type          = WalletTxType.credit_adjustment,
@@ -338,11 +393,18 @@ class WalletService:
         admin_id: UUID,
         reference: str,
         note: Optional[str] = None,
+        *, review: PayoutReview | None = None,
     ) -> PayoutResponse:
         """Record the approved transfer receipt idempotently and queue completion
         notification.
         """
         from datetime import UTC, datetime
+        reference = reference.strip()
+        if not 3 <= len(reference) <= 255 or any(
+            ord(char) < 32 or ord(char) == 127 for char in reference
+        ):
+            raise BusinessRuleError("Use a valid transfer reference of 3–255 characters")
+        note = self._payout_note(note)
         payout = await self.payout_repo.get_by_id(payout_id, for_update=True)
         if not payout:
             raise NotFoundError("Payout not found")
@@ -352,6 +414,7 @@ class WalletService:
             return PayoutResponse.model_validate(payout)
         if payout.status not in (PayoutStatus.approved, PayoutStatus.processing):
             raise BusinessRuleError("Approve the payout before recording a completed transfer")
+        self._check_payout_review(payout, review)
         payout.status = PayoutStatus.completed
         payout.transfer_reference = reference
         payout.approved_by = admin_id

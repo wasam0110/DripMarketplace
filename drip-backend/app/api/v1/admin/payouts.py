@@ -9,22 +9,21 @@ from uuid import UUID
 from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_db, CurrentAdmin
-from app.schemas.wallet import PaginatedPayouts, PayoutResponse
+from app.schemas.wallet import AdminPayoutActionRequest, PaginatedPayouts, PayoutResponse
 from app.services.wallet_service import WalletService
 router = APIRouter(prefix="/admin", tags=["admin"])
 DB = Annotated[AsyncSession, Depends(get_db)]
 
 
-class PayoutActionRequest(BaseModel):
-    admin_note:        Optional[str] = None
+class PayoutActionRequest(AdminPayoutActionRequest):
     payment_reference: Optional[str] = None
 
 
-class PayoutCompletionRequest(BaseModel):
+class PayoutCompletionRequest(AdminPayoutActionRequest):
     """Compatibility shape for the legacy completion URL."""
 
     admin_note: Optional[str] = Field(default=None, max_length=500)
@@ -73,6 +72,7 @@ async def approve_payout(
         payout_id=payout_id,
         admin_id=UUID(current_admin["sub"]),
         note=payload.admin_note,
+        review=payload.review,
     )
 
 
@@ -90,6 +90,7 @@ async def complete_payout(
         admin_id=UUID(current_admin["sub"]),
         reference=payload.payment_reference,
         note=payload.admin_note,
+        review=payload.review,
     )
 
 
@@ -108,4 +109,5 @@ async def reject_payout(
         payout_id=payout_id,
         admin_id=UUID(current_admin["sub"]),
         note=payload.admin_note,
+        review=payload.review,
     )

@@ -78,6 +78,7 @@ class AdminReturnOrderResponse(BaseModel):
     total: Decimal
     payment_id: Optional[UUID]
     payment_status: Optional[str]
+    payment_currency: str | None = None
 
 
 class AdminReturnItemResponse(BaseModel):
@@ -143,6 +144,8 @@ class OpenDisputeRequest(BaseModel):
 
 class AddDisputeMessageRequest(BaseModel):
     body: str = Field(min_length=1, max_length=2000)
+    expected_status: str | None = None
+    expected_message_count: int | None = Field(default=None, ge=0)
 
 
 class DisputeMessageResponse(BaseModel):
@@ -169,8 +172,13 @@ class DisputeDetailResponse(BaseModel):
 
 class AdminReturnActionRequest(BaseModel):
     admin_note: Optional[str] = Field(default=None, max_length=500)
+    expected_status: str | None = None
+    expected_notes: str | None = Field(default=None, max_length=500)
+    expected_refund_amount: Decimal | None = Field(default=None, ge=0, decimal_places=2)
 
 
 class ResolveDisputeRequest(BaseModel):
     in_favor_of:     str  = Field(pattern="^(customer|seller)$")
     resolution_note: str  = Field(min_length=10, max_length=1000)
+    expected_status: str | None = None
+    expected_message_count: int | None = Field(default=None, ge=0)

@@ -11,15 +11,24 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.exceptions import BusinessRuleError, ExternalServiceError, NotFoundError
+from app.core.exceptions import (
+    BusinessRuleError,
+    ConflictError,
+    ExternalServiceError,
+    NotFoundError,
+)
 from app.core.public_urls import api_url, frontend_url
 from app.integrations.payfast import PayFastClient, PayFastProtocolError
 from app.models.order import Order, OrderStatus, PaymentMethod, SellerOrderStatus
 from app.models.payment import Payment, PaymentCallback, PaymentStatus, Refund
+from app.models.return_ import Return
 from app.repositories.payment_repo import PaymentRepository
 from app.schemas.payment import (
+    AdminPaymentDetailResponse,
     AdminRefundDetailResponse,
     AdminRefundRowResponse,
+    CODCollectionRequest,
+    CODCollectionResponse,
     GatewayStatusResponse,
     PaginatedPayments,
     PaginatedRefunds,
@@ -30,6 +39,7 @@ from app.schemas.payment import (
     PaymentStatusResponse,
     RefundAccountingResponse,
     RefundAllocationResponse,
+    RefundConfirmationRequest,
     RefundHistoryEvent,
     RefundPaymentBalanceResponse,
     RefundRequest,
@@ -593,6 +603,7 @@ class PaymentService:
         """
         payment = await self.db.scalar(
             select(Payment).where(Payment.id == payment_id).with_for_update()
+            .execution_options(populate_existing=True)
         )
         if not payment:
             raise NotFoundError("Payment not found")
@@ -601,7 +612,7 @@ class PaymentService:
                 select(Refund).where(
                     Refund.payment_id == payment_id,
                     Refund.idempotency_key == payload.idempotency_key,
-                )
+                ).execution_options(populate_existing=True)
             )
             if existing:
                 if existing.amount != payload.amount or existing.reason != payload.reason:
@@ -616,6 +627,10 @@ class PaymentService:
                     # Repair a request created by the former two-commit flow. The
                     # caller still owns the transaction and decides whether to commit.
                     if existing.return_id is None:
+                        if existing.processed_at is not None:
+                            raise BusinessRuleError(
+                                "Confirmed legacy refunds need reconciliation before return linking"
+                            )
                         existing.return_id = return_id
                         if commit:
                             await self.db.commit()
@@ -625,7 +640,13 @@ class PaymentService:
                 return self._refund_response(existing)
         if payment.status != PaymentStatus.completed:
             raise BusinessRuleError("Only completed payments can be refunded")
+        if payment.currency != "PKR":
+            raise BusinessRuleError("Only PKR refunds are supported; reconcile this payment")
         reserved = await self.payment_repo.get_total_refunded(payment.id)
+        remaining = max(payment.amount - reserved, Decimal("0"))
+        if (payload.expected_remaining_amount is not None
+            and remaining != payload.expected_remaining_amount):
+            raise ConflictError("Refund balance changed. Refresh and review it again.")
         if payload.amount > payment.amount - reserved:
             raise BusinessRuleError("Refund exceeds the remaining refundable amount")
         refund = Refund(
@@ -646,42 +667,89 @@ class PaymentService:
         return self._refund_response(refund)
 
     async def confirm_refund(
-        self, refund_id: UUID, admin_id: UUID, reference: str
+        self, refund_id: UUID, admin_id: UUID, reference: str, *,
+        expected_amount: Decimal | None = None, expected_payment_id: UUID | None = None,
+        expected_return_id: UUID | None = None, check_return_link: bool = False,
     ) -> RefundResponse:
-        """Confirm a refund with a given reference."""
+        """Record an already-completed manual transfer and reconcile it atomically."""
+        from app.repositories.return_repo import ReturnRepository
+
+        reference = RefundConfirmationRequest(reference=reference).reference
         refund = await self.db.get(Refund, refund_id)
         if not refund:
             raise NotFoundError("Refund not found")
+        # Return requests already use return -> payment locking; preserve that order.
+        reviewed_return_id = refund.return_id
+        returned = (
+            await ReturnRepository(self.db).get_by_id(reviewed_return_id, for_update=True)
+            if reviewed_return_id else None
+        )
         payment = await self.db.scalar(
             select(Payment).where(Payment.id == refund.payment_id).with_for_update()
+            .execution_options(populate_existing=True)
         )
+        if not payment:
+            raise NotFoundError("Payment not found")
         await self.db.refresh(refund)
+        if refund.return_id != reviewed_return_id:
+            raise ConflictError("Refund return link changed. Refresh and review it again.")
         if refund.processed_at:
             if refund.gateway_ref != reference:
                 raise BusinessRuleError("Refund already confirmed with a different reference")
             return self._refund_response(refund)
+        if (
+            (expected_amount is not None and expected_amount != refund.amount)
+            or (expected_payment_id is not None and expected_payment_id != refund.payment_id)
+            or (check_return_link and expected_return_id != refund.return_id)
+        ):
+            raise ConflictError("Refund details changed. Refresh and review them again.")
+        blockers = await self._refund_confirmation_blockers(refund, payment, returned)
+        if blockers:
+            raise BusinessRuleError(" ".join(blockers))
 
         # ── Step 1: inventory restock and return status ───────────────────────
-        returned = None
         if refund.return_id:
-            from sqlalchemy import update
+            from sqlalchemy import func, update
 
-            from app.models.order import OrderItem
+            from app.models.order import OrderItem, SellerOrder
             from app.models.product import ProductInventory
-            from app.models.return_ import ReturnStatus
-            from app.repositories.return_repo import ReturnRepository
+            from app.models.return_ import Return, ReturnItem, ReturnStatus
 
-            returned = await ReturnRepository(self.db).get_by_id(refund.return_id)
-            if returned and returned.status == ReturnStatus.received:
-                for item in returned.items:
-                    order_item = await self.db.get(OrderItem, item.order_item_id)
-                    await self.db.execute(
-                        update(ProductInventory)
-                        .where(ProductInventory.variant_id == order_item.variant_id)
-                        .values(stock=ProductInventory.stock + item.quantity)
+            split = await self.db.get(SellerOrder, returned.seller_order_id)
+            quantities: dict[UUID, int] = {}
+            for item in returned.items:
+                if item.quantity <= 0:
+                    raise BusinessRuleError("Return quantities require reconciliation")
+                item_id = item.order_item_id
+                quantities[item_id] = quantities.get(item_id, 0) + item.quantity
+            restocks: dict[UUID, int] = {}
+            for item_id, quantity in quantities.items():
+                order_item = await self.db.get(OrderItem, item_id)
+                prior = await self.db.scalar(
+                    select(func.coalesce(func.sum(ReturnItem.quantity), 0))
+                    .join(Return, Return.id == ReturnItem.return_id)
+                    .where(
+                        ReturnItem.order_item_id == item_id, Return.status == ReturnStatus.refunded,
+                        Return.id != returned.id,
                     )
-                returned.status = ReturnStatus.refunded
-                returned.resolved_at = datetime.now(UTC)
+                )
+                if (
+                    not order_item or not split or split.order_id != payment.order_id
+                    or order_item.order_id != payment.order_id
+                    or order_item.seller_id != split.seller_id
+                    or quantity <= 0 or prior < 0 or prior + quantity > order_item.quantity
+                ):
+                    raise BusinessRuleError("Return quantities or links require reconciliation")
+                restocks[order_item.variant_id] = restocks.get(order_item.variant_id, 0) + quantity
+            for variant_id, quantity in sorted(restocks.items()):
+                result = await self.db.execute(
+                    update(ProductInventory).where(ProductInventory.variant_id == variant_id)
+                    .values(stock=ProductInventory.stock + quantity)
+                )
+                if result.rowcount != 1:
+                    raise BusinessRuleError("Return inventory is missing; reconcile it first")
+            returned.status = ReturnStatus.refunded
+            returned.resolved_at = datetime.now(UTC)
 
         # ── Step 2: mark refund as confirmed ─────────────────────────────────
         refund.gateway_ref = reference
@@ -750,6 +818,8 @@ class PaymentService:
             data=[self._refund_admin_row(refund) for refund in rows],
             total=total,
             page=page,
+            per_page=25,
+            total_pages=max(1, (total + 24) // 25),
         )
 
     async def get_admin_refund(self, refund_id: UUID) -> AdminRefundDetailResponse:
@@ -759,6 +829,18 @@ class PaymentService:
         refund = await self.payment_repo.get_refund_admin(refund_id)
         if not refund:
             raise NotFoundError("Refund not found")
+        from app.repositories.return_repo import ReturnRepository
+
+        # Load the payment graph once, without a Refund -> Payment -> Refund cycle
+        # that expires the root relationship under populate_existing.
+        payment = await self.payment_repo.get_payment_refunds(refund.payment_id)
+        if not payment:
+            raise NotFoundError("Payment not found")
+        returned = (
+            await ReturnRepository(self.db).get_by_id(refund.return_id)
+            if refund.return_id else None
+        )
+        blockers = await self._refund_confirmation_blockers(refund, payment, returned)
         history = [
             RefundHistoryEvent(
                 event="requested",
@@ -776,10 +858,36 @@ class PaymentService:
                 )
             )
         return AdminRefundDetailResponse(
-            **self._refund_admin_row(refund).model_dump(),
-            payment=self._refund_payment_balance(refund.payment),
+            **self._refund_admin_row(refund, payment).model_dump(),
+            payment=self._refund_payment_balance(payment),
             history=history,
+            can_confirm_refund=not blockers,
+            confirmation_blockers=blockers,
+            linked_return_status=returned.status.value if returned else None,
         )
+
+    async def _refund_confirmation_blockers(
+        self, refund: Refund, payment: Payment, returned: Return | None
+    ) -> list[str]:
+        """Fail closed on uncollected, over-reserved or inconsistent linked refunds."""
+        from app.models.return_ import ReturnStatus
+
+        blockers = []
+        if refund.processed_at:
+            blockers.append("Refund transfer is already recorded.")
+        elif refund.gateway_ref is not None or refund.processed_by is not None:
+            blockers.append("Existing transfer evidence requires reconciliation.")
+        if payment.status != PaymentStatus.completed or payment.currency != "PKR":
+            blockers.append("A completed PKR payment is required for manual refund confirmation.")
+        reserved = await self.payment_repo.get_total_refunded(payment.id)
+        if refund.amount <= 0 or reserved > payment.amount:
+            blockers.append("Refund amounts require reconciliation before confirmation.")
+        if refund.return_id and (
+            not returned or returned.order_id != payment.order_id
+            or returned.status != ReturnStatus.received or not returned.items
+        ):
+            blockers.append("The linked return must match this order and be received with items.")
+        return blockers
 
     async def get_payment_refund_history(self, payment_id: UUID) -> PaymentRefundHistoryResponse:
         """Assemble the payment's refund history and remaining refundable balance."""
@@ -839,6 +947,7 @@ class PaymentService:
             return_id=refund.return_id,
             status="completed" if refund.processed_at else "pending",
             amount=refund.amount,
+            currency=payment.currency,
             reason=refund.reason or "",
             transfer_reference=refund.gateway_ref,
             requested_by=refund.requested_by,
@@ -868,47 +977,156 @@ class PaymentService:
             payment_status=payment.status.value,
             payment_method=payment.method,
             payment_amount=payment.amount,
+            currency=payment.currency,
             pending_refund_amount=pending,
             completed_refund_amount=completed,
             reserved_refund_amount=reserved,
             remaining_refundable_amount=remaining,
             can_request_refund=(
-                payment.status == PaymentStatus.completed and remaining > Decimal("0")
+                payment.status == PaymentStatus.completed and payment.currency == "PKR"
+                and remaining > Decimal("0") and reserved <= payment.amount
             ),
         )
 
-    async def record_cod_collection(self, payment_id: UUID, admin_id: UUID, reference: str):
+    @staticmethod
+    def _cod_collection_blockers(payment: Payment, order: Order) -> list[str]:
+        """Fail closed on inconsistent or partially fulfilled full-amount collections."""
+        blockers = []
+        if payment.method != "cod" or order.payment_method != PaymentMethod.cod:
+            blockers.append("Only cash-on-delivery payments can be collected here.")
+        if payment.status != PaymentStatus.pending:
+            blockers.append("Payment is not awaiting collection.")
+        if payment.currency != "PKR" or payment.amount <= 0 or payment.amount != order.total:
+            blockers.append("Payment currency or amount does not match the saved checkout.")
+        if order.status not in (OrderStatus.delivered, OrderStatus.completed):
+            blockers.append("The order must be delivered before collection is recorded.")
+        if not order.items or not order.seller_orders or any(
+            row.status != SellerOrderStatus.delivered for row in order.seller_orders
+        ):
+            blockers.append("All saved brand fulfilment records must be delivered.")
+        if (
+            order.subtotal - order.discount_amount + order.shipping_fee != order.total
+            or sum((row.subtotal for row in order.items), Decimal("0")) != order.subtotal
+            or sum((row.subtotal for row in order.seller_orders), Decimal("0")) != order.subtotal
+            or any(row.unit_price * row.quantity != row.subtotal for row in order.items)
+            or any(
+                not any(split.seller_id == row.seller_id for split in order.seller_orders)
+                for row in order.items
+            )
+            or len({row.seller_id for row in order.seller_orders}) != len(order.seller_orders)
+            or any(
+                sum((item.subtotal for item in order.items if item.seller_id == split.seller_id),
+                    Decimal("0")) != split.subtotal
+                for split in order.seller_orders
+            )
+        ):
+            blockers.append("Saved checkout and fulfilment amounts require reconciliation.")
+        if payment.status == PaymentStatus.pending and (
+            payment.paid_at is not None or payment.gateway_reference
+        ):
+            blockers.append("Existing collection evidence requires reconciliation.")
+        return blockers
+
+    async def _cod_collection_actor(self, payment_id: UUID) -> UUID | None:
+        event = await self.db.scalar(
+            select(PaymentCallback)
+            .where(
+                PaymentCallback.payment_id == payment_id,
+                PaymentCallback.gateway == "cod_collection",
+            )
+            .order_by(PaymentCallback.received_at.desc(), PaymentCallback.id.desc())
+            .limit(1)
+        )
+        try:
+            return UUID(event.raw_payload["recorded_by"]) if event else None
+        except (KeyError, ValueError, TypeError, AttributeError):
+            return None  # Historical collection without a usable actor remains readable.
+
+    async def get_admin_payment(self, payment_id: UUID) -> AdminPaymentDetailResponse:
+        """Read local collection evidence; never contact a payment provider on GET."""
+        payment = await self.payment_repo.get_by_id(payment_id)
+        if not payment:
+            raise NotFoundError("Payment not found")
+        from app.repositories.order_repo import OrderRepository
+
+        order = await OrderRepository(self.db).get_by_id(payment.order_id)
+        if not order:
+            raise NotFoundError("Order not found")
+        blockers = self._cod_collection_blockers(payment, order)
+        return AdminPaymentDetailResponse(
+            id=payment.id, order_id=order.id, order_number=order.order_number,
+            method=payment.method, status=payment.status.value, amount=payment.amount,
+            gateway_reference=payment.gateway_reference, paid_at=payment.paid_at,
+            created_at=payment.created_at, currency=payment.currency,
+            order_status=order.status.value, order_updated_at=order.updated_at,
+            can_record_cod_collection=not blockers, collection_blockers=blockers,
+            collection_recorded_by=await self._cod_collection_actor(payment.id),
+        )
+
+    async def _cod_collection_receipt(
+        self, payment: Payment, order: Order
+    ) -> CODCollectionResponse:
+        if not payment.paid_at or not payment.gateway_reference:
+            raise BusinessRuleError("Collection evidence is incomplete; contact support")
+        return CODCollectionResponse(
+            payment_id=payment.id, order_id=order.id, order_number=order.order_number,
+            amount=payment.amount, reference=payment.gateway_reference, paid_at=payment.paid_at,
+            recorded_by=await self._cod_collection_actor(payment.id),
+        )
+
+    async def record_cod_collection(
+        self, payment_id: UUID, admin_id: UUID, reference: str, *,
+        expected_amount: Decimal | None = None,
+        expected_order_updated_at: datetime | None = None,
+    ) -> CODCollectionResponse:
         """Confirm a delivered COD payment and settle eligible seller orders idempotently."""
+        reference = CODCollectionRequest(reference=reference).reference
         payment = await self.db.get(Payment, payment_id)
         if not payment:
             raise NotFoundError("Payment not found")
         from app.repositories.order_repo import OrderRepository
 
         order = await OrderRepository(self.db).get_by_id(payment.order_id, for_update=True)
+        if not order:
+            raise NotFoundError("Order not found")
         await self.db.refresh(payment)
-        if payment.method != "cod" or order.status not in (
-            OrderStatus.delivered,
-            OrderStatus.completed,
+        if (
+            payment.method != "cod" or order.payment_method != PaymentMethod.cod
+            or order.status not in (OrderStatus.delivered, OrderStatus.completed)
         ):
             raise BusinessRuleError("COD collection can only be recorded after delivery")
         if payment.status == PaymentStatus.completed:
+            if payment.currency != "PKR" or payment.amount != order.total:
+                raise BusinessRuleError("Collection amount or currency requires reconciliation")
             if payment.gateway_reference != reference:
                 raise BusinessRuleError(
                     "Collection was already recorded with a different reference"
                 )
-            return {"status": "completed"}
-        if payment.status != PaymentStatus.pending:
-            raise BusinessRuleError("Payment cannot be collected in its current state")
+            return await self._cod_collection_receipt(payment, order)
+        if expected_amount is not None and payment.amount != expected_amount:
+            raise ConflictError("Payment amount changed. Refresh and review it again.")
+        if expected_order_updated_at is not None and order.updated_at != expected_order_updated_at:
+            raise ConflictError("Order changed. Refresh and review it again.")
+        blockers = self._cod_collection_blockers(payment, order)
+        if blockers:
+            raise BusinessRuleError(" ".join(blockers))
         payment.status = PaymentStatus.completed
         payment.paid_at = datetime.now(UTC)
         payment.gateway_reference = reference
+        await self.payment_repo.log_callback(
+            gateway="cod_collection", payment_id=payment.id, is_verified=True,
+            raw_payload={
+                "action": "manual_cod_collection", "recorded_by": str(admin_id),
+                "reference": reference, "amount": str(payment.amount), "currency": payment.currency,
+                "paid_at": payment.paid_at.isoformat(),
+            },
+        )
         from app.services.commission_service import CommissionService
 
-        for seller_order in order.seller_orders:
-            if seller_order.status == SellerOrderStatus.delivered:
-                await CommissionService(self.db).settle(seller_order.id, commit=False)
+        for seller_order in sorted(order.seller_orders, key=lambda row: (row.seller_id, row.id)):
+            await CommissionService(self.db).settle(seller_order.id, commit=False)
         await self.db.commit()
-        return {"status": "completed"}
+        return await self._cod_collection_receipt(payment, order)
 
     async def list_admin(self, **filters) -> PaginatedPayments:
         """Paginate payments for administrative reconciliation."""
@@ -922,6 +1140,7 @@ class PaymentService:
                     method=p.method,
                     status=p.status.value,
                     amount=p.amount,
+                    currency=p.currency,
                     gateway_reference=p.gateway_reference,
                     paid_at=p.paid_at,
                     created_at=p.created_at,
@@ -930,6 +1149,8 @@ class PaymentService:
             ],
             total=total,
             page=filters.get("page", 1),
+            per_page=25,
+            total_pages=max(1, (total + 24) // 25),
         )
 
     async def gateway_status(self) -> GatewayStatusResponse:

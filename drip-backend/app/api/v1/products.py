@@ -20,6 +20,7 @@ from app.schemas.product import (
     CataloguePage,
     SellerProductsPage,
     AdminProductsPage,
+    AdminProductDetailResponse,
     UploadImagesResponse,
     VariantWithStockResponse,
     SearchSuggestionsResponse,
@@ -267,6 +268,16 @@ async def admin_list_products(
     # Handle GET /admin/products at this router boundary. Delegates to
     # ProductService.admin_list. Access dependency: CurrentAdmin.
     return await ProductService(db).admin_list(seller_id, admin_hidden, page)
+
+
+@router.get("/admin/products/{product_id}", response_model=AdminProductDetailResponse)
+async def admin_product_detail(
+    product_id: UUID,
+    db: DB,
+    current_admin: CurrentAdmin,
+) -> AdminProductDetailResponse:
+    """Inspect a listing for moderation without changing its view count."""
+    return await ProductService(db).admin_detail(product_id)
 
 
 @router.post("/admin/products/{product_id}/hide")

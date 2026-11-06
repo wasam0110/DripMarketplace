@@ -1,0 +1,10 @@
+@layer components {
+  .admin-sellers { overflow-wrap: anywhere; }
+  .admin-seller-copy { white-space: pre-wrap; }
+  .admin-seller-logo { width: 160px; max-height: 160px; object-fit: contain; margin-block: 24px; }
+  .admin-decision-review { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--line); }
+  .admin-decision-review h3 { margin-bottom: 16px; font-size: 24px; }
+  .admin-sellers .option-row .button { margin-top: 0; }
+  .admin-payment-verification { display: flex; align-items: center; gap: 12px; }
+  .admin-payment-verification input { min-height: 24px; width: 24px; height: 24px; flex-shrink: 0; }
+}

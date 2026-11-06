@@ -5,15 +5,15 @@ HTTP handlers connect validated requests and access dependencies to backend serv
 
 from __future__ import annotations
 
+from typing import Annotated
 from uuid import UUID
-from typing import Annotated, Optional
 
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_db, CurrentAdmin
-from app.schemas.admin import PaginatedAdminOrders
+from app.api.deps import CurrentAdmin, get_db
 from app.models.order import OrderStatus, PaymentMethod
+from app.schemas.admin import AdminOrderDetailResponse, PaginatedAdminOrders
 from app.services.admin_service import AdminService
 
 router = APIRouter(prefix="/admin", tags=["admin"])
@@ -22,13 +22,13 @@ DB = Annotated[AsyncSession, Depends(get_db)]
 
 @router.get("/orders", response_model=PaginatedAdminOrders)
 async def list_all_orders(
-    db:             DB,
-    current_admin:  CurrentAdmin,
-    status:         Optional[OrderStatus] = Query(default=None),
-    seller_id:      Optional[UUID] = Query(default=None),
-    payment_method: Optional[PaymentMethod] = Query(default=None),
-    page:           int = Query(default=1, ge=1),
-    per_page:       int = Query(default=25, ge=1, le=100),
+    db: DB,
+    current_admin: CurrentAdmin,
+    status: OrderStatus | None = Query(default=None),
+    seller_id: UUID | None = Query(default=None),
+    payment_method: PaymentMethod | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=25, ge=1, le=100),
 ) -> PaginatedAdminOrders:
     # Handle GET /orders at this router boundary. Delegates to AdminService.list_orders. Access
     # dependency: CurrentAdmin.
@@ -39,3 +39,11 @@ async def list_all_orders(
         page=page,
         per_page=per_page,
     )
+
+
+@router.get("/orders/{order_id}", response_model=AdminOrderDetailResponse)
+async def admin_order_detail(
+    order_id: UUID, db: DB, current_admin: CurrentAdmin
+) -> AdminOrderDetailResponse:
+    """Inspect saved order/fulfilment snapshots without performing a payment action."""
+    return await AdminService(db).get_order_detail(order_id)

@@ -79,7 +79,7 @@ class OrderRepository:
         if user_id:
             q = q.where(Order.user_id == user_id)
         if for_update:
-            q = q.with_for_update()
+            q = q.with_for_update().execution_options(populate_existing=True)
 
         result = await self.db.execute(q)
         return result.scalar_one_or_none()

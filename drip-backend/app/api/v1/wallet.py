@@ -16,7 +16,7 @@ from app.schemas.wallet import (
     WalletSummaryResponse, PaginatedTransactions,
     WithdrawalRequest, PayoutResponse, PaginatedPayouts,
     CommissionBreakdownResponse, AdminWalletOverviewResponse,
-    AdminPayoutActionRequest, CompletePayoutRequest,
+    AdminPayoutActionRequest, AdminPayoutDetailResponse, CompletePayoutRequest,
 )
 from app.services.wallet_service import WalletService
 
@@ -147,6 +147,13 @@ async def admin_list_payouts(
     )
 
 
+@router.get("/admin/wallet/payouts/{payout_id}", response_model=AdminPayoutDetailResponse)
+async def admin_get_payout(
+    payout_id: UUID, db: DB, current_admin: CurrentAdmin,
+) -> AdminPayoutDetailResponse:
+    return await WalletService(db).admin_get_payout(payout_id)
+
+
 @router.post("/admin/wallet/payouts/{payout_id}/approve", response_model=PayoutResponse)
 async def admin_approve_payout(
     payout_id:     UUID,
@@ -160,6 +167,7 @@ async def admin_approve_payout(
         payout_id=payout_id,
         admin_id=UUID(current_admin["sub"]),
         note=payload.admin_note,
+        review=payload.review,
     )
 
 
@@ -179,6 +187,7 @@ async def admin_reject_payout(
         payout_id=payout_id,
         admin_id=UUID(current_admin["sub"]),
         note=payload.admin_note,
+        review=payload.review,
     )
 
 
@@ -186,4 +195,7 @@ async def admin_reject_payout(
 async def admin_complete_payout(payout_id: UUID, payload: CompletePayoutRequest, db: DB, current_admin: CurrentAdmin) -> PayoutResponse:
     # Handle POST /admin/wallet/payouts/{payout_id}/complete at this router boundary. Delegates
     # to WalletService.admin_complete_payout. Access dependency: CurrentAdmin.
-    return await WalletService(db).admin_complete_payout(payout_id, UUID(current_admin["sub"]), payload.reference)
+    return await WalletService(db).admin_complete_payout(
+        payout_id, UUID(current_admin["sub"]), payload.reference,
+        note=payload.admin_note, review=payload.review,
+    )

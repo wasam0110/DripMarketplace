@@ -174,6 +174,7 @@ class DisputeRepository:
             select(Dispute)
             .options(selectinload(Dispute.messages))
             .where(Dispute.id == dispute_id)
+            .execution_options(populate_existing=True)
         )
         if for_update:
             query = query.with_for_update()
@@ -188,6 +189,7 @@ class DisputeRepository:
             select(Dispute)
             .options(selectinload(Dispute.messages))
             .where(Dispute.return_id == return_id)
+            .execution_options(populate_existing=True)
         )
         if for_update:
             query = query.with_for_update()

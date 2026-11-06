@@ -6,10 +6,11 @@ from types import SimpleNamespace
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import select
+from sqlalchemy import func, select
 from test_marketplace_regressions import market as marketplace_fixture
 from test_resource_ownership import headers
 
+from app.models.analytics import AnalyticsEvent
 from app.models.product import Product
 from app.models.seller import Seller, SellerStatus
 from app.models.user import User, UserRole
@@ -168,3 +169,109 @@ async def test_equal_timestamp_pagination_has_no_gaps_or_duplicates(client, db, 
     assert result == expected_ids
     assert len(set(result)) == 27
     assert await product_snapshot(db) == before
+
+
+@pytest.mark.parametrize("name", ["visible", "draft", "hidden", "other_hidden"])
+async def test_private_admin_detail_reads_without_mutation_or_view_events(
+    client,
+    db,
+    market,
+    catalogue,
+    name,
+):
+    product = catalogue.rows[name]
+    before = await product_snapshot(db)
+    events = await db.scalar(select(func.count(AnalyticsEvent.id)))
+    response = await client.get(
+        f"/api/v1/admin/products/{product.id}",
+        headers=headers(market.admin),
+    )
+    assert response.status_code == 200, response.text
+    data = response.json()
+    assert data["id"] == str(product.id)
+    assert data["seller_id"] == str(product.seller_id)
+    assert data["admin_hidden"] == product.admin_hidden
+    assert data["is_published"] == product.is_published
+    assert data["price"] == format(product.price, ".2f")
+    assert data["seller"]["id"] == str(product.seller_id)
+    assert data["seller_status"] == "active"
+    assert data["seller_deleted"] is False
+    assert await product_snapshot(db) == before
+    assert await db.scalar(select(func.count(AnalyticsEvent.id))) == events
+
+
+@pytest.mark.parametrize("state", ["suspended", "rejected", "deleted"])
+async def test_admin_can_inspect_non_public_seller_products(client, db, market, state):
+    if state == "deleted":
+        market.seller.deleted_at = WHEN
+    else:
+        market.seller.status = SellerStatus(state)
+    await db.commit()
+    response = await client.get(
+        f"/api/v1/admin/products/{market.product.id}",
+        headers=headers(market.admin),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["seller_deleted"] == (state == "deleted")
+    assert response.json()["seller_status"] == ("active" if state == "deleted" else state)
+    assert (await client.get(f"/api/v1/products/{market.product.id}")).status_code == 404
+
+
+@pytest.mark.parametrize("actor,status", [(None, 401), ("buyer", 403), ("seller_user", 403)])
+@pytest.mark.parametrize("endpoint", ["detail", "hide", "unhide"])
+async def test_admin_product_tools_require_admin(client, db, market, actor, status, endpoint):
+    before = await product_snapshot(db)
+    path = f"/api/v1/admin/products/{market.product.id}"
+    auth = headers(getattr(market, actor)) if actor else {}
+    response = await client.request(
+        "GET" if endpoint == "detail" else "POST",
+        path if endpoint == "detail" else f"{path}/{endpoint}",
+        headers=auth,
+    )
+    assert response.status_code == status
+    assert await product_snapshot(db) == before
+
+
+async def test_deleted_missing_and_invalid_products_cannot_be_reviewed(client, market, catalogue):
+    for product_id, status in (
+        (catalogue.rows["deleted"].id, 404),
+        (uuid4(), 404),
+        ("bad-id", 422),
+    ):
+        response = await client.get(
+            f"/api/v1/admin/products/{product_id}",
+            headers=headers(market.admin),
+        )
+        assert response.status_code == status
+
+
+@pytest.mark.parametrize(
+    "published,state", [(True, "active"), (False, "active"), (True, "suspended")]
+)
+async def test_hide_unhide_are_idempotent_without_publishing_or_stock_changes(
+    client,
+    db,
+    market,
+    published,
+    state,
+):
+    market.product.is_published = published
+    market.seller.status = SellerStatus(state)
+    await db.commit()
+    slots = market.seller.slots_used
+    stock, reserved = market.inventory.stock, market.inventory.reserved
+    path = f"/api/v1/admin/products/{market.product.id}"
+    for action, expected in [("hide", True), ("hide", True), ("unhide", False), ("unhide", False)]:
+        response = await client.post(path + "/" + action, headers=headers(market.admin))
+        assert response.status_code == 200, response.text
+        assert response.json() == {"id": str(market.product.id), "admin_hidden": expected}
+        receipt = await client.get(path, headers=headers(market.admin))
+        assert receipt.json()["admin_hidden"] == expected
+        assert receipt.json()["is_published"] == published
+        await db.refresh(market.inventory)
+        await db.refresh(market.seller)
+        assert (market.inventory.stock, market.inventory.reserved) == (stock, reserved)
+        assert market.seller.slots_used == slots
+        assert market.seller.status.value == state
+    if not published or state != "active":
+        assert (await client.get(f"/api/v1/products/{market.product.id}")).status_code == 404

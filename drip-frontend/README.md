@@ -30,7 +30,8 @@ npm test
 npm run test:browser
 ```
 
-Browser tests use installed Microsoft Edge, start/reuse the development server,
+Browser tests use installed Microsoft Edge and start their own development server
+at `http://127.0.0.1:4173` (the normal development URL remains port 3000),
 and check desktop/mobile layouts, accessibility and the read-only backend proxy.
 The backend and its database/Redis must be running for the live proxy smoke test.
 All other browser tests use isolated fixtures, not live account or payment writes.
@@ -69,7 +70,7 @@ Runtime dependency audit reported no known vulnerabilities.
 
 This is not the complete frontend or a production-readiness claim. Still needed:
 payment retry/recovery controls, remaining customer account features, seller portal and admin portal.
-Role-specific landing pages also remain.
+Role-specific landing pages are now connected; see the role-entry checkpoint below.
 
 ## Product and bag verification scope
 
@@ -832,6 +833,1430 @@ concurrency remains unverified. Earlier attempt-contract browser checks passed a
 its rerun was not approved. Real provider acceptance of attempt baskets and terminal
 failure semantics must also be verified before enabling payments. No charges,
 deployment or commit occurred. Three pre-existing payment-service lint findings remain.
+The database/browser verification limitations above describe that checkpoint;
+the follow-up below supersedes them.
+
+## PayFast verification follow-up — 25 October 2026
+
+The final distinct-attempt/order-ID browser fixtures passed all 10 desktop/mobile
+scenarios. Provider navigation and API calls were intercepted; no real payment
+requests were made. Feature flags were set only in the test process, not saved.
+
+Native PostgreSQL 15 verification passed all 45 tests in
+`tests/integration/test_payment_api.py` and
+`tests/integration/test_payfast_attempt_races.py`. The two race cases use independent,
+committed database sessions and confirm that concurrent initiation or retry cannot
+issue two new attempts. Provider transport remains mocked: these results do not
+verify PayFast's own concurrency, callbacks or settlement behaviour.
+
+Testing used a dedicated localhost-only Docker container, a database ending in
+`_test`, disposable per-test schemas and temporary database storage. No application
+database, environment file or existing Docker volume was used. The initial run had
+44 passes and one stale COD response assertion; adding the expected nullable
+`attempt_id` field restored the exact response check. No COD business logic changed.
+
+Malformed/non-object token responses and non-string tokens now raise controlled
+PayFast protocol errors before any follow-up provider request. The four focused
+unit files (`test_payments.py`, `test_payfast_attempts.py`,
+`test_payfast_evidence.py`, `test_payment_return_urls.py`) passed all 61 tests.
+Ruff passed for the adapter and both changed payment test files. Existing Pydantic
+and UTC datetime deprecation warnings remain.
+
+Remaining provider gate: confirm merchant UAT credentials and status API access,
+acceptance of per-attempt baskets, authoritative amount/currency evidence, terminal
+failure semantics, callbacks and reconciliation with actual sandbox responses.
+The [published PayFast status example](https://gopayfast.com/docs/) does not include
+the monetary evidence required by this backend; do not weaken verification to match
+an incomplete example. Live payments and customer retry controls remain disabled.
+This is targeted verification, not full backend release certification.
+
+## Role-specific workspace entry — 25 October 2026
+
+The `/seller` and `/admin` routes are now role-gated landing pages. Email sign-in,
+restored login sessions, email-verification continuation and the successful Google
+callback continuation choose a fixed destination from the server-returned role:
+customer/unknown roles go to `/account`, sellers to `/seller`, admins to `/admin`.
+URL parameters cannot choose or grant a privileged role. Only exact `seller` and
+`admin` matches can render the corresponding workspace; there is no implicit role
+hierarchy. Loading, missing-session, restoration-error and wrong-role states are
+explicit. A cleared or changed session removes the workspace content.
+
+Existing `/account` links remain available, including account settings and sign-out.
+Seller/admin accounts now have a link back to their own workspace. Administrator
+authenticator input remains admin-only. No backend authorization was changed:
+frontend route checks are a presentation boundary, never an API security control.
+
+These are entry pages, not operational dashboards. They show only the authenticated
+account information, existing account/storefront links and an explicit description
+of tools not yet connected. Seller role does not imply seller approval. No invented
+balances, counters, approval state or privileged operations were added. Next:
+seller onboarding/approval-state contracts and UI, then seller operational tools;
+admin operational tools remain a separate checkpoint. PayFast gates are unchanged.
+
+Validation: production build/TypeScript and all 219 frontend unit/component tests
+passed. The focused browser run passed 46 desktop/mobile tests across
+`role-entry.spec.ts` and `google-callback.spec.ts`, including sign-in destinations,
+wrong-role/anonymous access, logout, verification/callback links and admin-only
+authenticator submission. Workspace automated WCAG 2 A/AA and 2.1 AA scans and
+horizontal-overflow checks passed; desktop/mobile screenshots were visually
+reviewed. These are mocked-API checks, not live authentication/provider acceptance
+or complete accessibility certification. The Sites skill kept this checkpoint
+local-only and reused the existing WearHowZ styling; no publication, new backend
+edits, real account writes, payment requests, commit or push occurred in this step.
+
+## Seller application status — 27 October 2026
+
+The seller workspace now reads `/seller/me` for verified seller accounts only.
+It shows the server's pending-payment, pending-approval, active, suspended or
+rejected state, registration amount outstanding and recorded payment date.
+Zero fees do not imply a paid receipt or approval. Unknown states remain
+unavailable, and malformed or contradictory displayed fields fail validation.
+The API does not expose rejection reasons or transfer instructions; none are
+invented. No registration, receipt, approval, payment or operational writes occur.
+
+Reads use the existing authenticated, no-store request hook. Owner changes
+remount the reader, stale responses are discarded, and refresh failures remove
+previously displayed status. Unverified accounts see verification guidance instead
+of making a seller-profile request. Existing exact-role/session guards remain.
+The Sites local-only workflow reused existing WearHowZ styling without publishing.
+
+Validation: production build/TypeScript, all 244 unit/component tests and 44
+focused desktop/mobile browser tests passed. Automated accessibility and overflow
+checks passed; payment-pending screenshots were visually reviewed at both sizes.
+Browser APIs were mocked, including assertions that seller requests are GET-only.
+This does not verify real seller onboarding or email delivery. Backend files,
+payment flags and provider configuration are unchanged. No commit or push occurred.
+
+Seller registration follows in the next checkpoint below. Profile and operational
+tools remain unfinished; admin tools remain a separate checkpoint.
+
+## Seller registration and pricing — 27 October 2026
+
+`/seller/register` is linked from login/customer registration. It creates a new
+seller account, not a conversion of an existing account. Signed-in users are sent
+back to their workspace/account controls; restoration failures block the form.
+The form matches the inspected seller request schema, including optional surname,
+Pakistani mobile validation, brand description/return policy and 0–10,000 extra slots.
+
+Pricing comes from `/seller/register/slot-price?extra_slots=...`; no fee defaults
+are invented. The client validates quantities and decimal arithmetic, requires
+explicit review, and rechecks pricing before `POST /seller/register`. Changed
+prices restart review without submission. This is not a signed/locked quote:
+pricing can still change before the server creates the account. The confirmed
+response supplies the final amount, and a difference is explicitly surfaced.
+No transfer, PayFast initiation, receipt upload or approval is performed here.
+
+Drafts/passwords remain in memory. A non-secret sessionStorage marker is saved
+before submission; a missing response or malformed success blocks another attempt
+in that tab, including after reload. Double clicks are suppressed. Explicit 409/422
+rejections permit corrections, clear the password and never retry automatically.
+Storage failure prevents writes. Successful submission retains the guard and asks
+the applicant to verify email/sign in; email delivery is not assumed successful.
+The API has no idempotency/recovery key for registration. This local tab guard does
+not coordinate other tabs/devices and is not a substitute for server idempotency.
+Uncertain applicants must check their account/email or contact support, not resubmit.
+
+Validation: production build/TypeScript and all 269 unit/component tests passed.
+The 32 role-entry browser cases passed alongside the initial registration checks;
+all 22 final registration cases passed on desktop/mobile Edge. They cover zero/nonzero
+fees, exact payloads, review, duplicate clicks, changed/unavailable prices, lost or
+malformed responses, 422 correction, storage failure, reload and signed-in guards.
+Automated accessibility scans and overflow checks passed, with desktop/mobile
+review screenshots inspected. Tests use mocked APIs and create no real accounts.
+The Sites local-only workflow preserved existing styling. Backend files and payment
+flags remain unchanged; no live provider/email test, commit, push or deployment.
+
+Brand-profile editing follows below; remaining seller operational tools are separate.
+
+## Seller brand-profile editing — 27 October 2026
+
+`/seller/profile` is linked from the loaded seller application panel. Only verified
+seller sessions mount its private reader/editor; exact-role checks do not grant
+admins access to another seller's form. Backend authorization remains authoritative.
+The existing `/seller/me` GET/PATCH contract permits onboarding/profile access
+without requiring an active brand; editing does not change approval or payment state.
+
+The editor whitelists description, return policy, WhatsApp number, Instagram handle
+and six-digit hex brand colour. Only changed fields are sent. Null optional text
+renders empty without creating changes; explicitly clearing saved text sends an
+empty string, matching the inspected update contract. Brand name, fees, slots,
+status and logo are never included in profile patches. Logo upload is covered below.
+
+Save confirmation requires a valid response, the same seller ID and exact returned
+values for every requested change. Double clicks are suppressed. Uncertain or
+mismatched responses lock writes on the mounted page; refreshing only reads the
+server state and does not retry or unlock the change. Explicit validation errors
+remain editable. Drafts stay in memory, and refresh/discard/owner changes remove
+them. No automatic replay, optimistic success or cross-tab version-conflict
+protection is claimed; avoid concurrent edits from multiple tabs.
+
+Validation: build/TypeScript and all 289 unit/component tests passed. All 32 focused
+desktop/mobile browser tests across seller profile and status passed, including
+exact patches, explicit clearing, discard/refresh, lost responses, mismatched
+confirmation, 422 correction, denied reads and role/verification gates. Automated
+accessibility and overflow checks passed; both profile layouts were visually
+reviewed. API writes were mocked, not applied to real seller records. The Sites
+local-only workflow reused existing styling. Backend files and payment flags are
+unchanged; no commit, push or deployment occurred.
+
+## Seller brand-logo upload — 27 October 2026
+
+`/seller/logo`, linked from the brand-profile editor, supports local preview,
+discard and explicit multipart upload using the existing `/seller/logo` endpoint
+and its `logo` field. Only verified seller sessions can load the page's private
+data. JPEG, PNG and WebP files are checked locally for size (2 MiB), decodability
+and dimensions (25 megapixels); backend validation remains authoritative.
+Selections remain in memory and object URLs are revoked when discarded or replaced.
+
+Successful uploads require an HTTPS logo URL and a fresh `/seller/me` read matching
+both the uploaded URL and the original seller ID. The loaded seller identity is
+pinned for the mounted session. Duplicate clicks are suppressed; uncertain or
+mismatched results lock uploads on that page without automatic retries. Refresh
+only reads saved state and discards the local selection; it does not unlock an
+uncertain write. Definite validation rejections allow explicit correction.
+
+The UI explains public visibility, server conversion/resizing and local-only
+discard. The API does not support removing a saved logo, and replacement does not
+promise deletion of previously stored image objects. No crop editor is provided.
+The existing backend contract supports this flow without backend changes.
+
+Validation: build/TypeScript and all 306 unit/component tests passed. All 46 focused
+desktop/mobile browser tests across seller logo and profile passed, including
+multipart requests, file rejection, read-back confirmation, identity mismatch,
+uncertain responses, explicit correction and role gates. Accessibility and
+overflow checks passed; desktop/mobile logo screenshots were visually reviewed.
+Browser API/provider responses were mocked; no live storage upload was performed.
+The Sites local-only workflow preserved existing styling. No commit, push or
+deployment occurred.
+
+## Seller catalogue browsing — 27 October 2026
+
+`/seller/products` is linked from active seller status. Verified seller sessions
+read the authenticated `/seller/products` API; backend active-account checks
+remain authoritative. All/published/draft filters reset pagination to page one.
+The list displays base price, recorded stock, image count and server-reported
+slot capacity without claiming available-to-buy stock or moderation clearance.
+
+Responses are validated before rendering. Loading, empty and failed reads are
+distinct; private reads use no-store requests and cancel stale responses. The
+mounted reader is keyed to the signed-in owner. The API supplies 20 rows per page
+but no total count, so a full page enables Next and may lead to an empty page.
+Previous remains available there; changing filters resets the page.
+
+Validation: production build/TypeScript, 35 focused catalogue/status unit tests
+and 12 mocked desktop/mobile browser tests passed. Browser checks cover filtering,
+pagination, refresh, denied reads, role/verification gates, accessibility and
+horizontal overflow. Both layouts were visually reviewed. Initial browser test
+counting was adjusted to allow React StrictMode's duplicate initial GET while
+retaining exact subsequent request checks. No live backend data was changed.
+The Sites local-only workflow reused existing styles; backend changes were not
+needed. No commit, push or deployment occurred.
+
+The catalogue browsing checkpoint is read-only. Basic creation/editing follows
+below; images, variants and publishing controls remain separate.
+
+## Seller product drafts and basic editing — 27 October 2026
+
+`/seller/products/new` creates an unpublished, uncategorized draft without images
+or variants. `/seller/products/:id/edit` reads the private seller detail endpoint
+and updates only changed name, description, regular/sale price and SEO fields.
+Both are linked from the catalogue. Existing category, inventory and publishing
+state are omitted from edits. Editing a published product can affect its live
+listing immediately; this warning is shown before saving.
+
+Verified exact-role seller sessions must load an active seller profile before the
+form mounts. Product IDs and seller ownership are checked on reads and returned
+saves. Price inputs follow the API's whole-PKR range of 100–500,000, with sale price
+strictly below regular price. Clearing sale/SEO fields sends null. Save confirmation
+compares every requested value; duplicate clicks and automatic write replay are
+blocked. Uncertain edits stay locked through read-only refresh on the mounted page.
+Refresh and discard remove local unsaved edits, not server data.
+
+Creation sets a non-secret per-seller pending marker in sessionStorage before POST.
+Uncertain/mismatched responses retain it across same-tab reloads; confirmed success
+or known rejection removes it. A confirmed draft opens its owned editor. No draft
+content or credentials are stored. This safeguard is not cross-tab/server-side
+idempotency; unresolved creation requires catalogue inspection/support before a new
+attempt. The API also has no optimistic version-conflict protection for edits.
+
+Validation: final production build/TypeScript passed; all 327 unit/component tests
+passed with `npm test -- --maxWorkers=2`. The first concurrent run had two unrelated
+5000 ms timeouts; the lower-concurrency rerun passed without relaxing timeouts.
+All 38 mocked desktop/mobile editor and catalogue browser tests passed after fixing
+an ambiguous discard-button test selector. Accessibility/overflow checks passed;
+both editor layouts were visually reviewed. The Sites local-only workflow reused
+existing form styles. Backend files were unchanged; no live writes, commit, push
+or deployment occurred.
+
+## Seller categories and variants — 28 October 2026
+
+`/seller/products/:id/options`, linked from the basic editor, manages an existing
+owned product's category and variants. The verified seller/active-account gate
+is reused. Private product responses are checked for product and seller identity;
+backend ownership enforcement remains authoritative. Public `/categories` supplies
+selectable categories. Missing saved categories remain visible and unchanged until
+an explicit replacement or Uncategorized selection; failed reads never clear them.
+Category saves send only `category_id` and verify the returned assignment.
+
+Variants can be added with size type/value, colour, initial stock and optional
+whole-PKR override. The server generates the SKU. Existing variants allow changed
+size/colour, active status and explicit pricing actions; stock and SKU are never
+included in update payloads. The API reports effective price rather than raw
+override state, so the editor never infers whether an override exists. Keep sends
+no price change, inherit sends null and set sends a validated override. Returned
+variant identity, SKU, changed fields and requested effective price are checked.
+New variants are identified by comparing returned IDs with the loaded product.
+Stock is displayed as a snapshot and may change concurrently after creation.
+
+All option writes share a mounted-page lock. Uncertain results stay locked through
+read refresh; no writes are automatically retried. Variant creation also uses a
+per-seller/product sessionStorage pending marker, containing no draft or credentials,
+to block another creation after same-tab reload. This is not server-side or cross-tab
+idempotency. Unresolved creation requires inspection/support before another attempt.
+Refresh/cancel discard local variant drafts. Existing stock adjustment, SKU renaming,
+variant deletion and publishing are not offered by this screen.
+
+Validation: production build/TypeScript and all 339 frontend unit/component tests
+passed (`npm test -- --maxWorkers=2`). All 58 mocked desktop/mobile browser tests
+for product options and the basic editor passed, covering category assignment and
+removal, unavailable categories, price actions, stock preservation, creation,
+uncertain writes, cancellation, access gates and owner mismatch. Accessibility and
+overflow checks passed; desktop/mobile layouts were visually reviewed. The Sites
+local-only workflow preserved existing styling. Backend changes were unnecessary;
+no live API writes, commit, push or deployment occurred.
+
+## Seller product images and publishing — 28 October 2026
+
+`/seller/products/:id/media` is linked from the basic editor and category/variant
+screen. It reuses verified-seller, active-account and owned-product checks. The
+backend detail schema now requires `is_published`, populated from the persisted
+product in `ProductService._to_detail`; deploy/restart that backend change with
+this frontend. A missing publication field blocks media controls rather than
+assuming draft state. No database migration or publishing-rule change was needed.
+
+The page supports single-image uploads (multipart `images`), local preview/discard,
+primary selection, complete-list reordering and confirmed removal. Local checks
+enforce JPEG/PNG/WebP, non-empty files up to 5 MiB and 25 megapixels; the six-image
+product limit is shown and backend validation remains authoritative. Local object
+URLs are revoked. Saved previews require safe HTTPS URLs and have load-failure
+fallbacks. Removal verifies attachment absence, not completed storage cleanup.
+
+Publish/unpublish and image removal require explicit confirmation. Publishing is
+locally disabled without an image or variant; the backend makes final capacity
+and eligibility decisions. The last image of a published product cannot be removed
+through this UI. Published status does not promise moderation clearance or public
+visibility. Unpublishing does not cancel existing orders.
+
+Each mutation is followed by a fresh authenticated owned-product read to confirm
+the specific result. Failed read-back (including 4xx), malformed results and
+mismatches lock writes on the mounted page; refresh inspects state without replay
+or unlocking. Duplicate clicks are suppressed. These locks do not provide
+cross-tab or server-side idempotency; resolve uncertain outcomes before retrying.
+
+Validation: production build/TypeScript, all 349 frontend unit/component tests
+(`npm test -- --maxWorkers=2`), 94 mocked desktop/mobile browser regressions, and
+the 3 focused backend publication-response tests passed. Accessibility/overflow
+checks and desktop/mobile screenshot review passed. Backend tests used the project
+root virtual environment; global Python lacked test dependencies. Ruff 0.17.3 was
+installed into that environment with approval. The new test is lint-clean; the two
+existing backend files retain the same 74 diagnostic codes/messages as HEAD, so
+full-file Ruff is not green. No unrelated lint rewrites were made.
+
+The build now warns about a JavaScript chunk exceeding 500 kB (approximately 502 kB
+minified / 142 kB gzip); code splitting remains a later performance checkpoint.
+The Sites local-only workflow preserved existing styles. No live upload, real
+product publication, full backend-suite run, commit, push or deployment occurred.
+
+## Seller inventory — 28 October 2026
+
+`/seller/inventory` is linked from the active seller workspace and catalogue.
+Verified seller sessions load active-account status before inventory access.
+The authenticated list supports product/SKU search, low-stock filtering and
+20-row pagination. It displays physical, reserved and available units plus reorder
+thresholds. Response validation checks variant/product identity, stock arithmetic,
+low-stock classification and pagination. A stock editor fetches fresh private
+variant detail before allowing changes; failed reads never produce an empty form.
+
+Both relative adjustments and absolute physical counts require review and explicit
+confirmation. Adjustments require a reason and delta from -10,000 to +10,000,
+excluding zero. Physical counts and thresholds accept 0–999,999. Local checks
+protect the displayed reserved quantity; existing backend row locks and reservation
+checks enforce this against current database state. Absolute counts explicitly
+replace physical units, including reserved units. Only a changed threshold is sent.
+Stock receipts are validated before reporting success: adjustment arithmetic uses
+the server's previous quantity, which may differ after concurrent order activity.
+An untouched threshold is not compared with a stale snapshot. The list refreshes
+after confirmed writes to show the latest quantities.
+
+Duplicate clicks are suppressed. A non-secret, per-account pending marker is set
+in sessionStorage before stock writes. Uncertain responses or malformed receipts
+retain it through refresh and same-tab reload; confirmed success or known request
+rejection clears it. Pending writes block further stock mutations while leaving
+inventory reads available. This is not cross-tab/server-side idempotency or a
+reconciliation ledger; unresolved writes require inspection/support before another
+adjustment. No reasons, draft quantities or credentials are persisted. Unsaved
+editor changes are discarded by filter/page changes, close or refresh.
+
+The seller inventory query now sorts by product ID and variant ID before applying
+offset/limit, giving unchanged catalogues a deterministic page order. This does not
+provide a snapshot across concurrent catalogue changes. A focused backend regression
+checks ordering, seller/deletion scope, low-stock condition and pagination SQL.
+Stock mutation and reservation rules were not changed.
+
+Validation: production build/TypeScript, all 363 frontend unit/component tests and
+42 mocked desktop/mobile inventory/status browser tests passed. Browser checks
+cover reviewed adjustments/counts, reservations, concurrent receipt arithmetic,
+uncertain response locks through reload, correction, filters, pagination and access
+gates. Accessibility/overflow checks passed and both layouts were visually reviewed.
+The backend ordering test passed; its Ruff check is clean. Inventory service retains
+the same 22 lint findings as HEAD. Native database races, real stock mutations and
+the full backend suite were not run for this UI checkpoint. The existing bundle-size
+warning remains (approximately 513 kB minified / 145 kB gzip).
+The Sites local workflow reused existing styling. No commit, push or deployment.
+
+## Seller fulfilment — 28 October 2026
+
+`/seller/orders` and `/seller/orders/:id` are linked from the active seller
+workspace. Verified seller sessions load active-account status before private
+order reads. The queue supports the API's status filters and 25-row pagination.
+The detail screen displays the seller's brand items, subtotal, delivery address,
+tracking and timestamps. Seller-order UUIDs are kept distinct from parent order
+UUIDs. Reads validate identity, amounts, item arithmetic and pagination; backend
+ownership checks remain authoritative. Unknown statuses have no write action.
+Empty/failed reads and incomplete delivery addresses do not enable fulfilment.
+
+The UI follows the existing pending → processing → shipped → delivered transitions.
+Each action requires review and confirmation. Shipping requires a trimmed tracking
+number (up to 100 characters) and accepts an optional courier name. Tracking fields
+are sent only with shipping. Delivered/cancelled orders offer no further transition.
+The existing backend enforces payment/COD verification, stock deduction and
+settlement rules; this checkpoint does not add a payment-verification action.
+The delivery confirmation explains that delivery can start earnings settlement.
+
+After PUT, a fresh authenticated detail read must match seller-order ID, parent
+order ID, requested state and any submitted tracking fields. A success message
+alone is not treated as confirmation. Duplicate clicks are suppressed; failed
+read-back (including 4xx), malformed/mismatched state or uncertain writes keep the
+order locked. A non-secret per-account/order sessionStorage marker preserves the
+lock across same-tab reloads. Known request rejection or confirmed success clears
+the marker. Customer addresses, tracking and form drafts are never persisted.
+This safeguard is not cross-tab/server-side idempotency or automatic reconciliation;
+unresolved updates require order inspection/support before further changes.
+
+Validation: production build/TypeScript, all 374 frontend unit/component tests and
+38 mocked desktop/mobile fulfilment browser tests passed. Tests cover preparation,
+tracking/shipping, delivery, payment/COD rejection, review cancellation, uncertain
+results through refresh/reload, queue filters/pages, terminal/unknown states,
+address completeness and access gates. Accessibility and overflow checks passed;
+both layouts were visually reviewed. The Sites local workflow reused existing
+styling. No backend source changes or live order/stock/settlement operations were
+needed for this checkpoint; no commit, push or deployment occurred. The existing
+bundle warning remains (approximately 525 kB minified / 147 kB gzip).
+
+## Seller returns — 28 October 2026
+
+`/seller/returns` and `/seller/returns/:id` are linked from the active seller
+workspace. Verified seller sessions load active-account status before private
+reads. The queue uses seller pagination (25 rows), API-supported status filters
+and distinct loading/empty/error states. All-status reads omit the status parameter.
+Detail displays named items, purchased/requested quantities, item reasons, notes,
+the server's discounted refund estimate, refund/dispute status and a link to the
+brand fulfilment order. Monetary/item arithmetic, quantities and IDs are validated.
+
+Actions are the intersection of server `available_actions` and the current return
+state: requested supports approve/reject, approved supports mark received. Unknown
+or terminal states and empty action lists enable no seller writes. Refund processing
+and dispute messaging are not exposed by the seller contract. The estimate is
+labelled separately from recorded refund status; receipt confirms physical arrival
+and leaves administrator refund processing separate.
+
+Every action requires review and confirmation. Optional decision notes use the
+existing API's `admin_note` field; the UI explains that a new note replaces shared
+return notes and may be visible to the customer. Blank notes send no replacement.
+After POST, a fresh owned detail read must match return, order and shipment IDs,
+requested item IDs/quantities, target state and any submitted note. Failure of
+read-back (including 4xx), malformed/mismatched results or uncertain writes keeps
+the return locked, with no automatic replay. A non-secret per-account/return
+sessionStorage marker preserves the lock through same-tab reload. Known rejection
+or confirmed success clears it. Notes, reasons and drafts are not persisted.
+Unresolved writes require inspection/support; this is not server-side or cross-tab
+idempotency. Refresh discards local edits while preserving uncertain-write locks.
+
+Validation: final production build/TypeScript, all 384 frontend unit/component tests
+and 42 mocked desktop/mobile seller-return browser tests passed. Tests cover partial
+quantities, refund estimates, approval/rejection/receipt, note preservation,
+confirmation, uncertain responses through reload, pagination/filtering, dispute
+status, terminal/unknown states and access gates. Accessibility/overflow checks
+passed; both layouts were visually reviewed. Long text wraps within the page.
+The Sites local workflow reused existing styling. No backend changes, live returns,
+refunds, stock credits, commit, push or deployment occurred for this checkpoint.
+The existing bundle warning remains (approximately 538 kB minified / 149 kB gzip).
+
+## Seller wallet and payouts — 28 October 2026
+
+`/seller/wallet` and `/seller/wallet/accounts` are linked from the active seller
+workspace. Verified seller sessions load active-account status before private
+reads. Wallet balances distinguish available funds and pending release, with
+recorded earnings/commission. Transaction and payout histories support the API's
+filters and 25-row pagination. Payout history shows status, admin notes, completion
+dates and transfer references; transfer destinations remain hidden until revealed.
+Platform completion records are not presented as bank-statement confirmation.
+
+Wallet summary now includes `minimum_withdrawal_amount` and
+`maximum_withdrawal_amount`, populated from the backend's configured withdrawal
+limits. The request schema and service limits remain unchanged. Deploy/restart
+the updated backend with this frontend. Missing/inconsistent limits block payout
+requests. The existing exact-response integration assertion was updated, and a
+unit regression verifies non-default configured limits are exposed correctly.
+
+Payout requests require explicit account selection, an exact decimal PKR amount
+and review/confirmation. The frontend checks precision, current published limits
+and available funds using integer paisa. Before POST, it reloads the wallet and
+accounts to catch changed eligibility, limits or destination details. The server's
+locking and ownership checks remain authoritative against changes after this read.
+The returned payout must match the amount, bank destination, method and requested
+status before success is shown. Success records a request for admin processing;
+it does not report a completed transfer. Balances refresh after confirmation.
+
+Bank accounts can be added with optional title/default selection, reviewed before
+submission and removed after confirmation. New responses and subsequent account
+list reads must match the requested details; deletion is confirmed by absence.
+Saved account numbers are masked in listings. Existing payout requests retain their
+destination snapshots. The API does not offer bank-account editing or an existing
+account default-change endpoint; this screen adds neither. Bank transfers are the
+supported destination method exposed by the current seller payout contract.
+
+All wallet/account writes share a mounted-page lock and a non-secret per-account
+pending marker in sessionStorage. Ambiguous responses or failed/mismatched
+post-write confirmation retain it through same-tab reload. Known rejection or
+confirmed success clears it. Preflight failures send no write and permit correction.
+No credentials, account numbers, amounts or notes are stored in browser storage.
+This is not cross-tab/server-side idempotency or automatic reconciliation; resolve
+uncertain requests using saved records/support before another payout.
+
+Validation: final production build/TypeScript, 50 focused frontend unit/component
+tests (wallet contracts, seller status and App), and 38 mocked desktop/mobile wallet
+browser tests passed. Accessibility/overflow checks passed and wallet/account layouts were visually
+reviewed on both viewports. All 23 backend withdrawal-limit tests and all 36 wallet
+API integration tests passed. Integration checks used a separate PostgreSQL 15
+container with synthetic accounts and isolated schemas; that container and its
+temporary volume were removed afterward. Application database/Redis containers
+were untouched. Test files are Ruff-clean; the schema/service pair retains the
+same 16 lint findings as HEAD. The full backend suite was not run.
+
+The Sites local workflow preserved existing styling. No real transfer, commit,
+push or deployment occurred. The existing bundle warning remains (approximately
+557 kB minified / 153 kB gzip). Commission/settlement breakdown belongs to the next
+seller analytics checkpoint.
+
+The seller analytics checkpoint below completes the next step.
+
+## Seller analytics and commission breakdown — 28 October 2026
+
+`/seller/analytics` is linked from the active seller workspace. Only verified
+seller sessions with an active profile load private analytics. Reads are scoped
+to the mounted owner and selected period; stale responses are aborted and never
+replace the current selection. Every section has loading, error and refresh
+states, and empty series are not filled with invented data. This checkpoint
+changes only frontend files; the existing backend contracts are unchanged.
+
+Performance supports 7/30/90/365-day windows, settlement buckets grouped by
+day/week/month, the top 10 products ranked by order value/units/lifetime views,
+and current inventory health. Labels distinguish refund-adjusted settlements
+from qualifying order-item sales, lifetime product views/ratings and current
+stock. Low-stock variants are included in in-stock counts. The settlement/view
+ratio is not presented as unique-customer conversion, nor as capped at 100%.
+Settlement bucket dates are UTC and only returned buckets are listed.
+
+The commission view has 25-entry pagination and all-time totals independent of
+the current page. Entries link to the seller's shipment and show original and
+refund-adjusted amounts, original commission rate, reversal totals, wallet
+recoveries, settlement offsets, platform-covered shortfalls and release records.
+Release timestamps do not imply bank payouts or withdrawable funds; wallet
+balances and payout history remain separate. All decimal money validation,
+reconciliation and formatting use integer paisa/BigInt without floating-point
+rounding, including aggregate totals above Number's safe integer range.
+
+Scope limit: the backend commission query currently ignores its optional date
+arguments. This UI therefore offers only explicitly all-time ledger reads and
+does not send or claim working commission date filters. Performance period
+filters use the separate analytics endpoints. Analytics and ledger sections
+are independent snapshots, not an atomic cross-endpoint financial report.
+Ledger ordering remains the backend's settlement-time ordering.
+
+Validation: production build/TypeScript, 52 focused frontend unit/component
+tests (analytics, seller status and App), and all 28 mocked desktop/mobile
+analytics browser tests passed. Browser checks cover period/ranking/bucket
+queries, commission pagination, release/refund distinctions, invalid payloads,
+denied reads/retry, empty states, access gates and stale period responses.
+Accessibility and horizontal-overflow checks passed; performance and expanded
+ledger screenshots were reviewed at both viewports. No live provider calls,
+backend tests, real-money operations, commits, pushes or deployment occurred.
+The Sites local workflow preserved the existing design. The existing bundle
+warning remains (approximately 573 kB minified / 156 kB gzip).
+
+The admin seller-review checkpoint below completes the next frontend step.
+
+## Admin seller reviews — 28 October 2026
+
+`/admin/sellers` and `/admin/sellers/:id` are connected from the admin workspace.
+Private reads require an exact admin role and verified email. Owner/route changes
+unmount private state and abort stale reads. Invalid references never reach the
+review API; unknown seller statuses are read-only. Backend authorization remains
+authoritative. Existing administrator sign-in/2FA policy was not changed.
+
+The application list defaults to awaiting approval and supports all five known
+status filters, brand-name search and 25-row pagination. Detail screens show the
+submitted brand/profile/return-policy fields, published-product and slot counts,
+quoted registration fee, saved review reason and recorded financial context.
+Delivered-shipment value is not presented as refund-adjusted settlement revenue.
+Money validation/formatting preserves decimal precision through integer paisa.
+Submitted logos are displayed only for credential-free HTTPS URLs, without a
+referrer; contact/profile text is rendered as text rather than executable links.
+
+Actions follow the existing service rules: awaiting-approval sellers can be
+approved/rejected; pending-payment applications can only be rejected; active
+sellers can be suspended; suspended sellers can be reinstated. Rejected/unknown
+states offer no action. Rejection/suspension require a trimmed 10–1,000-character
+reason. Each decision has explicit review and confirmation, then rechecks the
+latest status and reviewed application fields before POST. A changed application
+requires another review. Success requires a subsequent detail read matching the
+seller ID, target status and any submitted reason, not just a success message.
+Reinstatement does not claim to restore independently moderated products.
+
+Writes have a mounted-page lock and a non-secret owner/seller-scoped pending
+marker that survives same-tab reload. Ambiguous writes or failed/mismatched
+readback stay locked; known rejections allow correction without automatic replay.
+No token, reason, balance or application contents are saved in browser storage.
+This is not server idempotency or cross-tab/cross-admin concurrency control.
+
+The frontend checkpoint found that the review service read seller state without
+a row lock, then updated by seller ID. No backend files changed during that
+frontend step. The follow-up concurrency checkpoint below resolves that
+decision-transition race; frontend preflight alone is not the concurrency guard.
+
+At the review checkpoint, registration-payment recording was still separate.
+The follow-up below adds that form and receipt readback. A zero fee or approval
+is never treated as a paid receipt. Suspension/rejection do not cancel orders or
+settle financial balances.
+
+Validation: production build/TypeScript, 59 focused unit/component tests (admin
+contracts/page, portal and App), and all 52 mocked desktop/mobile browser tests
+passed. The owner-isolation tests were rerun after strengthening the valid delayed
+response/abort assertion (7 passed). Browser fixtures change application data
+explicitly after review rather than depending on initial-read counts in Strict
+Mode. Browser coverage includes all four decisions, state/reason readback,
+changed-application preflight, uncertain outcomes across reload, known rejection,
+status/search/page controls, invalid payloads, access gates and stale responses.
+Accessibility and horizontal-overflow checks passed. List/detail screenshots were
+visually reviewed at both viewports. The Sites local workflow preserved styling.
+
+No real seller decisions, external notifications, backend tests, commits, pushes
+or deployments occurred. Existing unrelated changes were preserved. The existing
+bundle warning remains (approximately 587 kB minified / 160 kB gzip).
+
+Concurrent admin decisions are addressed in the follow-up below.
+
+## Admin decision concurrency — 28 October 2026
+
+`AdminService._get_seller()` now uses PostgreSQL `SELECT ... FOR UPDATE` and
+`populate_existing=True`. Approval, rejection, suspension and reinstatement all
+use this helper, so each locks the seller before checking status and holds the
+lock through the existing update/outbox/commit transaction. A waiting request
+validates the latest committed state, even if its SQLAlchemy session already
+cached that seller. Missing/soft-deleted sellers remain excluded. Read-only list
+and detail queries, transition eligibility, API contracts and migrations are
+unchanged.
+
+The original race was reproduced on native PostgreSQL before changing the
+service: a competing rejection completed while the approval was paused after
+loading its seller. After the fix, tests explicitly observe the second database
+connection waiting on the first connection's lock via `pg_blocking_pids` before
+releasing the first operation. Tests do not infer locking from a fixed sleep.
+
+Eight native cases passed: approval versus rejection in both orders; duplicate
+approval/rejection; duplicate rejection while registration payment is pending;
+duplicate suspension/reinstatement; and rollback after an actual approval outbox
+insert followed by a successful waiting rejection. Each uses independent real
+transactions and deliberately preloads the second session's seller identity.
+Checks cover final status, decision actor/reason/timestamp, correct notification
+payloads and absence of phantom outbox events after rollback. Notification workers
+are not run and no external messages are sent.
+
+Verification: 45 focused tests passed (14 admin unit tests, 23 mocked admin API
+tests and 8 native PostgreSQL races). Both changed test files are Ruff-clean.
+The admin service has the same 34 pre-existing Ruff findings as HEAD, with no new
+codes/messages. The full backend suite, coverage gate and migration checks were
+not run for this query-only change. No frontend runtime files changed, so the
+previous frontend build/browser results remain the UI verification baseline.
+
+Database execution used a dedicated PostgreSQL 15 container with synthetic test
+accounts, per-test disposable schemas and real commits. The test container and
+its temporary volume were removed after verification; the application database
+and Redis containers were untouched. No commits, pushes or deployment occurred.
+
+Limits: this serializes the existing server-side transitions; it does not add
+cross-request idempotency keys or an optimistic version check binding a decision
+to the exact application content reviewed earlier in the browser. A later,
+independently eligible decision can still run after the first commits. These
+checks use the default PostgreSQL READ COMMITTED behavior, not every isolation
+level or a complete operational load test.
+
+Registration-payment recording is completed in the follow-up below.
+
+## Admin registration-payment records — 28 October 2026
+
+The seller detail screen now records an externally verified registration transfer
+for an eligible pending-payment application. An administrator enters the exact
+outstanding decimal PKR amount and transfer reference, explicitly confirms they
+verified receipt in the receiving account, reviews the details, then confirms the
+record. This does not charge money, contact a payment provider or approve a seller.
+A newly recorded payment moves the application to awaiting approval; any later
+approval/rejection remains a separate decision.
+
+Admin seller details now require `registration_amount_due`,
+`registration_paid_at`, `registration_payment_reference` and
+`registration_paid_by`. These expose existing stored receipt metadata; no new
+database column or migration is needed. Outstanding amount is the stored fee
+only while awaiting payment without a paid timestamp, otherwise zero. Recorded
+amount uses the stored registration fee that the endpoint matched at recording.
+Deploy/restart the updated backend before using this frontend: missing or
+inconsistent receipt fields block the detail screen rather than guessing.
+
+References are trimmed and must contain 3–255 usable characters without embedded
+control characters. Amounts remain exact decimal strings/integer paisa. The
+endpoint retains its seller row lock and now refreshes a cached ORM identity
+before checking receipt/state. An identical amount/reference replay preserves
+the original actor, timestamp and current seller status, including after a later
+approval. Conflicting replays fail. Partial legacy metadata is not overwritten;
+it requires reconciliation. Zero-fee applications never acquire invented receipts.
+
+The UI rechecks reviewed application/receipt fields before writing and confirms
+the saved seller ID, amount, reference, paid timestamp, recording admin and zero
+outstanding amount afterward. A separate later status change does not invalidate
+a matching receipt. Ambiguous writes or mismatched/failed readback retain the
+existing owner/seller pending marker across same-tab reload, locking both payment
+and decision writes. Known rejections permit correction without automatic replay.
+References, amounts and credentials are not saved in browser storage. Historical
+receipts with missing actor/reference are shown as incomplete, not silently repaired.
+
+Validation: 54 focused backend tests passed, including 20 native registration API/
+race cases and the 8 existing native decision-race regressions. Coverage includes
+permission gates, exact amounts, zero/partial records, idempotency, conflicting
+references, competing payment/rejection/approval operations, stale ORM identities
+and rollback. Test files are Ruff-clean. Changed backend source has no new lint
+findings: 8 old route findings were removed, leaving 55 existing findings across
+the route/schema/service files. The full backend suite, coverage gate and migration
+checks were not run for this additive response/query-validation change.
+
+Frontend production build/TypeScript passed. The initial 59 related unit/component
+regressions passed; after adding three receipt cases, all 19 admin contract tests
+passed. The final workspace copy was checked with all 23 portal tests passing.
+All 92 mocked desktop/mobile payment and seller-review browser tests
+passed after the final form-key fix. The payment regression also rejects duplicate
+component-key console warnings. Accessibility and overflow checks passed, and
+payment-review/receipt screenshots were visually reviewed at both viewports.
+The Sites local workflow preserved existing styling. The existing bundle warning
+remains (approximately 592 kB minified / 161 kB gzip).
+
+Native tests used a dedicated PostgreSQL 15 container with synthetic accounts and
+per-test disposable schemas. That container and temporary volume were removed;
+the application database and Redis were untouched. No real transfer, provider
+charge, notification delivery, commit, push or deployment occurred.
+
+Limits: this is manual receipt recording, not bank verification, file upload or
+automated reconciliation. Replay protection is per seller; no global cross-seller
+transfer-reference uniqueness policy was added. Existing uncertain browser writes
+still need reconciliation rather than automatic unlocking. The recorded fee is
+not credited to seller wallet balances by this workflow.
+
+Product moderation is completed in the follow-up below.
+
+## Admin product moderation — 28 October 2026
+
+`/admin/products` and `/admin/products/:id` are linked from the verified admin
+workspace. Seller review pages link to the corresponding filtered catalogue.
+The list supports the API's seller UUID and admin-hidden filters with stable
+25-row pagination; no unsupported name-search filter is invented. URL filters
+and product references are validated before reads. Exact admin role and verified
+email gates precede private requests, with mounted-owner isolation and aborted
+stale reads. Server authorization remains authoritative.
+
+Added `GET /api/v1/admin/products/{product_id}` and the separate
+`AdminProductDetailResponse`. This permits inspection of non-deleted products
+even when draft, admin-hidden or owned by a suspended/archived seller. It exposes
+the existing product detail plus `admin_hidden`, `seller_status` and
+`seller_deleted`; public response contracts gain none of those private flags.
+The existing repository fully hydrates images, category, seller, variants and
+inventory. Unlike public product reads, admin inspection creates no analytics
+view event and does not increment product views. No migration was needed.
+Deploy/restart the updated backend before using the new detail screen.
+
+Detail screens show content, prices, images, category, brand return policy,
+effective variant prices and physical/available stock. Non-HTTPS or
+credential-bearing image URLs are not rendered. Moderation status, seller
+publication, seller approval/deletion and stock are kept separate: removing an
+admin restriction does not publish a draft, activate a seller or guarantee stock.
+The UI adds neither product deletion nor seller-side editing/publication actions.
+Existing seller publication and moderation fields remain independent.
+
+Hide/unhide require review and explicit confirmation. Preflight rereads the
+reviewed content, identities, prices, variants and seller/moderation flags; changed
+content requires another review. Volatile inventory counts are excluded from
+that content comparison and never submitted by the moderation form. Success
+requires both the returned product/flag receipt and a private detail readback
+matching the target product, seller and requested flag. Unknown outcomes or
+failed/mismatched confirmation retain an owner/product-scoped non-secret pending
+marker across same-tab reload. Known rejections permit correction without replay.
+No content, credentials or prices are stored in browser storage.
+
+Validation: production build/TypeScript and 48 focused frontend unit/component
+tests passed. All 60 mocked desktop/mobile browser tests passed, including filter
+pagination/reset, exact money, hide/unhide, drafts, inactive/archived sellers,
+changed-content preflight, stock changes, invalid payloads, permission gates,
+uncertain responses/reload, empty states and stale reads. Accessibility/overflow
+checks passed and list/detail screenshots were visually reviewed at both sizes.
+The Sites local workflow preserved the existing styling. Existing bundle-size
+warning remains (approximately 606 kB minified / 163 kB gzip).
+
+All 46 focused backend tests passed: 12 unit/OpenAPI contract cases and 34 native
+PostgreSQL read/moderation cases. These prove permission boundaries, non-public
+inspection, deleted/missing exclusions, exact prices, non-mutating admin reads,
+stable pagination and idempotent hide/unhide without stock, slot, seller-status
+or publication changes. Both changed backend test files are Ruff-clean. The
+route's 30 and service's 41 existing lint findings match their baselines, with no
+new findings. Schema Ruff verification was not run after its approval was
+declined; it was not retried. Schema contracts were exercised by tests/build.
+The full backend suite, coverage gate and migration checks were not run here.
+
+Native execution used synthetic data and per-test disposable schemas in a
+separate PostgreSQL 15 container. Its container and temporary volume were removed;
+the app database and Redis were untouched. No live product moderation, external
+storage changes, commits, pushes or deployments occurred. Unrelated work was
+preserved, including earlier product publication-response repairs.
+
+Limits: the existing row-locked hide/unhide operations set an absolute flag and
+are idempotent, not optimistic-version checks against the exact browser snapshot.
+Another authorized decision may change the flag after a read. No moderation
+reason, actor-history, bulk-edit or deletion API was added. Uncertain browser
+writes require reconciliation rather than automatic unlocking.
+
+Admin review moderation is completed in the checkpoint below.
+
+## Admin customer review moderation — 28 October 2026
+
+Verified administrators can open `/admin/reviews` from their workspace and
+inspect `/admin/reviews/:id`. Lists default to pending, support all four real
+statuses plus all-status browsing, and use the API's 25-row pagination. The
+all-status URL survives navigation/reload without accidentally reverting to pending.
+Detail shows customer content, author reference, rating, purchase-verification
+flag, photos, vote counts, private note and recorded timestamps. Product links
+open the existing private admin product detail, not a public visibility bypass.
+
+Approved, rejected and hidden decisions are explicitly reviewed before PATCH.
+The optional private note is limited to 1,000 characters; whitespace-only clears
+it. No customer text/photo deletion, order changes or financial operations are
+offered. Only approved reviews contribute to the product rating aggregate.
+The existing warm ivory/forest design and responsive account-card styles are reused.
+
+Backend changes are confined to `app/api/v1/admin/reviews.py`: typed private
+list/detail/decision responses, a protected detail GET, note normalization and
+setting `moderated_at` plus `updated_at` when saving decisions. Admin fields
+remain absent from the public/customer review schema. The existing review row
+lock now reloads stale identity-map state. The new frontend supplies
+`expected_updated_at`; the server compares it under that lock and returns 409
+for a stale decision, with rating refresh in the same transaction. Legacy callers
+may still omit the version (backward compatibility), so they do not receive
+optimistic conflict protection. This is latest moderation metadata, not an
+actor-attributed, append-only moderation audit history. No migration was needed.
+
+The UI rechecks reviewed content before writing, verifies the PATCH receipt and
+a fresh private readback, and prevents duplicate clicks. Uncertain outcomes lock
+further writes across same-tab reload/refresh using an owner/review-scoped pending
+marker; tokens, content and notes are not stored there. Known rejections are not
+replayed. Private results are discarded when the admin changes, and a pending
+preflight cannot send a decision after its owner screen is unmounted.
+
+Verification:
+
+- `npm run build` passed; JavaScript is 618.08 kB minified / 165.16 kB gzip.
+  The existing >500 kB bundle warning remains.
+- Focused Vitest run for `reviews.test.ts`, `AdminReviewsPage.test.tsx`,
+  `PortalPage.test.tsx` and `App.test.tsx` with `--maxWorkers=2`: **49 passed**.
+- `npm run test:browser -- tests/browser/admin-reviews.spec.ts`: **52 passed**
+  across desktop/mobile. Confirmation screenshots were subsequently refreshed
+  with two additional passing repetitions. List and confirmation screenshots
+  were visually reviewed; those representative states had no tested Axe
+  WCAG A/AA violations or horizontal overflow.
+- Backend `tests/unit/test_admin_review_contract.py` and
+  `tests/integration/test_admin_reviews.py`, using `-q -o addopts="" --tb=short
+  --disable-warnings`: **26 passed**, with 83 warnings. Native PostgreSQL 15
+  used synthetic data in a dedicated disposable test container, now removed.
+  Checks cover permissions, private contracts, status filters, tied-date
+  pagination, note clearing, aggregate updates, stale versions and competing
+  decisions from independently preloaded sessions (one winner).
+- Ruff passed on the changed backend route and both new backend test files;
+  `git diff --check` passed. No full-suite or coverage-gate claim is made here.
+
+Browser APIs and images were mocked; no real provider/storage calls occurred.
+Deploy the frontend with the updated private backend contracts. Nothing was
+committed, pushed or deployed. Content management and remaining admin operations
+are separate checkpoints, not completed by this moderation screen.
+
+## Admin banner content management — 28 October 2026
+
+Verified administrators can open `/admin/content`, create banners at
+`/admin/content/banners/new` and manage `/admin/content/banners/:id`.
+This checkpoint covers the existing banner APIs only; it does not add a generic
+CMS, category editor or new storefront placement rendering.
+
+The saved list follows server sort order and shows artwork, placement, active
+flag, schedule limits and destination text. New banners default inactive in this
+UI. JPEG/PNG/WebP selections are locally decoded and previewed before an explicit
+review/confirmation; limits are 5 MiB and 25 megapixels. The server's existing
+image processor converts/resizes to WebP. Scheduling is available after creation,
+matching the existing create/update API split. Metadata edits support all three
+positions, non-negative 32-bit order, active state, optional safe destination and
+UTC start/end limits. Clearing a limit/link is explicit. Unchanged schedule
+seconds are preserved despite minute-resolution form controls.
+
+The existing warm ivory/forest account-card design is reused. Editing does not
+replace artwork: that action is not supported by this API. Deletion requires a
+separate review and confirmation and removes only the banner database record;
+stored images are retained. No shared or historical media was deleted here.
+Live storage verification and orphan-media reconciliation remain separate work;
+an upload followed by a persistence failure is not claimed to have automatic
+storage compensation. Active/schedule flags do not by themselves verify that a
+placement is displayed in the storefront.
+
+Backend changes stay in `admin/content.py`, the banner portion of
+`schemas/admin.py` and banner methods of `AdminService`. Creation now validates
+title, link, placement and order before storage calls. Destinations must be
+site-relative paths or credential-free HTTPS URLs, without control characters,
+spaces, protocol-relative paths or backslashes. Schedule inputs require timezone
+offsets; merged start/end validation occurs before mutation. Lists have a stable
+ID tie-breaker. Responses include the already-persisted `updated_at`; edits and
+deletes lock/reload the row and compare optional `expected_updated_at`. The new
+frontend always supplies that version. Legacy callers may omit it, so they do
+not receive optimistic stale-decision protection. No migration was needed.
+
+The UI rechecks the saved list before writes, verifies receipts and fresh list
+readback, and discards private state when the admin/record changes. Unknown
+create/edit/delete outcomes retain owner/action-scoped session markers across
+same-tab reload/refresh; no tokens, artwork or banner content are stored in those
+markers. Writes are never automatically replayed. This is not a server-side
+cross-request idempotency key; inspect records before resolving an uncertain
+creation. Known validation/conflict responses permit correction.
+
+Verification:
+
+- `npm run build` passed: 633.35 kB JavaScript / 168.77 kB gzip. The existing
+  >500 kB bundle warning remains.
+- Focused Vitest run for `content.test.ts`, `AdminContentPage.test.tsx`,
+  `PortalPage.test.tsx` and `App.test.tsx`, `--maxWorkers=2`: **50 passed**.
+- `npm run test:browser -- tests/browser/admin-content.spec.ts`: **50 passed**
+  across desktop/mobile, with mocked API/storage responses. List, edit-review
+  and creation screenshots were visually reviewed. Tested list/edit states had
+  no Axe WCAG A/AA violations or horizontal overflow.
+- Backend `tests/unit/test_admin_banner_contract.py`, `tests/unit/test_admin.py`
+  and `tests/integration/test_admin_banners.py`, using `-q -x -o addopts=""
+  --tb=short --disable-warnings`: **71 passed**, 83 warnings. Tests used a
+  disposable native PostgreSQL 15 database and synthetic users; image processing
+  ran with storage upload mocked. Coverage includes all CRUD permissions,
+  metadata-before-upload validation, corrupt/oversized images, schedule clearing,
+  stable order, stale update/delete checks and independent-session conflicts.
+  The banner test module removes the shared client's forced JSON header so
+  HTTPX can generate real multipart boundaries; the global fixture is unchanged.
+- Ruff passed for the changed content route and both new backend test files.
+  Schema/service lint remains at its pre-change baseline: **19 + 34 findings**,
+  no new findings. `git diff --check` passed. No full-suite/coverage-gate claim.
+
+The disposable database was removed after checks. No real storage calls,
+commits, pushes or deployment occurred. Deploy with the updated backend response
+contract. Next checkpoint: admin order management.
+
+## Admin order inspection — 29 October 2026
+
+Implementation and automated checks completed on 28 October; screenshot review
+and this handoff were finished after the interrupted session resumed on 29 October.
+Verified administrators can open `/admin/orders` and `/admin/orders/:id` from
+the admin workspace. This is read-only inspection, not COD verification,
+cancellation, payment reconciliation or refund execution.
+
+Lists support the existing order-status, COD/PayFast and optional seller filters,
+with 25-row pages, refresh, empty/error states and browser-history restoration.
+Historical payment methods remain readable under All methods but are not offered
+as new individual filters. Seller filtering selects whole parent orders: other
+brands and the full checkout amounts remain visible. The matching-order summary
+covers all matching pages, not merely the current page. Original checkout totals
+may include unpaid, cancelled or refunded orders and are not collected revenue.
+Recorded net commission uses settlement entries after commission reversals; it
+is not a wallet balance, payout receipt or completed customer-refund claim.
+
+Detail shows stored checkout values, notes, address and item snapshots, plus
+current brand fulfilment records, tracking and recorded dates. Links open the
+existing private product/seller inspection screens. Historical missing addresses,
+items/splits and inconsistent amounts are explicitly flagged without repairing
+or fabricating data on read. Private responses are owner/record-scoped, aborted
+when superseded and never stored in local/session storage. No write actions or
+provider calls were added. The existing ivory/forest account-card design is reused.
+
+Backend changes add protected `GET /api/v1/admin/orders/{order_id}` with the
+separate `AdminOrderDetailResponse`; public/customer schemas remain unchanged.
+The private response excludes checkout hashes, guest-access secrets, guest email
+and phone fields and authentication secrets. The stored delivery phone remains
+available to verified administrators for order operations. List responses add
+`per_page` and `total_pages`. A stable created-date/ID order prevents tied-date
+page drift. Seller filtering uses EXISTS rather than a multiplying join, so
+legacy duplicate brand splits do not duplicate parent orders. Per-page commission
+reads are batched; matching totals and detail use all relevant brands. No database
+migration or COD/refund mutation changes were made.
+
+Verification from the 28 October run:
+
+- `npm run build` passed: 648.54 kB JavaScript / 171.69 kB gzip. The existing
+  >500 kB bundle warning remains.
+- Focused Vitest run for `orders.test.ts`, `AdminOrdersPage.test.tsx`,
+  `PortalPage.test.tsx` and `App.test.tsx`, `--maxWorkers=2`: **50 passed**.
+- `npm run test:browser -- tests/browser/admin-orders.spec.ts`: **46 passed**
+  across desktop/mobile, using mocked API responses. List/detail screenshots
+  were visually reviewed on resume; representative tested states had no Axe
+  WCAG A/AA violations or horizontal overflow.
+- Backend `tests/unit/test_admin_order_contract.py`, `tests/unit/test_admin.py`
+  and `tests/integration/test_admin_order_reads.py`, using `-q -x -o addopts=""
+  --tb=short --disable-warnings`: **44 passed**, 83 warnings. Native PostgreSQL
+  15 used synthetic accounts/orders. Checks cover role/email restrictions,
+  snapshot/ledger values, whole-order filtered totals, legacy records, stable
+  pagination, duplicate splits and unchanged persisted order/accounting/stock
+  records after reads. No real payment or storage calls occurred.
+- Ruff passed on the changed admin order route and both new backend test files.
+  Existing schema/service findings are now **19 + 33**, down from 19 + 34;
+  no new findings. `git diff --check` passed. No full-suite or coverage-gate claim.
+
+Cleanup was initially unconfirmed because Docker was stopped. On 1 November,
+after Docker became available, the `com.wearhowz.task=admin-orders-check` label
+and PostgreSQL image were verified and `wearhowz-admin-orders-check-20261028`
+was removed with its disposable test volume. Application containers were untouched.
+
+Deploy with the updated private backend contracts. Nothing was committed, pushed
+or deployed. Next checkpoint: admin COD queue and verification, selected separately.
+
+## Admin COD decisions — 1 November 2026
+
+Verified administrators can open `/admin/cod` and `/admin/cod/:id` from the
+workspace. The complete pending queue includes expired records awaiting
+cancellation. Review shows saved contact, checkout total, brands, delivery/items,
+current order status and the exact UTC deadline. Zero rounded minutes does not
+mean the exact deadline has passed. Missing/inconsistent records are flagged;
+approval requires an eligible order and contact phone.
+
+Both actions require an explicit checkbox and a second review step. Cancellation
+requires a 10–500 character reason in this UI. Approval permits preparation only:
+it does not record cash collection, settle seller funds or issue a refund.
+Cancellation releases held reservations, not physical-stock credits or refunds.
+The Sites local workflow preserved the existing ivory/forest account-card design;
+no new imagery or hosted deployment was needed.
+
+Immediately before writing, the UI rechecks the private order and queue against
+the reviewed snapshot. It submits the parent version and runtime deadline, checks
+the structured receipt, then reads back the saved status and original checkout
+content. Double submits are locked; writes are never automatically retried.
+An ambiguous result stays locked across same-tab refresh/reload using only an
+owner/order-scoped pending marker. No contact data, notes or tokens are persisted.
+Owner changes discard old reads and prevent an old preflight from sending a write.
+
+Backend COD decisions lock and refresh the parent row, check current method,
+status, fulfilment eligibility, optional reviewed version and runtime deadline.
+Approval at or after the deadline is rejected. Optional version fields preserve
+legacy callers, which still receive the current server-side eligibility checks.
+Cancellation and expiry use strict reservation decrements and transactional
+history/outbox updates. A stale SQLAlchemy identity map after waiting for a lock
+was fixed in the shared order repository. Timeout jobs now reject non-COD parents;
+both expiry paths release inventory in deterministic variant order. No migration.
+
+Verification:
+
+- `npm run build` passed: 661.51 kB JavaScript / 174.32 kB gzip. The existing
+  >500 kB bundle warning remains.
+- Focused Vitest (`cod.test.ts`, `AdminCODPage.test.tsx`, `PortalPage.test.tsx`,
+  `App.test.tsx`, `--maxWorkers=2`): **51 passed** on the final sequential run.
+- `npm run test:browser -- tests/browser/admin-cod.spec.ts`: **52 passed** on
+  the final isolated run across Edge desktop/mobile. Queue/review screenshots
+  were visually inspected; representative tested states had no Axe WCAG A/AA
+  violations or horizontal overflow. This is not an accessibility certification.
+- Backend unit/admin/task-dispatch checks: **64 passed**. Native PostgreSQL COD
+  flow checks: **27 passed**, including independent-session decision races,
+  an expiry worker proved blocked behind an uncommitted admin cancellation,
+  duplicate decisions, expired/stale-policy rejection, reservation inconsistency,
+  outbox-failure rollback, permissions and unchanged wallet/ledger balances.
+- Existing marketplace COD fulfilment, dashboard totals and pre-settlement
+  refund regressions: **3 passed**, 46 deselected. Each backend invocation used
+  `-q -x -o addopts="" --tb=short --disable-warnings` and reported 29 warnings.
+- Ruff passed on the COD route, expiry task and new COD test files. The scoped
+  schema/service/repository check still reports **68 existing-style findings**
+  (down from the recorded pre-change 76); this is not a lint-clean or full-suite
+  claim. The unchanged release coverage gate was not rerun.
+
+Browser isolation now owns port 4173 and refuses to reuse another server. The
+initial port-3000 run hit an unrelated server's 404 page and was stopped. A later
+concurrent run had one navigation-unit and one role-gate browser timeout; the
+focused unit and full COD browser runs passed when repeated sequentially.
+Browser APIs are mocked;
+native tests use synthetic data, not real charges, delivery or notification sends.
+
+The labelled `wearhowz-admin-cod-check-20261101` disposable PostgreSQL container
+and test volume were removed after native verification. Application PostgreSQL,
+Redis and the unrelated port-3000 server were left untouched. Deploy frontend and
+updated backend contracts together. Nothing was committed, pushed or deployed.
+Next separately selected checkpoint: admin payment operations, including COD
+collection as a distinct financial action, followed by refund handling.
+
+## Admin payments and COD cash collection — 1 November 2026
+
+Verified administrators can open `/admin/payments` and `/admin/payments/:id`.
+The list starts with pending COD payments, supports status/method filters,
+25-row pagination, history restoration, refresh and empty/error states. All
+methods includes historical payment records; only COD/PayFast are new filter
+options. Saved amounts use the recorded currency, not an invented revenue total.
+Payment states have their own labels, separate from fulfilment states.
+
+Private detail shows the saved payment amount/currency, order status, reference,
+payment date, collection administrator when recorded and eligibility blockers.
+It links to full order inspection. This is local evidence, not independent
+verification by a bank, courier or PayFast. Old payments without an administrator
+audit remain readable without inventing an actor. Partial collections, PayFast
+reconciliation, refunds and seller payouts are not actions in this checkpoint.
+
+An eligible full-amount COD collection requires an actual receipt reference and
+an explicit confirmation that cash was received, then a second review. The UI
+rechecks the private snapshot before POST, submits the saved amount and parent
+order version, validates the structured receipt and reads back the saved evidence.
+Synchronous locking prevents double submission; mutations are never auto-retried.
+Ambiguous outcomes remain locked across same-tab reload/refresh using only an
+owner/payment-scoped pending marker. References, financial data and tokens are
+not stored in local/session storage. Owner changes discard stale reads/preflights.
+
+Backend additions/changes:
+
+- Protected `GET /api/v1/payments/{payment_id}` exposes a dedicated private detail
+  contract, excluding provider payloads, callback bodies and guest capabilities.
+  Payment lists add currency, `per_page` and `total_pages`, with stable date/ID
+  ordering. Frontend and backend contracts must be deployed together.
+- `POST /api/v1/payments/{payment_id}/cod-collection` returns a structured receipt
+  and accepts optional reviewed amount/order-version fields. Reference-only
+  legacy callers remain supported but still receive current eligibility checks.
+- Collection locks/refreshes the parent, rechecks the payment and requires COD,
+  PKR, the full matching checkout amount and delivered fulfilment for every brand.
+  Inconsistent item/brand allocations, partial/cancelled/returned fulfilment and
+  existing inconsistent receipt evidence require reconciliation instead of a write.
+- A `PaymentCallback` audit with gateway `cod_collection` records the acting admin,
+  reference, amount/currency and timestamp inside the settlement transaction.
+  Its verified flag denotes administrator confirmation, not provider verification.
+  No migration or historical evidence backfill was needed.
+- Payment completion, audit and seller settlement are atomic. Brand settlement
+  order is deterministic. Proceeds enter existing held balances; collection does
+  not issue payouts, release the hold early or change physical/reserved stock.
+  Same-reference repeats return the original receipt without new credits/audits;
+  different-reference repeats are rejected.
+
+Verification on synthetic data:
+
+- `npm run build` passed: 675.43 kB JavaScript / 176.45 kB gzip. The existing
+  >500 kB bundle warning remains.
+- Focused Vitest (`payments.test.ts`, `AdminPaymentsPage.test.tsx`,
+  `PortalPage.test.tsx`, `App.test.tsx`, `--maxWorkers=2`): **51 passed**.
+- `npm run test:browser -- tests/browser/admin-payments.spec.ts`: **54 passed**
+  on the final run after correcting payment labels, using mocked API responses.
+  Desktop/mobile list/review screenshots were visually inspected. Representative
+  tested states had no Axe WCAG A/AA violations or horizontal overflow; this is
+  not a complete accessibility certification.
+- Backend `tests/unit/test_cod_collection.py`, `tests/unit/test_payments.py` and
+  `tests/integration/test_admin_collection_flow.py`: **77 passed**, 29 warnings.
+  Native PostgreSQL checks cover role/email gates, read-only/private contracts,
+  exact PKR receipts, version/amount rejection, unsupported/inconsistent states,
+  repeat requests, independent-session races and unchanged stock. Two-brand
+  settlement verifies rounded held proceeds and whole-transaction rollback after
+  a failure following the second brand's wallet credit.
+- Existing marketplace COD fulfilment, dashboard totals and pre-settlement
+  refund regressions: **3 passed**, 46 deselected, 29 warnings. Backend invocations
+  used `-q -x -o addopts="" --tb=short --disable-warnings` with the disposable
+  `admin_collection_test` database, not application data.
+- Existing `tests/integration/test_payment_api.py -k 'admin_payment or admin_gateway'`:
+  **16 passed**, 27 deselected, 29 warnings. Admin authorization, actual-row
+  filters, authenticated query validation and static gateway-status routing
+  remain compatible. Across these final invocations, **96 backend tests passed**.
+- New schemas/tests pass scoped Ruff. There are **20 inherited findings** across
+  the payment route (1), repository (17) and service (2), with no new findings.
+  This is not a full-suite, lint-clean or release-coverage-gate claim.
+
+The Sites local workflow reused the existing ivory/forest design and screenshot
+review corrected the misleading shared pending-status copy. No new assets,
+dependencies, real provider requests, charges, transfers or notification sends
+were needed. The verified task-labelled `wearhowz-admin-collection-check-20261101`
+container and disposable test volume were removed after checks; application
+PostgreSQL/Redis and unrelated servers were untouched. The browser-owned server
+was stopped and `git diff --check` passed. Nothing was staged, committed, pushed
+or deployed. Next separately
+selected checkpoint: admin refund inspection and manual-transfer confirmation;
+PayFast reconciliation, payouts/settings and production verification remain separate.
+
+## Admin refund inspection and transfer records — 5 November 2026
+
+The admin workspace now links to `/admin/refunds`, individual refund inspection,
+and `/admin/payments/:id/refunds` for payment history and direct refund requests.
+Verified administrators can filter/paginate records, inspect actors, references,
+return links and seller/platform accounting, request an exact PKR amount, and
+record a manual transfer that has already happened externally. Creating a request
+reserves refundable balance; it does not send money or credit stock. A manual
+reference is not independent bank/provider verification.
+
+Both write flows require acknowledgement, a separate review, fresh authenticated
+state and verification of the saved result. Stale amounts, balances, identities
+or return links stop the write. Double submissions are locked. Ambiguous network,
+server or readback outcomes remain locked across same-tab reloads instead of
+automatically replaying a write; stored markers contain no receipt, amount,
+reason or credentials. Unsupported currencies, inconsistent records and
+unreconciled accounting remain explicit rather than being presented as success.
+
+Targeted backend changes preserve refund idempotency and add optional expected
+amount/payment/remaining-balance/return-link fields for compatibility with older
+clients. Explicit null return linkage is distinguished from an omitted field.
+Confirmation locks the return before its payment, refreshes locked state, and
+checks the received return, order ownership, positive item quantities, prior
+restocks and inventory existence before crediting stock. Direct refunds never
+credit stock. Return completion, stock, transfer records and seller/platform
+reversals share one transaction. Same-reference repeats return the original
+receipt; conflicting references are rejected. A cyclic eager-loading path that
+expired the refund's payment relationship was removed, and refund detail uses
+explicitly loaded payment history to avoid asynchronous lazy-loading failures.
+New confirmations require a completed PKR payment, including collected COD.
+The historical pre-collection regression now asserts rejection of a new
+confirmation and separately seeds an already-recorded legacy transfer to verify
+that its seller settlement offset remains supported. Historical records are not
+silently converted into permission to issue new refunds against uncollected cash.
+
+Frontend verification completed on 4 November; native verification resumed on
+5 November after restarting Docker Desktop:
+
+- `npm run build` passed: 700.40 kB JavaScript / 180.79 kB gzip. The existing
+  >500 kB bundle warning remains.
+- Focused Vitest (`refunds.test.ts`, `AdminRefundsPage.test.tsx`,
+  `PortalPage.test.tsx`, `App.test.tsx`, `--maxWorkers=2`): **51 passed**.
+- `npm run test:browser -- tests/browser/admin-refunds.spec.ts`: **76 passed**,
+  using mocked APIs on desktop/mobile. List, request review, confirmation review
+  and unreconciled accounting screenshots were visually reviewed at both sizes.
+  Tested representative states include Axe checks and horizontal-overflow checks;
+  this is not a complete accessibility certification.
+- Scoped Ruff passes for the payment route, schemas and new refund tests.
+  The repository/service retain **19 inherited findings** (17/2 respectively).
+  The adjusted historical marketplace regression file has **5 existing findings**
+  outside its changed function; these were left outside this checkpoint's scope.
+- Backend `tests/unit/test_refund_review.py`, `tests/unit/test_payments.py` and
+  `tests/integration/test_admin_refunds_flow.py`: **64 passed**, 29 warnings,
+  against disposable native PostgreSQL 15. Checks include private role gates,
+  partial/full refunds, idempotency, stale reviews, received-return stock limits,
+  whole-transaction rollback and independent-session confirmation races.
+  Pytest used `-q -x -o addopts="" --tb=short --show-capture=no --disable-warnings`;
+  no full-suite or coverage-gate claim is made.
+- Existing `test_marketplace_regressions.py`, `test_payment_api.py` and
+  `test_return_api.py`, selected with `-k refund` and the same pytest flags:
+  **22 passed**, 102 deselected, 29 warnings. These cover pending/available
+  balances, multi-brand allocation, paid-out shortfalls, historical settlement
+  offsets, hold/release and existing payment/return contracts. Together with
+  the focused run, **86 backend tests passed** on native PostgreSQL.
+
+The Sites local workflow preserved the existing ivory/forest interface; no new
+assets or dependencies were added. No migrations, real provider requests, charges
+or transfers were needed. This checkpoint does not replace full-suite coverage
+or production verification. Admin return/dispute handling, payouts/settings and
+PayFast reconciliation remain separately selected work.
+
+After verification, the task-labelled `wearhowz-admin-refunds-check-20261104`
+container and disposable synthetic-data volume were removed. No checkpoint
+preview server remained listening on port 4173. Application containers were not
+changed by the test commands. Nothing was staged, committed, pushed or deployed.
+
+## Admin returns and disputes — 5 November 2026
+
+The admin workspace connects `/admin/returns`, `/admin/returns/:id`,
+`/admin/disputes` and `/admin/disputes/:id`. Verified administrators can filter
+and paginate records, inspect customer/brand/order/item details and text evidence,
+approve or reject requested returns, record physical receipt, and request a
+pending return-linked refund. Links connect orders, returns, disputes and the
+existing refund-transfer inspection screen. A request or item-receipt decision
+does not send money or credit stock; transfer confirmation stays in the refund
+workflow. New refund requests require a completed PKR payment.
+
+Dispute tools support reviewed messages and customer/seller resolutions. A
+customer resolution reopens an eligible rejected return as approved, subject to
+the backend's returnable-quantity checks. Resolution does not initiate a refund.
+Resolved/closed disputes are read-only. The existing API exposes current return
+notes plus requested/resolved timestamps, not a complete return-decision audit
+trail. Dispute message history is available; evidence attachments are not part
+of this contract. The UI does not invent missing history or attachment support.
+
+Writes require an acknowledgement and separate confirmation, re-read the current
+record before submission, and verify saved state afterward. Ownership changes
+stop an unsent action. Synchronous submission locks prevent double clicks, while
+ambiguous writes or failed readbacks remain locked across same-tab reloads.
+Session markers store only a pending flag, not notes, messages or credentials.
+Return refund readback checks the linked refund ID, amount and pending status;
+customer dispute resolution also checks the linked return transition.
+
+Targeted backend changes add optional reviewed status/notes/refund-estimate
+expectations to admin return actions and status/message-count expectations to
+admin dispute messages/resolutions. Checks run under existing row locks and
+return a conflict when the reviewed state changed. Older callers can omit the
+new fields. Dispute repository reads now refresh cached state, preventing a
+preloaded unresolved dispute from accepting a message after another session has
+resolved it. Blank admin messages and whitespace-only resolution notes are
+rejected. No migrations or external services were required.
+
+Verification:
+
+- `tests/integration/test_admin_return_review.py`,
+  `tests/integration/test_return_api.py`, `tests/unit/test_returns.py`:
+  **53 passed**, 29 warnings, against disposable native PostgreSQL 15.
+  Tests cover lifecycle/linked requests, stale notes and estimates, unread
+  messages, both resolution outcomes, independent-session stale-cache rejection,
+  blank text, existing permissions and return/dispute regressions.
+  Flags: `-q -x -o addopts="" --tb=short --show-capture=no --disable-warnings`.
+- Focused Vitest (`returns.test.ts`, `AdminReturnsPage.test.tsx`,
+  `PortalPage.test.tsx`, `App.test.tsx`, `--maxWorkers=2`): **50 passed** on the
+  final frontend source.
+- `npm run test:browser -- tests/browser/admin-returns.spec.ts`: **52 passed**
+  with mocked API responses across desktop/mobile. After form styling and focus
+  improvements, **10 affected checks passed** again, including explicit review
+  focus, successful writes, queues, Axe checks and horizontal-overflow checks.
+  A final six-check screenshot run also passed. Return refund review, dispute
+  resolution review and dispute queue images were visually checked at both sizes.
+  This is not a complete accessibility certification or live-provider test.
+- `npm run build` passed: **720.81 kB JavaScript / 184.87 kB gzip**. The existing
+  >500 kB bundle warning remains.
+- The new backend test file passes Ruff. The three touched backend files retain
+  **51 existing lint findings**, verified against their committed versions:
+  schema 23, service 13, repository 15. No full-suite coverage-gate claim is made.
+
+The Sites local workflow preserved the approved ivory/forest direction, reused
+existing form styles and added keyboard focus to review panels. No new assets
+or dependencies were needed. Nothing was staged, committed, pushed or deployed.
+The task-labelled `wearhowz-admin-returns-check-20261105` PostgreSQL container and
+its disposable synthetic-data volume were removed. The browser-owned preview
+server stopped; no listener remained on port 4173. Application data was not used.
+Next separately selected checkpoint: admin payouts and transfer receipts;
+platform settings, PayFast reconciliation and production verification remain
+separate work.
+
+## Admin payouts checkpoint — 5 November 2026
+
+Added `/admin/payouts` and `/admin/payouts/:id`, with a verified-admin workspace
+link, status filters, pagination, loading/error/empty states, saved destination
+inspection and reviewed approval, rejection and transfer-record actions.
+The Sites local workflow reused the ivory/forest styles and focused confirmation
+panels; desktop/mobile screenshots were inspected. No assets or dependencies changed.
+
+Requests already reserve funds. Approval does not debit again; rejection restores
+the original amount once. Completion records an **already-made external transfer**;
+it never initiates a bank or PayFast payment. Check the actual beneficiary and receipt
+independently. Saved destinations are request-time snapshots, not current bank edits.
+The last recorded administrator is not a complete audit history.
+
+The new admin detail endpoint exposes supported actions and saved evidence. Both
+canonical and legacy mutation routes accept an optional reviewed snapshot for backward
+compatibility; the new UI always supplies it. The service compares it under the payout
+row lock. Existing transfer evidence blocks conflicting actions, whitespace-only
+rejection notes and invalid references are rejected, and a missing seller wallet
+blocks a false reversal. Same-reference completion remains idempotent.
+
+The frontend rechecks details before sending, validates the response and saved
+readback, prevents duplicate clicks and keeps uncertain outcomes locked across reloads.
+Session storage holds only an owner/payout uncertainty marker, not bank details or
+receipt contents. Unknown outcomes require reconciliation; never repeat a transfer
+because recording its result failed.
+
+Verification:
+
+- **70 distinct backend tests passed**: 66 in the initial payout/wallet run, followed
+  by 5 final guard/concurrency checks (one repeats the existing rejection test).
+  Integration checks used disposable native PostgreSQL 15, including independent
+  sessions racing completion against rejection and duplicate decisions. Unit wallet
+  checks were included. No full-suite or coverage-gate claim is made.
+- **40 frontend tests passed** across payout helpers, seller wallet and workspace tests.
+- **36 mocked desktop/mobile browser tests passed**, covering approval/rejection,
+  completion, stale reviews, duplicate clicks, uncertain outcomes/reloads, filters,
+  malformed responses and role/email restrictions. Representative transfer-review
+  screens had no axe WCAG A/AA violations; this is not a full accessibility audit.
+- `npm run build` passed: **733.02 kB JavaScript / 187.21 kB gzip**. The existing
+  >500 kB bundle warning remains.
+- New backend tests pass Ruff. Touched backend source retains **27 baseline lint
+  findings** (legacy routes 4, wallet routes 7, schemas 7, service 9), compared with
+  29 in their committed versions. No broad lint rewrite was performed.
+
+Commands: focused pytest for `test_admin_payout_review.py`, `test_wallet_api.py`
+and `test_wallet.py` with `-o addopts=""`; final pytest selection
+`missing_wallet or independent_sessions or rejection_credits_original`;
+`npm test -- src/admin/payouts.test.ts src/seller/wallet.test.ts src/pages/PortalPage.test.tsx`;
+`npm run test:browser -- tests/browser/admin-payouts.spec.ts`; `npm run build`.
+
+No real transfers, provider calls, commits, pushes or deployments were made.
+The task-labelled payout-test PostgreSQL container and synthetic-data volume were
+removed after verification. The browser-owned preview stopped; port 4173 had no
+remaining listener. Application databases were not used or removed.
+Platform settings and PayFast reconciliation remain separately selected checkpoints.
+
+## Admin platform settings checkpoint — 5 November 2026
+
+Added `/admin/settings` and a verified-admin workspace link. The screen reads the
+seven effective business settings: commission rate, registration fee, extra-slot
+price, free-shipping threshold, standard shipping fee, COD timeout and wallet hold.
+Values are loaded from the backend rather than fabricated frontend defaults.
+
+The form validates bounds and whole-rupee/day/minute fields, supports permitted
+zero values, requires an explicit acknowledgement and shows a before/after review.
+Only changed fields are sent. Loading, malformed/denied responses, stale reviews,
+duplicate clicks and uncertain outcomes fail safely. Successful writes require a
+matching response and fresh readback. A per-admin session marker locks uncertain
+saves across reloads without storing setting values or credentials.
+
+Backend updates now accept an optional complete `expected_settings` snapshot.
+The UI always supplies it; existing supported callers can omit it. A PostgreSQL
+transaction-scoped advisory lock serializes updates even when override rows do not
+exist yet. A stale snapshot receives 409 before writes. The response is read inside
+the transaction, and unknown fields or empty changes are rejected. No migration
+was needed. Existing settings are not reset or automatically changed by this work.
+
+The page does not manage provider enablement, credentials, deployment configuration,
+historical order repricing or retention policy. Runtime consumers may apply current
+policy to operational work; reducing hold/timeout values warrants operational review.
+This is not a complete settings audit history or scheduled-change workflow.
+
+Frontend verification: **27 focused tests** and **28 mocked desktop/mobile browser
+tests passed**. Screenshots were visually inspected, with no axe WCAG A/AA violations
+on the representative confirmation screen. This is not full accessibility certification.
+The Sites local-only workflow preserved the existing ivory/forest design and focused
+the confirmation panel for keyboard users. No new dependencies or assets were added.
+
+**32 focused backend tests passed**, including native PostgreSQL 15 authorization,
+validation, partial updates, attribution, stale snapshots and concurrent updates
+with both missing and existing override rows. Only disposable synthetic data was used.
+The final production build passed: **740.69 kB JavaScript / 189.04 kB gzip**;
+the existing >500 kB bundle warning remains.
+
+New backend tests pass Ruff. The two touched backend source files retain **45 existing
+lint findings** (schema 19, service 26); their committed versions have 53. Unrelated
+pre-existing work was preserved. No full-suite or coverage-gate claim is made.
+
+Focused commands: pytest `tests/integration/test_admin_settings_flow.py
+tests/unit/test_admin.py -q -x -o addopts=""`; `npm test -- src/admin/settings.test.ts
+src/pages/PortalPage.test.tsx`; `npm run test:browser -- tests/browser/admin-settings.spec.ts`;
+`npm run build`.
+
+No live settings, provider calls, commits, pushes or deployments were performed.
+The task-labelled settings-test container and disposable synthetic-data volume were
+removed after verification; application databases were untouched. The browser-owned
+preview stopped and port 4173 had no remaining listener.
+Next separately selected checkpoint: PayFast reconciliation; production verification
+remains separate.
 
 ## Design and assets
 

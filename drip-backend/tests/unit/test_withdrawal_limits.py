@@ -19,6 +19,22 @@ from app.services.wallet_service import WalletService
 pytestmark = pytest.mark.unit
 
 
+async def test_wallet_summary_exposes_configured_withdrawal_limits(monkeypatch):
+    monkeypatch.setattr(settings, "MIN_WITHDRAWAL_AMOUNT", 750)
+    monkeypatch.setattr(settings, "MAX_WITHDRAWAL_AMOUNT", 1250)
+    service = WalletService(AsyncMock())
+    service.wallet_repo = AsyncMock()
+    service.wallet_repo.get_by_seller_id.return_value = SimpleNamespace(
+        available_balance=Decimal("1000.25"), pending_balance=Decimal("500"),
+        total_earned=Decimal("2000"), total_commission=Decimal("100"),
+    )
+    summary = await service.get_summary(uuid4())
+    assert summary.available_balance == Decimal("1000.25")
+    assert summary.minimum_withdrawal_amount == Decimal("750")
+    assert summary.maximum_withdrawal_amount == Decimal("1250")
+    assert summary.model_dump(mode="json")["minimum_withdrawal_amount"] == "750"
+
+
 @pytest.mark.parametrize(
     "minimum,maximum",
     [

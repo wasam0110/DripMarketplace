@@ -1575,7 +1575,7 @@ async def test_refund_before_settlement_creates_auditable_settlement_offset(
     db, market, isolated_redis
 ):
     """
-    Edge case: admin confirms a direct refund before COD is collected.
+    Edge case: a historical direct refund was recorded before COD collection.
     When settle() runs, the original entitlement remains auditable and the
     seller-specific refund is recorded as an offset before wallet credit.
 
@@ -1584,6 +1584,7 @@ async def test_refund_before_settlement_creates_auditable_settlement_offset(
     """
     from app.models.wallet import CommissionLedger
     from app.services.admin_service import AdminService
+    from app.services.commission_service import CommissionService
 
     await isolated_redis.hset(f"cart:{market.buyer.id}", str(market.variant.id), 2)
     created = await OrderService(db, isolated_redis).create_order(
@@ -1607,7 +1608,7 @@ async def test_refund_before_settlement_creates_auditable_settlement_offset(
     )
     # Order is now delivered but COD not yet collected → no commission ledger yet.
 
-    # Admin creates and immediately confirms a direct refund of 1200.
+    # Legacy pending record: current confirmation must reject uncollected cash.
     payment = await db.get(Payment, payment_init.payment_id)
     from app.models.payment import Refund
 
@@ -1615,15 +1616,27 @@ async def test_refund_before_settlement_creates_auditable_settlement_offset(
         payment_id=payment.id,
         amount=Decimal("1200.00"),
         reason="Quality issue — refund before COD",
-        processed_by=market.admin.id,
+        requested_by=market.admin.id,
         idempotency_key="pre-cod-refund-001",
     )
     db.add(refund)
-    # Confirm the recorded refund before collection; leave COD pending so the
-    # collection operation can record the later receipt and settle earnings.
     await db.commit()
 
-    await PaymentService(db).confirm_refund(refund.id, market.admin.id, "BANK-PRE-001")
+    with pytest.raises(BusinessRuleError, match="completed PKR payment"):
+        await PaymentService(db).confirm_refund(refund.id, market.admin.id, "BANK-PRE-001")
+    assert refund.processed_at is None
+    assert refund.gateway_ref is None
+    assert refund.processed_by is None
+
+    # Seed an already-recorded historical transfer, not a newly permitted action.
+    # Reconciliation must still preserve its offset when COD is later collected.
+    refund.processed_at = datetime.now(UTC)
+    refund.processed_by = market.admin.id
+    refund.gateway_ref = "BANK-PRE-001"
+    await db.commit()
+    await CommissionService(db).reverse_for_refund(
+        refund.id, order_id=payment.order_id, refund_amount=refund.amount,
+    )
     # No CommissionLedger exists yet: the allocation remains pending for settle().
 
     # Now admin collects COD: settle() applies only this seller's persisted offset.

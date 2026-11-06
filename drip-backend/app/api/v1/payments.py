@@ -11,9 +11,13 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentAdmin, OptionalUser, get_db
-from app.core.client_ip import client_ip, matches_ip as _matches_ip
+from app.core.client_ip import client_ip
+from app.core.client_ip import matches_ip as _matches_ip
 from app.schemas.payment import (
+    AdminPaymentDetailResponse,
     AdminRefundDetailResponse,
+    CODCollectionRequest,
+    CODCollectionResponse,
     GatewayStatusResponse,
     InitiatePaymentRequest,
     PaginatedPayments,
@@ -22,10 +26,10 @@ from app.schemas.payment import (
     PaymentInitResponse,
     PaymentRefundHistoryResponse,
     PaymentStatusResponse,
+    RefundConfirmationRequest,
     RefundRequest,
     RefundResponse,
     RetryPaymentRequest,
-    TransferConfirmationRequest,
 )
 from app.services.payment_service import PaymentService
 
@@ -215,21 +219,35 @@ async def refund_payment(
 
 @router.post("/refunds/{refund_id}/confirm", response_model=RefundResponse)
 async def confirm_refund(
-    refund_id: UUID, payload: TransferConfirmationRequest, db: DB, current_admin: CurrentAdmin
-):
+    refund_id: UUID, payload: RefundConfirmationRequest, db: DB, current_admin: CurrentAdmin
+) -> RefundResponse:
     # Handle POST /refunds/{refund_id}/confirm at this router boundary. Delegates to
     # PaymentService.confirm_refund. Access dependency: CurrentAdmin.
     return await PaymentService(db).confirm_refund(
-        refund_id, UUID(current_admin["sub"]), payload.reference
+        refund_id, UUID(current_admin["sub"]), payload.reference,
+        expected_amount=payload.expected_amount,
+        expected_payment_id=payload.expected_payment_id,
+        expected_return_id=payload.expected_return_id,
+        check_return_link="expected_return_id" in payload.model_fields_set,
     )
 
 
-@router.post("/{payment_id}/cod-collection")
+@router.get("/{payment_id}", response_model=AdminPaymentDetailResponse)
+async def get_admin_payment(
+    payment_id: UUID, db: DB, current_admin: CurrentAdmin
+) -> AdminPaymentDetailResponse:
+    """Read a private payment snapshot without provider secrets or customer capabilities."""
+    return await PaymentService(db).get_admin_payment(payment_id)
+
+
+@router.post("/{payment_id}/cod-collection", response_model=CODCollectionResponse)
 async def record_cod_collection(
-    payment_id: UUID, payload: TransferConfirmationRequest, db: DB, current_admin: CurrentAdmin
-):
+    payment_id: UUID, payload: CODCollectionRequest, db: DB, current_admin: CurrentAdmin
+) -> CODCollectionResponse:
     # Handle POST /{payment_id}/cod-collection at this router boundary. Delegates to
     # PaymentService.record_cod_collection. Access dependency: CurrentAdmin.
     return await PaymentService(db).record_cod_collection(
-        payment_id, UUID(current_admin["sub"]), payload.reference
+        payment_id, UUID(current_admin["sub"]), payload.reference,
+        expected_amount=payload.expected_amount,
+        expected_order_updated_at=payload.expected_order_updated_at,
     )

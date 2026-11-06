@@ -139,6 +139,7 @@ class ProductCardResponse(BaseModel):
 
 
 class ProductDetailResponse(ProductCardResponse):
+    is_published:     bool
     description:      Optional[str]
     meta_title:       Optional[str]
     meta_description: Optional[str]
@@ -207,6 +208,12 @@ class AdminProductsPagination(BaseModel):
 class AdminProductsPage(BaseModel):
     data: list[AdminProductRowResponse]
     pagination: AdminProductsPagination
+
+
+class AdminProductDetailResponse(ProductDetailResponse):
+    admin_hidden: bool
+    seller_status: str
+    seller_deleted: bool
 
 
 class UploadImagesResponse(BaseModel):

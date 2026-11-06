@@ -20,6 +20,8 @@ class WalletSummaryResponse(BaseModel):
     pending_balance:   Decimal
     total_earned:      Decimal
     total_commission:  Decimal
+    minimum_withdrawal_amount: Decimal
+    maximum_withdrawal_amount: Decimal
 
 
 class WalletTransactionResponse(BaseModel):
@@ -118,11 +120,27 @@ class CommissionBreakdownResponse(BaseModel):
     page:    int
 
 
+class PayoutReview(BaseModel):
+    expected_status: str
+    expected_amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
+    expected_seller_id: UUID
+    expected_payment_method: str
+    expected_payment_detail: str
+    expected_admin_note: str | None
+
+
+class AdminPayoutDetailResponse(PayoutResponse):
+    seller_id: UUID
+    last_action_by: UUID | None
+    available_actions: list[str]
+
+
 class AdminPayoutActionRequest(BaseModel):
     admin_note: Optional[str] = Field(default=None, max_length=500)
+    review: PayoutReview | None = None
 
 
-class CompletePayoutRequest(BaseModel):
+class CompletePayoutRequest(AdminPayoutActionRequest):
     reference: str = Field(min_length=3, max_length=255)
 
 

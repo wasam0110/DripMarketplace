@@ -67,3 +67,16 @@ def test_openapi_documents_admin_product_contract():
         "per_page",
         "total",
     }
+
+
+def test_openapi_has_separate_private_admin_detail_contract():
+    schema = create_application().openapi()
+    response = schema["paths"]["/api/v1/admin/products/{product_id}"]["get"]["responses"]["200"]
+    assert response["content"]["application/json"]["schema"] == {
+        "$ref": "#/components/schemas/AdminProductDetailResponse"
+    }
+    definitions = schema["components"]["schemas"]
+    private = definitions["AdminProductDetailResponse"]
+    for name in ("admin_hidden", "seller_status", "seller_deleted", "is_published", "seller_id"):
+        assert name in private["required"]
+    assert "admin_hidden" not in definitions["ProductDetailResponse"]["properties"]

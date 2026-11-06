@@ -148,10 +148,6 @@ class PaymentRepository:
             select(Refund)
             .options(
                 selectinload(Refund.payment).selectinload(Payment.order),
-                selectinload(Refund.payment)
-                .selectinload(Payment.refunds)
-                .joinedload(Refund.accounting)
-                .selectinload(RefundAccounting.allocations),
                 joinedload(Refund.accounting).selectinload(RefundAccounting.allocations),
             )
             .where(Refund.id == refund_id)
@@ -189,6 +185,7 @@ class PaymentRepository:
         count_q = select(func.count()).select_from(q.subquery())
         total   = (await self.db.execute(count_q)).scalar_one()
 
-        q = q.order_by(desc(Payment.created_at)).offset((page - 1) * per_page).limit(per_page)
+        q = q.order_by(desc(Payment.created_at), desc(Payment.id))
+        q = q.offset((page - 1) * per_page).limit(per_page)
         result = await self.db.execute(q)
         return result.scalars().all(), total

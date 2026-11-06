@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
 import { useAuth } from './AuthProvider'
+import { accountDestination } from './destination'
 
 export function GoogleCallbackPage() {
   const auth = useAuth()
@@ -26,7 +27,7 @@ export function GoogleCallbackPage() {
     <p className="eyebrow">Google sign-in</p>
     <h1>{auth.loading ? 'Checking your session' : auth.user && !auth.error ? 'You’re signed in' : 'Session could not be restored'}</h1>
     {auth.loading ? <p role="status">Checking the secure session created by the server…</p>
-      : auth.user && !auth.error ? <><p role="status">Your account session is available. No sign-in tokens were read from this URL.</p><Link className="button" to="/account">Continue to your account</Link></>
+      : auth.user && !auth.error ? <><p role="status">Your account session is available. No sign-in tokens were read from this URL.</p><Link className="button" to={accountDestination(auth.user.role)}>Continue to your account</Link></>
       : <><p role="alert">We could not confirm an active session. Check that cookies are allowed, then return to sign in. No sign-in attempt will be retried automatically.</p><Link className="button" to="/login">Return to sign in</Link></>}
   </section>
 }

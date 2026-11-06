@@ -62,9 +62,9 @@ class InventoryRepository:
         )
         return result.scalar_one_or_none() is not None
 
-    async def release(self, variant_id: UUID, quantity: int) -> None:
+    async def release(self, variant_id: UUID, quantity: int, *, strict: bool = False) -> None:
         """Release reserved stock back (order cancelled)."""
-        await self.db.execute(
+        result = await self.db.execute(
             update(ProductInventory)
             .where(
                 ProductInventory.variant_id == variant_id,
@@ -75,6 +75,8 @@ class InventoryRepository:
                 updated_at=datetime.utcnow(),
             )
         )
+        if strict and result.rowcount != 1:
+            raise BusinessRuleError("Reserved inventory is inconsistent; contact support")
 
     async def deduct(self, variant_id: UUID, quantity: int) -> None:
         """Deduct reserved → confirmed sale (order delivered)."""

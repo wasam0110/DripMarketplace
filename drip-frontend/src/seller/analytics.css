@@ -1,0 +1,19 @@
+@layer components {
+  .seller-analytics { overflow-wrap: anywhere; }
+  .seller-analytics .analytics-wide { max-width: none; }
+  .analytics-tabs { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; margin-block: 24px; }
+  .analytics-filter { max-width: 300px; margin-block: 24px; }
+  .analytics-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 24px; }
+  .analytics-metrics dt { color: var(--muted); font-size: 14px; margin-bottom: 8px; }
+  .analytics-metrics dd { margin: 0; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .analytics-entry, .analytics-products li { padding-block: 24px; border-top: 1px solid var(--line); }
+  .analytics-products { padding-left: 24px; }
+  .analytics-entry h3, .analytics-products h3 { font-size: 22px; margin-bottom: 12px; }
+  .seller-analytics details { margin-block: 24px; }
+  .seller-analytics summary { padding-block: 12px; text-decoration: underline; text-underline-offset: 4px; }
+  .analytics-table-wrap { overflow-x: auto; margin-block: 24px; }
+  .analytics-table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  .analytics-table caption { text-align: left; margin-bottom: 12px; }
+  .analytics-table th, .analytics-table td { padding: 16px 12px; text-align: left; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .seller-analytics .analytics-tabs .button { margin-top: 0; }
+}

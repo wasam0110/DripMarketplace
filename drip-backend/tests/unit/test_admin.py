@@ -1,11 +1,19 @@
 """Unit tests — Block 8: Admin. No DB required."""
+from unittest.mock import AsyncMock, MagicMock
+from uuid import uuid4
+
 import pytest
 from pydantic import ValidationError
+from sqlalchemy.dialects import postgresql
 
+from app.core.exceptions import NotFoundError
 from app.schemas.admin import (
-    RejectSellerRequest, SuspendSellerRequest,
-    UpdateSettingsRequest, CODVerifyRequest,
+    CODVerifyRequest,
+    RejectSellerRequest,
+    SuspendSellerRequest,
+    UpdateSettingsRequest,
 )
+from app.services.admin_service import AdminService
 
 
 class TestSellerActionSchemas:
@@ -60,3 +68,31 @@ class TestCODVerifySchema:
     def test_with_note(self):
         req = CODVerifyRequest(note="Customer confirmed address")
         assert req.note == "Customer confirmed address"
+
+
+@pytest.mark.asyncio
+async def test_seller_decision_loader_locks_and_refreshes_current_state():
+    seller = MagicMock()
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = seller
+    db = MagicMock(execute=AsyncMock(return_value=result))
+    seller_id = uuid4()
+
+    assert await AdminService(db)._get_seller(seller_id) is seller
+    statement = db.execute.call_args.args[0]
+    sql = str(statement.compile(dialect=postgresql.dialect()))
+    assert "FOR UPDATE" in sql
+    assert "sellers.deleted_at IS NULL" in sql
+    assert seller_id in statement.compile().params.values()
+    assert statement.get_execution_options()["populate_existing"] is True
+    db.commit.assert_not_called()
+
+
+@pytest.mark.asyncio
+async def test_seller_decision_loader_rejects_missing_or_deleted_seller():
+    result = MagicMock()
+    result.scalar_one_or_none.return_value = None
+    db = MagicMock(execute=AsyncMock(return_value=result))
+    with pytest.raises(NotFoundError):
+        await AdminService(db)._get_seller(uuid4())
+    db.commit.assert_not_called()

@@ -116,7 +116,11 @@ class InventoryService:
         total = (await self.db.execute(count_stmt)).scalar_one()
 
         offset = (page - 1) * per_page
-        rows   = (await self.db.execute(stmt.offset(offset).limit(per_page))).all()
+        rows = (
+            await self.db.execute(
+                stmt.order_by(Product.id, ProductVariant.id).offset(offset).limit(per_page)
+            )
+        ).all()
 
         data = [
             VariantStockResponse(**self._to_schema(row.ProductInventory, row.ProductVariant, row.Product))

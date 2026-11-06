@@ -33,6 +33,7 @@ from app.schemas.product import (
     UpdateProductRequest,
     ProductCardResponse,
     ProductDetailResponse,
+    AdminProductDetailResponse,
     CataloguePage,
     CursorPagination,
     SellerProductRowResponse,
@@ -411,6 +412,7 @@ class ProductService:
         card = self._to_card(p)
         return ProductDetailResponse(
             **card.model_dump(),
+            is_published=p.is_published,
             description=p.description,
             meta_title=p.meta_title,
             meta_description=p.meta_description,
@@ -559,6 +561,18 @@ class ProductService:
             ],
             "pagination": {"page": page, "per_page": 25, "total": total},
         }
+
+    async def admin_detail(self, product_id: UUID) -> AdminProductDetailResponse:
+        """Inspect non-deleted listings without public visibility gates or view events."""
+        product = await self.product_repo.get_by_id(product_id, load_full=True)
+        if not product:
+            raise NotFoundError("Product not found")
+        return AdminProductDetailResponse(
+            **self._to_detail(product).model_dump(),
+            admin_hidden=product.admin_hidden,
+            seller_status=product.seller.status.value,
+            seller_deleted=product.seller.deleted_at is not None,
+        )
 
     async def set_hidden(self, product_id, hidden):
         """Change administrative product visibility without deleting the listing."""
