@@ -1,0 +1,4072 @@
+{
+  "limitations": "Static shape matching only; dynamic variable/helper calls and runtime API prefix are not resolved. No app/settings import or provider calls.",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/health",
+      "file": "drip-backend/app/api/v1/health.py",
+      "line": 23
+    },
+    {
+      "method": "POST",
+      "path": "/auth/register",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 35
+    },
+    {
+      "method": "GET",
+      "path": "/auth/verify-email",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 80
+    },
+    {
+      "method": "POST",
+      "path": "/auth/login",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 102
+    },
+    {
+      "method": "POST",
+      "path": "/auth/refresh",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 137
+    },
+    {
+      "method": "POST",
+      "path": "/auth/logout",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 164
+    },
+    {
+      "method": "POST",
+      "path": "/auth/forgot-password",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 195
+    },
+    {
+      "method": "POST",
+      "path": "/auth/reset-password",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 236
+    },
+    {
+      "method": "GET",
+      "path": "/auth/me",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 255
+    },
+    {
+      "method": "POST",
+      "path": "/auth/change-password",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 277
+    },
+    {
+      "method": "POST",
+      "path": "/auth/setup-2fa",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 304
+    },
+    {
+      "method": "POST",
+      "path": "/auth/setup-2fa/verify",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 330
+    },
+    {
+      "method": "GET",
+      "path": "/auth/google",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 350
+    },
+    {
+      "method": "GET",
+      "path": "/auth/google/callback",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 362
+    },
+    {
+      "method": "POST",
+      "path": "/auth/resend-verification",
+      "file": "drip-backend/app/api/v1/auth.py",
+      "line": 370
+    },
+    {
+      "method": "POST",
+      "path": "/seller/register",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 37
+    },
+    {
+      "method": "GET",
+      "path": "/seller/register/slot-price",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 43
+    },
+    {
+      "method": "GET",
+      "path": "/seller/me",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 56
+    },
+    {
+      "method": "PATCH",
+      "path": "/seller/me",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 63
+    },
+    {
+      "method": "POST",
+      "path": "/seller/logo",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 74
+    },
+    {
+      "method": "POST",
+      "path": "/seller/slots/purchase",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 103
+    },
+    {
+      "method": "GET",
+      "path": "/seller/dashboard",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 115
+    },
+    {
+      "method": "GET",
+      "path": "/seller/bank-accounts",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 132
+    },
+    {
+      "method": "POST",
+      "path": "/seller/bank-accounts",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 139
+    },
+    {
+      "method": "DELETE",
+      "path": "/seller/bank-accounts/{account_id}",
+      "file": "drip-backend/app/api/v1/sellers.py",
+      "line": 150
+    },
+    {
+      "method": "GET",
+      "path": "/products",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 43
+    },
+    {
+      "method": "GET",
+      "path": "/products/search/suggestions",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 78
+    },
+    {
+      "method": "GET",
+      "path": "/products/slug/{slug}",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 88
+    },
+    {
+      "method": "GET",
+      "path": "/products/{product_id}",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 95
+    },
+    {
+      "method": "GET",
+      "path": "/products/{product_id}/variants",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 102
+    },
+    {
+      "method": "GET",
+      "path": "/products/{product_id}/reviews",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 109
+    },
+    {
+      "method": "POST",
+      "path": "/products/{product_id}/reviews",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 124
+    },
+    {
+      "method": "GET",
+      "path": "/seller/products",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 143
+    },
+    {
+      "method": "POST",
+      "path": "/seller/products",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 158
+    },
+    {
+      "method": "PUT",
+      "path": "/seller/products/{product_id}",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 170
+    },
+    {
+      "method": "DELETE",
+      "path": "/seller/products/{product_id}",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 183
+    },
+    {
+      "method": "POST",
+      "path": "/seller/products/{product_id}/publish",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 196
+    },
+    {
+      "method": "POST",
+      "path": "/seller/products/{product_id}/unpublish",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 208
+    },
+    {
+      "method": "POST",
+      "path": "/seller/products/{product_id}/images",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 220
+    },
+    {
+      "method": "GET",
+      "path": "/admin/products",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 260
+    },
+    {
+      "method": "GET",
+      "path": "/admin/products/{product_id}",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 273
+    },
+    {
+      "method": "POST",
+      "path": "/admin/products/{product_id}/hide",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 283
+    },
+    {
+      "method": "GET",
+      "path": "/seller/products/{product_id}",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 297
+    },
+    {
+      "method": "POST",
+      "path": "/seller/products/{product_id}/variants",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 304
+    },
+    {
+      "method": "PATCH",
+      "path": "/seller/products/{product_id}/variants/{variant_id}",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 317
+    },
+    {
+      "method": "PUT",
+      "path": "/seller/products/{product_id}/images/order",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 334
+    },
+    {
+      "method": "PUT",
+      "path": "/seller/products/{product_id}/images/{image_id}/primary",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 345
+    },
+    {
+      "method": "DELETE",
+      "path": "/seller/products/{product_id}/images/{image_id}",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 354
+    },
+    {
+      "method": "POST",
+      "path": "/admin/products/{product_id}/unhide",
+      "file": "drip-backend/app/api/v1/products.py",
+      "line": 362
+    },
+    {
+      "method": "POST",
+      "path": "/orders",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 49
+    },
+    {
+      "method": "POST",
+      "path": "/orders/guest",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 63
+    },
+    {
+      "method": "POST",
+      "path": "/orders/quote",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 73
+    },
+    {
+      "method": "POST",
+      "path": "/orders/recover",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 81
+    },
+    {
+      "method": "POST",
+      "path": "/orders/guest/recover",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 88
+    },
+    {
+      "method": "POST",
+      "path": "/orders/guest/quote",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 93
+    },
+    {
+      "method": "GET",
+      "path": "/orders",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 103
+    },
+    {
+      "method": "GET",
+      "path": "/orders/number/{order_number}",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 114
+    },
+    {
+      "method": "GET",
+      "path": "/orders/{order_id}",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 129
+    },
+    {
+      "method": "POST",
+      "path": "/orders/{order_id}/cancel",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 145
+    },
+    {
+      "method": "POST",
+      "path": "/coupons/validate",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 166
+    },
+    {
+      "method": "GET",
+      "path": "/seller/orders",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 180
+    },
+    {
+      "method": "GET",
+      "path": "/seller/orders/{seller_order_id}",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 198
+    },
+    {
+      "method": "PUT",
+      "path": "/seller/orders/{seller_order_id}/status",
+      "file": "drip-backend/app/api/v1/orders.py",
+      "line": 212
+    },
+    {
+      "method": "GET",
+      "path": "/cart",
+      "file": "drip-backend/app/api/v1/cart.py",
+      "line": 29
+    },
+    {
+      "method": "POST",
+      "path": "/cart",
+      "file": "drip-backend/app/api/v1/cart.py",
+      "line": 37
+    },
+    {
+      "method": "PATCH",
+      "path": "/cart/{variant_id}",
+      "file": "drip-backend/app/api/v1/cart.py",
+      "line": 49
+    },
+    {
+      "method": "DELETE",
+      "path": "/cart/{variant_id}",
+      "file": "drip-backend/app/api/v1/cart.py",
+      "line": 64
+    },
+    {
+      "method": "POST",
+      "path": "/cart/clear",
+      "file": "drip-backend/app/api/v1/cart.py",
+      "line": 77
+    },
+    {
+      "method": "POST",
+      "path": "/cart/sync",
+      "file": "drip-backend/app/api/v1/cart.py",
+      "line": 86
+    },
+    {
+      "method": "POST",
+      "path": "/payments/initiate",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 44
+    },
+    {
+      "method": "GET",
+      "path": "/payments/{order_id}/status",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 61
+    },
+    {
+      "method": "POST",
+      "path": "/payments/{order_id}/retry",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 77
+    },
+    {
+      "method": "GET",
+      "path": "/payments/callback/payfast",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 106
+    },
+    {
+      "method": "POST",
+      "path": "/payments/callback/payfast",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 106
+    },
+    {
+      "method": "GET",
+      "path": "/payments/gateway-status",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 137
+    },
+    {
+      "method": "POST",
+      "path": "/payments/{order_id}/reconcile",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 144
+    },
+    {
+      "method": "GET",
+      "path": "/payments",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 152
+    },
+    {
+      "method": "GET",
+      "path": "/payments/refunds",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 167
+    },
+    {
+      "method": "GET",
+      "path": "/payments/refunds/{refund_id}",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 182
+    },
+    {
+      "method": "GET",
+      "path": "/payments/{payment_id}/refunds",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 193
+    },
+    {
+      "method": "POST",
+      "path": "/payments/{payment_id}/refund",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 204
+    },
+    {
+      "method": "POST",
+      "path": "/payments/refunds/{refund_id}/confirm",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 220
+    },
+    {
+      "method": "GET",
+      "path": "/payments/{payment_id}",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 235
+    },
+    {
+      "method": "POST",
+      "path": "/payments/{payment_id}/cod-collection",
+      "file": "drip-backend/app/api/v1/payments.py",
+      "line": 243
+    },
+    {
+      "method": "GET",
+      "path": "/seller/wallet",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 30
+    },
+    {
+      "method": "GET",
+      "path": "/seller/wallet/transactions",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 39
+    },
+    {
+      "method": "POST",
+      "path": "/seller/wallet/withdraw",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 60
+    },
+    {
+      "method": "GET",
+      "path": "/seller/wallet/payouts",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 73
+    },
+    {
+      "method": "GET",
+      "path": "/seller/wallet/commission-breakdown",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 92
+    },
+    {
+      "method": "GET",
+      "path": "/admin/wallet/overview",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 112
+    },
+    {
+      "method": "GET",
+      "path": "/admin/wallet/payouts",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 121
+    },
+    {
+      "method": "GET",
+      "path": "/admin/wallet/payouts/{payout_id}",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 150
+    },
+    {
+      "method": "POST",
+      "path": "/admin/wallet/payouts/{payout_id}/approve",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 157
+    },
+    {
+      "method": "POST",
+      "path": "/admin/wallet/payouts/{payout_id}/reject",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 174
+    },
+    {
+      "method": "POST",
+      "path": "/admin/wallet/payouts/{payout_id}/complete",
+      "file": "drip-backend/app/api/v1/wallet.py",
+      "line": 194
+    },
+    {
+      "method": "GET",
+      "path": "/admin/dashboard",
+      "file": "drip-backend/app/api/v1/admin/dashboard.py",
+      "line": 21
+    },
+    {
+      "method": "GET",
+      "path": "/admin/sellers",
+      "file": "drip-backend/app/api/v1/admin/brands.py",
+      "line": 32
+    },
+    {
+      "method": "GET",
+      "path": "/admin/sellers/{seller_id}",
+      "file": "drip-backend/app/api/v1/admin/brands.py",
+      "line": 49
+    },
+    {
+      "method": "POST",
+      "path": "/admin/sellers/{seller_id}/approve",
+      "file": "drip-backend/app/api/v1/admin/brands.py",
+      "line": 60
+    },
+    {
+      "method": "POST",
+      "path": "/admin/sellers/{seller_id}/reject",
+      "file": "drip-backend/app/api/v1/admin/brands.py",
+      "line": 71
+    },
+    {
+      "method": "POST",
+      "path": "/admin/sellers/{seller_id}/suspend",
+      "file": "drip-backend/app/api/v1/admin/brands.py",
+      "line": 85
+    },
+    {
+      "method": "POST",
+      "path": "/admin/sellers/{seller_id}/reinstate",
+      "file": "drip-backend/app/api/v1/admin/brands.py",
+      "line": 99
+    },
+    {
+      "method": "POST",
+      "path": "/admin/sellers/{seller_id}/registration-payment",
+      "file": "drip-backend/app/api/v1/admin/brands.py",
+      "line": 109
+    },
+    {
+      "method": "GET",
+      "path": "/admin/orders",
+      "file": "drip-backend/app/api/v1/admin/orders.py",
+      "line": 23
+    },
+    {
+      "method": "GET",
+      "path": "/admin/orders/{order_id}",
+      "file": "drip-backend/app/api/v1/admin/orders.py",
+      "line": 44
+    },
+    {
+      "method": "GET",
+      "path": "/admin/cod-queue",
+      "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+      "line": 22
+    },
+    {
+      "method": "POST",
+      "path": "/admin/cod-queue/{order_id}/verify",
+      "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+      "line": 29
+    },
+    {
+      "method": "POST",
+      "path": "/admin/cod-queue/{order_id}/cancel",
+      "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+      "line": 47
+    },
+    {
+      "method": "GET",
+      "path": "/admin/payouts",
+      "file": "drip-backend/app/api/v1/admin/payouts.py",
+      "line": 33
+    },
+    {
+      "method": "POST",
+      "path": "/admin/payouts/{payout_id}/approve",
+      "file": "drip-backend/app/api/v1/admin/payouts.py",
+      "line": 62
+    },
+    {
+      "method": "POST",
+      "path": "/admin/payouts/{payout_id}/complete",
+      "file": "drip-backend/app/api/v1/admin/payouts.py",
+      "line": 79
+    },
+    {
+      "method": "POST",
+      "path": "/admin/payouts/{payout_id}/reject",
+      "file": "drip-backend/app/api/v1/admin/payouts.py",
+      "line": 97
+    },
+    {
+      "method": "GET",
+      "path": "/admin/content/banners",
+      "file": "drip-backend/app/api/v1/admin/content.py",
+      "line": 28
+    },
+    {
+      "method": "POST",
+      "path": "/admin/content/banners",
+      "file": "drip-backend/app/api/v1/admin/content.py",
+      "line": 35
+    },
+    {
+      "method": "DELETE",
+      "path": "/admin/content/banners/{banner_id}",
+      "file": "drip-backend/app/api/v1/admin/content.py",
+      "line": 82
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/content/banners/{banner_id}",
+      "file": "drip-backend/app/api/v1/admin/content.py",
+      "line": 95
+    },
+    {
+      "method": "GET",
+      "path": "/admin/settings",
+      "file": "drip-backend/app/api/v1/admin/settings.py",
+      "line": 22
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/settings",
+      "file": "drip-backend/app/api/v1/admin/settings.py",
+      "line": 29
+    },
+    {
+      "method": "GET",
+      "path": "/admin/notifications/failed",
+      "file": "drip-backend/app/api/v1/notifications.py",
+      "line": 31
+    },
+    {
+      "method": "POST",
+      "path": "/admin/notifications/failed/{event_id}/replay",
+      "file": "drip-backend/app/api/v1/notifications.py",
+      "line": 42
+    },
+    {
+      "method": "GET",
+      "path": "/notifications",
+      "file": "drip-backend/app/api/v1/notifications.py",
+      "line": 54
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/{notification_id}/read",
+      "file": "drip-backend/app/api/v1/notifications.py",
+      "line": 72
+    },
+    {
+      "method": "POST",
+      "path": "/notifications/read-all",
+      "file": "drip-backend/app/api/v1/notifications.py",
+      "line": 87
+    },
+    {
+      "method": "GET",
+      "path": "/notifications/preferences",
+      "file": "drip-backend/app/api/v1/notifications.py",
+      "line": 98
+    },
+    {
+      "method": "PATCH",
+      "path": "/notifications/preferences",
+      "file": "drip-backend/app/api/v1/notifications.py",
+      "line": 108
+    },
+    {
+      "method": "POST",
+      "path": "/admin/notifications/broadcast",
+      "file": "drip-backend/app/api/v1/notifications.py",
+      "line": 123
+    },
+    {
+      "method": "GET",
+      "path": "/admin/notifications/email-log",
+      "file": "drip-backend/app/api/v1/notifications.py",
+      "line": 137
+    },
+    {
+      "method": "POST",
+      "path": "/returns/guest",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 36
+    },
+    {
+      "method": "GET",
+      "path": "/returns/guest/{return_id}",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 47
+    },
+    {
+      "method": "POST",
+      "path": "/returns",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 58
+    },
+    {
+      "method": "GET",
+      "path": "/returns",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 69
+    },
+    {
+      "method": "GET",
+      "path": "/returns/{return_id}",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 80
+    },
+    {
+      "method": "POST",
+      "path": "/returns/{return_id}/dispute",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 91
+    },
+    {
+      "method": "GET",
+      "path": "/returns/{return_id}/dispute",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 103
+    },
+    {
+      "method": "POST",
+      "path": "/returns/{return_id}/dispute/messages",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 114
+    },
+    {
+      "method": "GET",
+      "path": "/seller/returns",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 128
+    },
+    {
+      "method": "GET",
+      "path": "/seller/returns/{return_id}",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 145
+    },
+    {
+      "method": "POST",
+      "path": "/seller/returns/{return_id}/approve",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 158
+    },
+    {
+      "method": "POST",
+      "path": "/seller/returns/{return_id}/reject",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 172
+    },
+    {
+      "method": "POST",
+      "path": "/seller/returns/{return_id}/received",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 186
+    },
+    {
+      "method": "GET",
+      "path": "/admin/returns",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 200
+    },
+    {
+      "method": "GET",
+      "path": "/admin/returns/{return_id}",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 215
+    },
+    {
+      "method": "POST",
+      "path": "/admin/returns/{return_id}/approve",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 226
+    },
+    {
+      "method": "POST",
+      "path": "/admin/returns/{return_id}/reject",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 238
+    },
+    {
+      "method": "POST",
+      "path": "/admin/returns/{return_id}/received",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 250
+    },
+    {
+      "method": "POST",
+      "path": "/admin/returns/{return_id}/refund",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 262
+    },
+    {
+      "method": "GET",
+      "path": "/admin/disputes",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 274
+    },
+    {
+      "method": "GET",
+      "path": "/admin/disputes/{dispute_id}",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 289
+    },
+    {
+      "method": "POST",
+      "path": "/admin/disputes/{dispute_id}/messages",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 300
+    },
+    {
+      "method": "POST",
+      "path": "/admin/disputes/{dispute_id}/resolve",
+      "file": "drip-backend/app/api/v1/returns.py",
+      "line": 318
+    },
+    {
+      "method": "GET",
+      "path": "/customers/me",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 53
+    },
+    {
+      "method": "PATCH",
+      "path": "/customers/me",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 59
+    },
+    {
+      "method": "POST",
+      "path": "/customers/me/avatar",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 71
+    },
+    {
+      "method": "POST",
+      "path": "/customers/me/change-password",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 91
+    },
+    {
+      "method": "GET",
+      "path": "/customers/me/addresses",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 108
+    },
+    {
+      "method": "POST",
+      "path": "/customers/me/addresses",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 114
+    },
+    {
+      "method": "PATCH",
+      "path": "/customers/me/addresses/{address_id}",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 126
+    },
+    {
+      "method": "DELETE",
+      "path": "/customers/me/addresses/{address_id}",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 139
+    },
+    {
+      "method": "POST",
+      "path": "/customers/me/addresses/{address_id}/set-default",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 152
+    },
+    {
+      "method": "GET",
+      "path": "/customers/me/reviews",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 168
+    },
+    {
+      "method": "POST",
+      "path": "/customers/me/reviews",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 181
+    },
+    {
+      "method": "PATCH",
+      "path": "/customers/me/reviews/{review_id}",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 193
+    },
+    {
+      "method": "DELETE",
+      "path": "/customers/me/reviews/{review_id}",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 206
+    },
+    {
+      "method": "GET",
+      "path": "/customers/reviews/product/{product_id}",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 221
+    },
+    {
+      "method": "POST",
+      "path": "/customers/reviews/{review_id}/helpful",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 236
+    },
+    {
+      "method": "GET",
+      "path": "/customers/me/wishlist",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 256
+    },
+    {
+      "method": "POST",
+      "path": "/customers/me/wishlist",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 262
+    },
+    {
+      "method": "DELETE",
+      "path": "/customers/me/wishlist/{product_id}",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 274
+    },
+    {
+      "method": "GET",
+      "path": "/customers/me/notification-preferences",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 291
+    },
+    {
+      "method": "PATCH",
+      "path": "/customers/me/notification-preferences",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 299
+    },
+    {
+      "method": "DELETE",
+      "path": "/customers/me",
+      "file": "drip-backend/app/api/v1/customers.py",
+      "line": 315
+    },
+    {
+      "method": "GET",
+      "path": "/seller/inventory",
+      "file": "drip-backend/app/api/v1/inventory.py",
+      "line": 150
+    },
+    {
+      "method": "GET",
+      "path": "/seller/inventory/low-stock",
+      "file": "drip-backend/app/api/v1/inventory.py",
+      "line": 175
+    },
+    {
+      "method": "GET",
+      "path": "/seller/inventory/{variant_id}",
+      "file": "drip-backend/app/api/v1/inventory.py",
+      "line": 188
+    },
+    {
+      "method": "PUT",
+      "path": "/seller/inventory/{variant_id}",
+      "file": "drip-backend/app/api/v1/inventory.py",
+      "line": 201
+    },
+    {
+      "method": "POST",
+      "path": "/seller/inventory/{variant_id}/adjust",
+      "file": "drip-backend/app/api/v1/inventory.py",
+      "line": 221
+    },
+    {
+      "method": "GET",
+      "path": "/admin/inventory",
+      "file": "drip-backend/app/api/v1/inventory.py",
+      "line": 245
+    },
+    {
+      "method": "POST",
+      "path": "/admin/inventory/bulk-update",
+      "file": "drip-backend/app/api/v1/inventory.py",
+      "line": 268
+    },
+    {
+      "method": "GET",
+      "path": "/me/reviews/{review_id}/images",
+      "file": "drip-backend/app/api/v1/review_photos.py",
+      "line": 22
+    },
+    {
+      "method": "POST",
+      "path": "/me/reviews/{review_id}/images",
+      "file": "drip-backend/app/api/v1/review_photos.py",
+      "line": 33
+    },
+    {
+      "method": "DELETE",
+      "path": "/me/reviews/{review_id}/images/{image_id}",
+      "file": "drip-backend/app/api/v1/review_photos.py",
+      "line": 47
+    },
+    {
+      "method": "GET",
+      "path": "/categories",
+      "file": "drip-backend/app/api/v1/storefront.py",
+      "line": 41
+    },
+    {
+      "method": "GET",
+      "path": "/brands",
+      "file": "drip-backend/app/api/v1/storefront.py",
+      "line": 78
+    },
+    {
+      "method": "GET",
+      "path": "/brands/{slug}",
+      "file": "drip-backend/app/api/v1/storefront.py",
+      "line": 103
+    },
+    {
+      "method": "GET",
+      "path": "/brands/{slug}/products",
+      "file": "drip-backend/app/api/v1/storefront.py",
+      "line": 116
+    },
+    {
+      "method": "GET",
+      "path": "/content/banners",
+      "file": "drip-backend/app/api/v1/storefront.py",
+      "line": 132
+    },
+    {
+      "method": "GET",
+      "path": "/admin/analytics/platform",
+      "file": "drip-backend/app/api/v1/analytics/admin.py",
+      "line": 26
+    },
+    {
+      "method": "GET",
+      "path": "/admin/analytics/revenue",
+      "file": "drip-backend/app/api/v1/analytics/admin.py",
+      "line": 37
+    },
+    {
+      "method": "GET",
+      "path": "/admin/analytics/top-sellers",
+      "file": "drip-backend/app/api/v1/analytics/admin.py",
+      "line": 49
+    },
+    {
+      "method": "GET",
+      "path": "/admin/analytics/cohort",
+      "file": "drip-backend/app/api/v1/analytics/admin.py",
+      "line": 61
+    },
+    {
+      "method": "GET",
+      "path": "/admin/analytics/payment-methods",
+      "file": "drip-backend/app/api/v1/analytics/admin.py",
+      "line": 72
+    },
+    {
+      "method": "GET",
+      "path": "/admin/analytics/cities",
+      "file": "drip-backend/app/api/v1/analytics/admin.py",
+      "line": 83
+    },
+    {
+      "method": "GET",
+      "path": "/admin/analytics/conversion",
+      "file": "drip-backend/app/api/v1/analytics/admin.py",
+      "line": 95
+    },
+    {
+      "method": "GET",
+      "path": "/admin/analytics/search-queries",
+      "file": "drip-backend/app/api/v1/analytics/admin.py",
+      "line": 106
+    },
+    {
+      "method": "GET",
+      "path": "/seller/analytics/overview",
+      "file": "drip-backend/app/api/v1/analytics/seller.py",
+      "line": 25
+    },
+    {
+      "method": "GET",
+      "path": "/seller/analytics/revenue",
+      "file": "drip-backend/app/api/v1/analytics/seller.py",
+      "line": 38
+    },
+    {
+      "method": "GET",
+      "path": "/seller/analytics/top-products",
+      "file": "drip-backend/app/api/v1/analytics/seller.py",
+      "line": 53
+    },
+    {
+      "method": "GET",
+      "path": "/seller/analytics/inventory-health",
+      "file": "drip-backend/app/api/v1/analytics/seller.py",
+      "line": 69
+    },
+    {
+      "method": "GET",
+      "path": "/admin/reviews",
+      "file": "drip-backend/app/api/v1/admin/reviews.py",
+      "line": 55
+    },
+    {
+      "method": "GET",
+      "path": "/admin/reviews/{review_id}",
+      "file": "drip-backend/app/api/v1/admin/reviews.py",
+      "line": 77
+    },
+    {
+      "method": "PATCH",
+      "path": "/admin/reviews/{review_id}",
+      "file": "drip-backend/app/api/v1/admin/reviews.py",
+      "line": 88
+    }
+  ],
+  "calls": [
+    {
+      "file": "drip-frontend/src/account/AccountDetails.tsx",
+      "line": 48,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/me",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/AccountDetails.tsx",
+      "line": 56,
+      "helper": "request",
+      "method": "PATCH",
+      "path": "/me",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/AccountDetails.tsx",
+      "line": 81,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/me/addresses",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/AccountDetails.tsx",
+      "line": 91,
+      "helper": "request",
+      "method": "?",
+      "path": "/me/addresses",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/AccountDetails.tsx",
+      "line": 91,
+      "helper": "request",
+      "method": "?",
+      "path": "/me/addresses/{dynamic}",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/AccountDetails.tsx",
+      "line": 110,
+      "helper": "request",
+      "method": "POST",
+      "path": "/me/addresses/{dynamic}/set-default",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/AccountDetails.tsx",
+      "line": 118,
+      "helper": "request",
+      "method": "DELETE",
+      "path": "/me/addresses/{dynamic}",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/AvatarPage.tsx",
+      "line": 13,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/me",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/AvatarPage.tsx",
+      "line": 55,
+      "helper": "request",
+      "method": "POST",
+      "path": "/me/avatar",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/ChangePasswordPage.tsx",
+      "line": 34,
+      "helper": "request",
+      "method": "POST",
+      "path": "/me/change-password",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/DeleteAccountPage.tsx",
+      "line": 34,
+      "helper": "request",
+      "method": "DELETE",
+      "path": "/customers/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/customers/me",
+          "file": "drip-backend/app/api/v1/customers.py",
+          "line": 53
+        },
+        {
+          "method": "PATCH",
+          "path": "/customers/me",
+          "file": "drip-backend/app/api/v1/customers.py",
+          "line": 59
+        },
+        {
+          "method": "DELETE",
+          "path": "/customers/me",
+          "file": "drip-backend/app/api/v1/customers.py",
+          "line": 315
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/account/NotificationInboxPage.tsx",
+      "line": 27,
+      "helper": "request",
+      "method": "POST",
+      "path": "/notifications/{dynamic}/read",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/notifications/{notification_id}/read",
+          "file": "drip-backend/app/api/v1/notifications.py",
+          "line": 72
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/account/NotificationInboxPage.tsx",
+      "line": 31,
+      "helper": "request",
+      "method": "POST",
+      "path": "/notifications/read-all",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/notifications/read-all",
+          "file": "drip-backend/app/api/v1/notifications.py",
+          "line": 87
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/account/NotificationPreferencesPage.tsx",
+      "line": 12,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/me/notification-preferences",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/account/NotificationPreferencesPage.tsx",
+      "line": 21,
+      "helper": "request",
+      "method": "PATCH",
+      "path": "/me/notification-preferences",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminCODPage.tsx",
+      "line": 28,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/cod-queue",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/cod-queue",
+          "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+          "line": 22
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminCODPage.tsx",
+      "line": 32,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/cod-queue",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/cod-queue",
+          "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+          "line": 22
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminCODPage.tsx",
+      "line": 48,
+      "helper": "request",
+      "method": "GET",
+      "path": "/admin/cod-queue",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/cod-queue",
+          "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+          "line": 22
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminCODPage.tsx",
+      "line": 54,
+      "helper": "request",
+      "method": "POST",
+      "path": "/admin/cod-queue/{dynamic}/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/admin/cod-queue/{order_id}/verify",
+          "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+          "line": 29
+        },
+        {
+          "method": "POST",
+          "path": "/admin/cod-queue/{order_id}/cancel",
+          "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+          "line": 47
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminOrdersPage.tsx",
+      "line": 38,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/orders?{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/orders",
+          "file": "drip-backend/app/api/v1/admin/orders.py",
+          "line": 23
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminOrdersPage.tsx",
+      "line": 47,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/orders/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/orders/{order_id}",
+          "file": "drip-backend/app/api/v1/admin/orders.py",
+          "line": 44
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPayoutsPage.tsx",
+      "line": 29,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/wallet/payouts?status={dynamic}&page={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/wallet/payouts",
+          "file": "drip-backend/app/api/v1/wallet.py",
+          "line": 121
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminProductsPage.tsx",
+      "line": 36,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/products?{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/products",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 260
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminRefundsPage.tsx",
+      "line": 41,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/payments/refunds?{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/payments/refunds",
+          "file": "drip-backend/app/api/v1/payments.py",
+          "line": 167
+        },
+        {
+          "method": "GET",
+          "path": "/payments/{payment_id}",
+          "file": "drip-backend/app/api/v1/payments.py",
+          "line": 235
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminRefundsPage.tsx",
+      "line": 73,
+      "helper": "request",
+      "method": "POST",
+      "path": "/payments/{dynamic}/refund",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/payments/refunds/{refund_id}",
+          "file": "drip-backend/app/api/v1/payments.py",
+          "line": 182
+        },
+        {
+          "method": "POST",
+          "path": "/payments/{payment_id}/refund",
+          "file": "drip-backend/app/api/v1/payments.py",
+          "line": 204
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 30,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/{dynamic}?page={dynamic}&status={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/products",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 260
+        },
+        {
+          "method": "GET",
+          "path": "/admin/dashboard",
+          "file": "drip-backend/app/api/v1/admin/dashboard.py",
+          "line": 21
+        },
+        {
+          "method": "GET",
+          "path": "/admin/sellers",
+          "file": "drip-backend/app/api/v1/admin/brands.py",
+          "line": 32
+        },
+        {
+          "method": "GET",
+          "path": "/admin/orders",
+          "file": "drip-backend/app/api/v1/admin/orders.py",
+          "line": 23
+        },
+        {
+          "method": "GET",
+          "path": "/admin/cod-queue",
+          "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+          "line": 22
+        },
+        {
+          "method": "GET",
+          "path": "/admin/payouts",
+          "file": "drip-backend/app/api/v1/admin/payouts.py",
+          "line": 33
+        },
+        {
+          "method": "GET",
+          "path": "/admin/settings",
+          "file": "drip-backend/app/api/v1/admin/settings.py",
+          "line": 22
+        },
+        {
+          "method": "PATCH",
+          "path": "/admin/settings",
+          "file": "drip-backend/app/api/v1/admin/settings.py",
+          "line": 29
+        },
+        {
+          "method": "GET",
+          "path": "/admin/returns",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 200
+        },
+        {
+          "method": "GET",
+          "path": "/admin/disputes",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 274
+        },
+        {
+          "method": "GET",
+          "path": "/admin/inventory",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 245
+        },
+        {
+          "method": "GET",
+          "path": "/admin/reviews",
+          "file": "drip-backend/app/api/v1/admin/reviews.py",
+          "line": 55
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 30,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/{dynamic}?page={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/products",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 260
+        },
+        {
+          "method": "GET",
+          "path": "/admin/dashboard",
+          "file": "drip-backend/app/api/v1/admin/dashboard.py",
+          "line": 21
+        },
+        {
+          "method": "GET",
+          "path": "/admin/sellers",
+          "file": "drip-backend/app/api/v1/admin/brands.py",
+          "line": 32
+        },
+        {
+          "method": "GET",
+          "path": "/admin/orders",
+          "file": "drip-backend/app/api/v1/admin/orders.py",
+          "line": 23
+        },
+        {
+          "method": "GET",
+          "path": "/admin/cod-queue",
+          "file": "drip-backend/app/api/v1/admin/cod_queue.py",
+          "line": 22
+        },
+        {
+          "method": "GET",
+          "path": "/admin/payouts",
+          "file": "drip-backend/app/api/v1/admin/payouts.py",
+          "line": 33
+        },
+        {
+          "method": "GET",
+          "path": "/admin/settings",
+          "file": "drip-backend/app/api/v1/admin/settings.py",
+          "line": 22
+        },
+        {
+          "method": "PATCH",
+          "path": "/admin/settings",
+          "file": "drip-backend/app/api/v1/admin/settings.py",
+          "line": 29
+        },
+        {
+          "method": "GET",
+          "path": "/admin/returns",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 200
+        },
+        {
+          "method": "GET",
+          "path": "/admin/disputes",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 274
+        },
+        {
+          "method": "GET",
+          "path": "/admin/inventory",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 245
+        },
+        {
+          "method": "GET",
+          "path": "/admin/reviews",
+          "file": "drip-backend/app/api/v1/admin/reviews.py",
+          "line": 55
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 87,
+      "helper": "request",
+      "method": "GET",
+      "path": "/admin/returns/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/returns/{return_id}",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 215
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReviewsPage.tsx",
+      "line": 33,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/reviews?{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/reviews",
+          "file": "drip-backend/app/api/v1/admin/reviews.py",
+          "line": 55
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminSellersPage.tsx",
+      "line": 27,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/admin/sellers?{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/admin/sellers",
+          "file": "drip-backend/app/api/v1/admin/brands.py",
+          "line": 32
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/api/client.ts",
+      "line": 30,
+      "helper": "request",
+      "method": "POST",
+      "path": "/auth/refresh",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/auth/refresh",
+          "file": "drip-backend/app/api/v1/auth.py",
+          "line": 137
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/auth/AuthProvider.tsx",
+      "line": 26,
+      "helper": "request",
+      "method": "GET",
+      "path": "/auth/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/auth/me",
+          "file": "drip-backend/app/api/v1/auth.py",
+          "line": 255
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/auth/AuthProvider.tsx",
+      "line": 38,
+      "helper": "request",
+      "method": "POST",
+      "path": "/auth/login",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/auth/login",
+          "file": "drip-backend/app/api/v1/auth.py",
+          "line": 102
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/auth/AuthProvider.tsx",
+      "line": 61,
+      "helper": "request",
+      "method": "POST",
+      "path": "/auth/logout",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/auth/logout",
+          "file": "drip-backend/app/api/v1/auth.py",
+          "line": 164
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/cart/CartProvider.tsx",
+      "line": 74,
+      "helper": "request",
+      "method": "GET",
+      "path": "/cart",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/cart",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 29
+        },
+        {
+          "method": "POST",
+          "path": "/cart",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 37
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/cart/CartProvider.tsx",
+      "line": 76,
+      "helper": "request",
+      "method": "POST",
+      "path": "/orders/guest/quote",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/orders/guest/quote",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 93
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/cart/CartProvider.tsx",
+      "line": 137,
+      "helper": "request",
+      "method": "POST",
+      "path": "/cart",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/cart",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 29
+        },
+        {
+          "method": "POST",
+          "path": "/cart",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 37
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/cart/CartProvider.tsx",
+      "line": 158,
+      "helper": "request",
+      "method": "PATCH",
+      "path": "/cart/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "PATCH",
+          "path": "/cart/{variant_id}",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 49
+        },
+        {
+          "method": "DELETE",
+          "path": "/cart/{variant_id}",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 64
+        },
+        {
+          "method": "POST",
+          "path": "/cart/clear",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 77
+        },
+        {
+          "method": "POST",
+          "path": "/cart/sync",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 86
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/cart/CartProvider.tsx",
+      "line": 170,
+      "helper": "request",
+      "method": "POST",
+      "path": "/cart/clear",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "PATCH",
+          "path": "/cart/{variant_id}",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 49
+        },
+        {
+          "method": "DELETE",
+          "path": "/cart/{variant_id}",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 64
+        },
+        {
+          "method": "POST",
+          "path": "/cart/clear",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 77
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/cart/CartProvider.tsx",
+      "line": 181,
+      "helper": "request",
+      "method": "POST",
+      "path": "/cart/sync",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "PATCH",
+          "path": "/cart/{variant_id}",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 49
+        },
+        {
+          "method": "DELETE",
+          "path": "/cart/{variant_id}",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 64
+        },
+        {
+          "method": "POST",
+          "path": "/cart/sync",
+          "file": "drip-backend/app/api/v1/cart.py",
+          "line": 86
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/catalogue/FilterPanel.tsx",
+      "line": 21,
+      "helper": "useResource",
+      "method": "GET",
+      "path": "/categories",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/categories",
+          "file": "drip-backend/app/api/v1/storefront.py",
+          "line": 41
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/checkout/SavedAddressPicker.tsx",
+      "line": 8,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/me/addresses",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/checkout/submission.ts",
+      "line": 55,
+      "helper": "request",
+      "method": "POST",
+      "path": "/orders/recover",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/orders/recover",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 81
+        },
+        {
+          "method": "GET",
+          "path": "/orders/{order_id}",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 129
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/checkout/submission.ts",
+      "line": 55,
+      "helper": "request",
+      "method": "POST",
+      "path": "/orders",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/orders",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 49
+        },
+        {
+          "method": "GET",
+          "path": "/orders",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 103
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/checkout/submission.ts",
+      "line": 55,
+      "helper": "request",
+      "method": "POST",
+      "path": "/orders/guest/recover",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/orders/guest/recover",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 88
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/checkout/submission.ts",
+      "line": 55,
+      "helper": "request",
+      "method": "POST",
+      "path": "/orders/guest",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/orders/guest",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 63
+        },
+        {
+          "method": "GET",
+          "path": "/orders/{order_id}",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 129
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/AuthPages.tsx",
+      "line": 41,
+      "helper": "request",
+      "method": "POST",
+      "path": "/auth/register",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/auth/register",
+          "file": "drip-backend/app/api/v1/auth.py",
+          "line": 35
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/AuthPages.tsx",
+      "line": 47,
+      "helper": "request",
+      "method": "POST",
+      "path": "/auth/forgot-password",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/auth/forgot-password",
+          "file": "drip-backend/app/api/v1/auth.py",
+          "line": 195
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/AuthPages.tsx",
+      "line": 52,
+      "helper": "request",
+      "method": "POST",
+      "path": "/auth/reset-password",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/auth/reset-password",
+          "file": "drip-backend/app/api/v1/auth.py",
+          "line": 236
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/AuthPages.tsx",
+      "line": 98,
+      "helper": "request",
+      "method": "GET",
+      "path": "/auth/google",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/auth/google",
+          "file": "drip-backend/app/api/v1/auth.py",
+          "line": 350
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/AuthPages.tsx",
+      "line": 130,
+      "helper": "request",
+      "method": "GET",
+      "path": "/auth/verify-email?token={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/auth/verify-email",
+          "file": "drip-backend/app/api/v1/auth.py",
+          "line": 80
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/CheckoutPage.tsx",
+      "line": 68,
+      "helper": "request",
+      "method": "POST",
+      "path": "/orders/quote",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/orders/quote",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 73
+        },
+        {
+          "method": "GET",
+          "path": "/orders/{order_id}",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 129
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/CheckoutPage.tsx",
+      "line": 68,
+      "helper": "request",
+      "method": "POST",
+      "path": "/orders/guest/quote",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/orders/guest/quote",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 93
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/CheckoutPage.tsx",
+      "line": 105,
+      "helper": "request",
+      "method": "POST",
+      "path": "/orders/quote",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/orders/quote",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 73
+        },
+        {
+          "method": "GET",
+          "path": "/orders/{order_id}",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 129
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/DisputePage.tsx",
+      "line": 18,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/returns/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/returns/guest",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 36
+        },
+        {
+          "method": "GET",
+          "path": "/returns/{return_id}",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 80
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/DisputePage.tsx",
+      "line": 19,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/returns/{dynamic}/dispute",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/returns/guest/{return_id}",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 47
+        },
+        {
+          "method": "POST",
+          "path": "/returns/{return_id}/dispute",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 91
+        },
+        {
+          "method": "GET",
+          "path": "/returns/{return_id}/dispute",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 103
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/DisputePage.tsx",
+      "line": 42,
+      "helper": "request",
+      "method": "POST",
+      "path": "/returns/{dynamic}/dispute",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/returns/guest/{return_id}",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 47
+        },
+        {
+          "method": "POST",
+          "path": "/returns/{return_id}/dispute",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 91
+        },
+        {
+          "method": "GET",
+          "path": "/returns/{return_id}/dispute",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 103
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/DisputePage.tsx",
+      "line": 48,
+      "helper": "request",
+      "method": "POST",
+      "path": "/returns/{dynamic}/dispute/messages",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/returns/{return_id}/dispute/messages",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 114
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/OrderPages.tsx",
+      "line": 106,
+      "helper": "request",
+      "method": "POST",
+      "path": "/returns",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/returns",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 58
+        },
+        {
+          "method": "GET",
+          "path": "/returns",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 69
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/OrderPages.tsx",
+      "line": 106,
+      "helper": "request",
+      "method": "POST",
+      "path": "/returns/guest",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/returns/guest",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 36
+        },
+        {
+          "method": "GET",
+          "path": "/returns/{return_id}",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 80
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/OrderPages.tsx",
+      "line": 114,
+      "helper": "request",
+      "method": "POST",
+      "path": "/orders/{dynamic}/cancel",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/orders/number/{order_number}",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 114
+        },
+        {
+          "method": "POST",
+          "path": "/orders/{order_id}/cancel",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 145
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/ProductPage.tsx",
+      "line": 12,
+      "helper": "useResource",
+      "method": "GET",
+      "path": "/products/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 95
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/ReturnPages.tsx",
+      "line": 51,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/returns/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/returns/guest",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 36
+        },
+        {
+          "method": "GET",
+          "path": "/returns/{return_id}",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 80
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/ReturnPages.tsx",
+      "line": 51,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/returns/guest/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/returns/guest/{return_id}",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 47
+        },
+        {
+          "method": "POST",
+          "path": "/returns/{return_id}/dispute",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 91
+        },
+        {
+          "method": "GET",
+          "path": "/returns/{return_id}/dispute",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 103
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/pages/SavedPage.tsx",
+      "line": 13,
+      "helper": "useResource",
+      "method": "GET",
+      "path": "/products/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 95
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/payments/PayFastHandoff.tsx",
+      "line": 30,
+      "helper": "request",
+      "method": "POST",
+      "path": "/payments/initiate",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/payments/initiate",
+          "file": "drip-backend/app/api/v1/payments.py",
+          "line": 44
+        },
+        {
+          "method": "GET",
+          "path": "/payments/{payment_id}",
+          "file": "drip-backend/app/api/v1/payments.py",
+          "line": 235
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/payments/PaymentStatusPage.tsx",
+      "line": 49,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/payments/{dynamic}/status",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/payments/{order_id}/status",
+          "file": "drip-backend/app/api/v1/payments.py",
+          "line": 61
+        },
+        {
+          "method": "GET",
+          "path": "/payments/refunds/{refund_id}",
+          "file": "drip-backend/app/api/v1/payments.py",
+          "line": 182
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/reviews/MyReviewsPage.tsx",
+      "line": 37,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/me/reviews?page={dynamic}&per_page=20",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/reviews/MyReviewsPage.tsx",
+      "line": 69,
+      "helper": "request",
+      "method": "?",
+      "path": "/me/reviews/{dynamic}",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/reviews/ProductReviews.tsx",
+      "line": 42,
+      "helper": "request",
+      "method": "POST",
+      "path": "/products/{dynamic}/reviews",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/products/slug/{slug}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 88
+        },
+        {
+          "method": "GET",
+          "path": "/products/{product_id}/reviews",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 109
+        },
+        {
+          "method": "POST",
+          "path": "/products/{product_id}/reviews",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 124
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/reviews/ProductReviews.tsx",
+      "line": 84,
+      "helper": "useResource",
+      "method": "GET",
+      "path": "/products/{dynamic}/reviews?page={dynamic}&per_page=10",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/products/slug/{slug}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 88
+        },
+        {
+          "method": "GET",
+          "path": "/products/{product_id}/reviews",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 109
+        },
+        {
+          "method": "POST",
+          "path": "/products/{product_id}/reviews",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 124
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/reviews/ReviewVote.tsx",
+      "line": 16,
+      "helper": "request",
+      "method": "POST",
+      "path": "/reviews/{dynamic}/helpful",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/saved/AccountWishlist.tsx",
+      "line": 40,
+      "helper": "request",
+      "method": "GET",
+      "path": "/me/wishlist",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/saved/AccountWishlist.tsx",
+      "line": 52,
+      "helper": "request",
+      "method": "POST",
+      "path": "/me/wishlist",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/saved/AccountWishlist.tsx",
+      "line": 57,
+      "helper": "request",
+      "method": "DELETE",
+      "path": "/me/wishlist/{dynamic}",
+      "status": "path_mismatch",
+      "backend_candidates": []
+    },
+    {
+      "file": "drip-frontend/src/seller/ProductOptions.tsx",
+      "line": 11,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/products/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "PUT",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 170
+        },
+        {
+          "method": "DELETE",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 183
+        },
+        {
+          "method": "GET",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 297
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/ProductOptions.tsx",
+      "line": 12,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/categories",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/categories",
+          "file": "drip-backend/app/api/v1/storefront.py",
+          "line": 41
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/ProductOptions.tsx",
+      "line": 26,
+      "helper": "request",
+      "method": "?",
+      "path": "/seller/products/{dynamic}/variants/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "PATCH",
+          "path": "/seller/products/{product_id}/variants/{variant_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 317
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/ProductOptions.tsx",
+      "line": 26,
+      "helper": "request",
+      "method": "?",
+      "path": "/seller/products/{dynamic}/variants",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/seller/products/{product_id}/variants",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 304
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/ProductOptions.tsx",
+      "line": 57,
+      "helper": "request",
+      "method": "PUT",
+      "path": "/seller/products/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "PUT",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 170
+        },
+        {
+          "method": "DELETE",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 183
+        },
+        {
+          "method": "GET",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 297
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerAnalyticsPage.tsx",
+      "line": 20,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerAnalyticsPage.tsx",
+      "line": 45,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/analytics/overview?period={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/analytics/overview",
+          "file": "drip-backend/app/api/v1/analytics/seller.py",
+          "line": 25
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerAnalyticsPage.tsx",
+      "line": 46,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/analytics/inventory-health",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/analytics/inventory-health",
+          "file": "drip-backend/app/api/v1/analytics/seller.py",
+          "line": 69
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerAnalyticsPage.tsx",
+      "line": 59,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/analytics/revenue?period={dynamic}&granularity={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/analytics/revenue",
+          "file": "drip-backend/app/api/v1/analytics/seller.py",
+          "line": 38
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerAnalyticsPage.tsx",
+      "line": 69,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/analytics/top-products?period={dynamic}&sort_by={dynamic}&limit=10",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/analytics/top-products",
+          "file": "drip-backend/app/api/v1/analytics/seller.py",
+          "line": 53
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerAnalyticsPage.tsx",
+      "line": 79,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/wallet/commission-breakdown?page={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/wallet/commission-breakdown",
+          "file": "drip-backend/app/api/v1/wallet.py",
+          "line": 92
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerCataloguePage.tsx",
+      "line": 21,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/products?status={dynamic}&page={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/products",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 143
+        },
+        {
+          "method": "POST",
+          "path": "/seller/products",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 158
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerFulfilmentPage.tsx",
+      "line": 23,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerFulfilmentPage.tsx",
+      "line": 31,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/orders?status={dynamic}&page={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/orders",
+          "file": "drip-backend/app/api/v1/orders.py",
+          "line": 180
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerInventoryPage.tsx",
+      "line": 21,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerInventoryPage.tsx",
+      "line": 34,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/inventory?{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/inventory",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 150
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerInventoryPage.tsx",
+      "line": 43,
+      "helper": "request",
+      "method": "?",
+      "path": "/seller/inventory/{dynamic}/adjust",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/seller/inventory/{variant_id}/adjust",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 221
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerInventoryPage.tsx",
+      "line": 43,
+      "helper": "request",
+      "method": "?",
+      "path": "/seller/inventory/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/inventory/low-stock",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 175
+        },
+        {
+          "method": "GET",
+          "path": "/seller/inventory/{variant_id}",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 188
+        },
+        {
+          "method": "PUT",
+          "path": "/seller/inventory/{variant_id}",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 201
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerInventoryPage.tsx",
+      "line": 85,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/inventory/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/inventory/low-stock",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 175
+        },
+        {
+          "method": "GET",
+          "path": "/seller/inventory/{variant_id}",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 188
+        },
+        {
+          "method": "PUT",
+          "path": "/seller/inventory/{variant_id}",
+          "file": "drip-backend/app/api/v1/inventory.py",
+          "line": 201
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerLogoPage.tsx",
+      "line": 35,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerLogoPage.tsx",
+      "line": 80,
+      "helper": "request",
+      "method": "POST",
+      "path": "/seller/logo",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/seller/logo",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 74
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerLogoPage.tsx",
+      "line": 84,
+      "helper": "request",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerProductEditorPage.tsx",
+      "line": 25,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerProductEditorPage.tsx",
+      "line": 38,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/products/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "PUT",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 170
+        },
+        {
+          "method": "DELETE",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 183
+        },
+        {
+          "method": "GET",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 297
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerProductEditorPage.tsx",
+      "line": 52,
+      "helper": "request",
+      "method": "?",
+      "path": "/seller/products/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "PUT",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 170
+        },
+        {
+          "method": "DELETE",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 183
+        },
+        {
+          "method": "GET",
+          "path": "/seller/products/{product_id}",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 297
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerProductEditorPage.tsx",
+      "line": 52,
+      "helper": "request",
+      "method": "?",
+      "path": "/seller/products",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/products",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 143
+        },
+        {
+          "method": "POST",
+          "path": "/seller/products",
+          "file": "drip-backend/app/api/v1/products.py",
+          "line": 158
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerProfilePage.tsx",
+      "line": 31,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerProfilePage.tsx",
+      "line": 42,
+      "helper": "request",
+      "method": "PATCH",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerRegistrationPage.tsx",
+      "line": 81,
+      "helper": "request",
+      "method": "POST",
+      "path": "/seller/register",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/seller/register",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 37
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerReturnsPage.tsx",
+      "line": 24,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerReturnsPage.tsx",
+      "line": 32,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/returns?page={dynamic}&status={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/returns",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 128
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerReturnsPage.tsx",
+      "line": 32,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/returns?page={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/returns",
+          "file": "drip-backend/app/api/v1/returns.py",
+          "line": 128
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerStatus.tsx",
+      "line": 48,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 22,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/me",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 56
+        },
+        {
+          "method": "PATCH",
+          "path": "/seller/me",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 63
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 28,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/wallet",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/wallet",
+          "file": "drip-backend/app/api/v1/wallet.py",
+          "line": 30
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 28,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/bank-accounts",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/bank-accounts",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 132
+        },
+        {
+          "method": "POST",
+          "path": "/seller/bank-accounts",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 139
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 52,
+      "helper": "request",
+      "method": "GET",
+      "path": "/seller/bank-accounts",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/bank-accounts",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 132
+        },
+        {
+          "method": "POST",
+          "path": "/seller/bank-accounts",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 139
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 58,
+      "helper": "request",
+      "method": "GET",
+      "path": "/seller/wallet",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/wallet",
+          "file": "drip-backend/app/api/v1/wallet.py",
+          "line": 30
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 59,
+      "helper": "request",
+      "method": "GET",
+      "path": "/seller/bank-accounts",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/bank-accounts",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 132
+        },
+        {
+          "method": "POST",
+          "path": "/seller/bank-accounts",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 139
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 68,
+      "helper": "request",
+      "method": "POST",
+      "path": "/seller/wallet/withdraw",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "POST",
+          "path": "/seller/wallet/withdraw",
+          "file": "drip-backend/app/api/v1/wallet.py",
+          "line": 60
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 91,
+      "helper": "request",
+      "method": "POST",
+      "path": "/seller/bank-accounts",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/bank-accounts",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 132
+        },
+        {
+          "method": "POST",
+          "path": "/seller/bank-accounts",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 139
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 96,
+      "helper": "request",
+      "method": "DELETE",
+      "path": "/seller/bank-accounts/{dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "DELETE",
+          "path": "/seller/bank-accounts/{account_id}",
+          "file": "drip-backend/app/api/v1/sellers.py",
+          "line": 150
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 128,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/wallet/transactions?page={dynamic}&per_page=25&tx_type={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/wallet/transactions",
+          "file": "drip-backend/app/api/v1/wallet.py",
+          "line": 39
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 128,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/wallet/transactions?page={dynamic}&per_page=25",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/wallet/transactions",
+          "file": "drip-backend/app/api/v1/wallet.py",
+          "line": 39
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 138,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/wallet/payouts?page={dynamic}&status={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/wallet/payouts",
+          "file": "drip-backend/app/api/v1/wallet.py",
+          "line": 73
+        }
+      ]
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerWalletPage.tsx",
+      "line": 138,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/seller/wallet/payouts?page={dynamic}",
+      "status": "shape_match",
+      "backend_candidates": [
+        {
+          "method": "GET",
+          "path": "/seller/wallet/payouts",
+          "file": "drip-backend/app/api/v1/wallet.py",
+          "line": 73
+        }
+      ]
+    }
+  ],
+  "unresolved": [
+    {
+      "file": "drip-frontend/src/account/NotificationInboxPage.tsx",
+      "line": 18,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/notifications?page={dynamic}&per_page=20&unread_only={dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminCODPage.tsx",
+      "line": 33,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminCODPage.tsx",
+      "line": 48,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminCODPage.tsx",
+      "line": 60,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminContentPage.tsx",
+      "line": 26,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminContentPage.tsx",
+      "line": 39,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminContentPage.tsx",
+      "line": 44,
+      "helper": "request",
+      "method": "DELETE",
+      "path": "{dynamic}/{dynamic}?{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminContentPage.tsx",
+      "line": 49,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminContentPage.tsx",
+      "line": 51,
+      "helper": "request",
+      "method": "PATCH",
+      "path": "{dynamic}/{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminContentPage.tsx",
+      "line": 59,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPaymentsPage.tsx",
+      "line": 41,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/payments?{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPaymentsPage.tsx",
+      "line": 47,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPaymentsPage.tsx",
+      "line": 55,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPaymentsPage.tsx",
+      "line": 59,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/cod-collection"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPaymentsPage.tsx",
+      "line": 65,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPayoutsPage.tsx",
+      "line": 34,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPayoutsPage.tsx",
+      "line": 43,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPayoutsPage.tsx",
+      "line": 48,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminPayoutsPage.tsx",
+      "line": 52,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminProductsPage.tsx",
+      "line": 46,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminProductsPage.tsx",
+      "line": 57,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminProductsPage.tsx",
+      "line": 60,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/hide"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminProductsPage.tsx",
+      "line": 60,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/unhide"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminProductsPage.tsx",
+      "line": 67,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminRefundsPage.tsx",
+      "line": 70,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminRefundsPage.tsx",
+      "line": 72,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminRefundsPage.tsx",
+      "line": 74,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminRefundsPage.tsx",
+      "line": 91,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminRefundsPage.tsx",
+      "line": 93,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminRefundsPage.tsx",
+      "line": 94,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/confirm"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminRefundsPage.tsx",
+      "line": 95,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 55,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 57,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 58,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 59,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 79,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 81,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 82,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/messages"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 82,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/resolve"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReturnsPage.tsx",
+      "line": 84,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReviewsPage.tsx",
+      "line": 42,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReviewsPage.tsx",
+      "line": 53,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReviewsPage.tsx",
+      "line": 57,
+      "helper": "request",
+      "method": "PATCH",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminReviewsPage.tsx",
+      "line": 63,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminSellersPage.tsx",
+      "line": 44,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminSellersPage.tsx",
+      "line": 59,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminSellersPage.tsx",
+      "line": 62,
+      "helper": "request",
+      "method": "?",
+      "path": "{dynamic}/{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminSellersPage.tsx",
+      "line": 69,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminSettingsPage.tsx",
+      "line": 22,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminSettingsPage.tsx",
+      "line": 30,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminSettingsPage.tsx",
+      "line": 34,
+      "helper": "request",
+      "method": "PATCH",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/admin/AdminSettingsPage.tsx",
+      "line": 37,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/hooks/useResource.ts",
+      "line": 13,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/orders/api.ts",
+      "line": 88,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/pages/OrderPages.tsx",
+      "line": 32,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/orders?page={dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/pages/OrderPages.tsx",
+      "line": 94,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/pages/ReturnPages.tsx",
+      "line": 21,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "/returns?page={dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/pages/Storefront.tsx",
+      "line": 39,
+      "helper": "useResource",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/pages/Storefront.tsx",
+      "line": 138,
+      "helper": "useResource",
+      "method": "GET",
+      "path": "/brands?{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/pages/Storefront.tsx",
+      "line": 165,
+      "helper": "useResource",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/reviews/ReviewPhotosPage.tsx",
+      "line": 18,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/reviews/ReviewPhotosPage.tsx",
+      "line": 50,
+      "helper": "request",
+      "method": "?",
+      "path": "{dynamic}/{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/reviews/ReviewPhotosPage.tsx",
+      "line": 50,
+      "helper": "request",
+      "method": "?",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/ProductMedia.tsx",
+      "line": 13,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/ProductMedia.tsx",
+      "line": 40,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/ProductMedia.tsx",
+      "line": 47,
+      "helper": "request",
+      "method": "?",
+      "path": "{dynamic}{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/ProductMedia.tsx",
+      "line": 87,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/images"
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerFulfilmentPage.tsx",
+      "line": 56,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerFulfilmentPage.tsx",
+      "line": 63,
+      "helper": "request",
+      "method": "PUT",
+      "path": "{dynamic}/status"
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerFulfilmentPage.tsx",
+      "line": 69,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerRegistrationPage.tsx",
+      "line": 41,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerRegistrationPage.tsx",
+      "line": 71,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerReturnsPage.tsx",
+      "line": 48,
+      "helper": "useOrderRead",
+      "method": "GET",
+      "path": "{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerReturnsPage.tsx",
+      "line": 55,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/received"
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerReturnsPage.tsx",
+      "line": 55,
+      "helper": "request",
+      "method": "POST",
+      "path": "{dynamic}/{dynamic}"
+    },
+    {
+      "file": "drip-frontend/src/seller/SellerReturnsPage.tsx",
+      "line": 58,
+      "helper": "request",
+      "method": "GET",
+      "path": "{dynamic}"
+    }
+  ]
+}

@@ -2,8 +2,11 @@
 <h1>WearHowZ<br>Project audit &amp; new-chat handoff</h1>
 <p>Snapshot: 6 November 2026 · Asia/Karachi · local working tree, including uncommitted files.</p>
 <section class="warn"><h2>Review status: in progress</h2><p>This is an evidence-backed handoff and complete mechanical source inventory, <strong>not a completed A–Z semantic/line-by-line audit</strong>. Indexing every definition does not prove its purpose or correctness. Use the coverage ledger below; do not convert an indexed item into “reviewed” without reading its body and connections.</p></section>
-<nav><a href="#start">Start here</a> · <a href="#latest-findings">New findings</a> · <a href="#findings">Earlier findings</a> · <a href="#architecture">Architecture</a> · <a href="#coverage">Coverage ledger</a> · <a href="#excluded">Exclusions</a></nav>
-<section id="start"><h2>New-chat starting instructions</h2><pre>Continue the WearHowZ A–Z audit in C:/Users/wasam/OneDrive/Desktop/MultiMarket. Read this HTML&#x27;s review status, findings and coverage ledger first. The complete semantic/line-by-line audit is NOT finished. An indexed definition is NOT a reviewed function. Preserve all existing dirty/untracked implementation. Compare the current files&#x27; hashes and git status with this snapshot before relying on it. Review both drip-backend and drip-frontend, tests, migrations, CI/Docker and project documentation. Do not read real .env/private keys, dependencies or generated bundles. Respect AGENTS.md and ask before inspecting explicitly excluded legacy utilities. No implementation fixes, production writes, real payments/emails/uploads, commits, pushes or deployment are authorized by the audit. Explain purpose, control/data flow and cross-file connections; distinguish confirmed defects, suspected risks, missing features and operational gates. Complete pending source review in batches, maintaining this ledger. Reconcile historical documents with current source. Do not automatically start PayFast or other feature implementation: the user replaced that plan with this audit. Produce an updated self-contained HTML handoff with prioritized next actions, exact source references and honest test evidence. Existing focused test passes and old CI screenshots are not a current full-suite/release sign-off.</pre><p>Repository HEAD: <code>c6560df5c7de6325d35d2971a0f4e52bd1a6720a</code>. HEAD alone does not contain the uncommitted implementation described here. The new chat needs access to this working copy.</p></section>
+<nav><a href="#start">Start here</a> · <a href="#notification-findings">Notification findings</a> · <a href="#latest-findings">Auth/customer findings</a> · <a href="#findings">Earlier findings</a> · <a href="#contract-paths">API paths</a> · <a href="#architecture">Architecture</a> · <a href="#coverage">Coverage ledger</a> · <a href="#excluded">Exclusions</a></nav>
+<section id="start"><h2>New-chat starting instructions</h2><pre>Continue the WearHowZ A–Z audit in C:/Users/wasam/OneDrive/Desktop/MultiMarket. Read this HTML&#x27;s review status, findings and coverage ledger first. The complete semantic/line-by-line audit is NOT finished. An indexed definition is NOT a reviewed function. Preserve all existing dirty/untracked implementation. Compare the current files&#x27; hashes and git status with this snapshot before relying on it. Review both drip-backend and drip-frontend, tests, migrations, CI/Docker and project documentation. Do not read real .env/private keys, dependencies or generated bundles. Respect AGENTS.md and ask before inspecting explicitly excluded legacy utilities. No implementation fixes, production writes, real payments/emails/uploads, commits, pushes or deployment are authorized by the audit. Explain purpose, control/data flow and cross-file connections; distinguish confirmed defects, suspected risks, missing features and operational gates. Complete pending source review in batches, maintaining this ledger. Reconcile historical documents with current source. Do not automatically start PayFast or other feature implementation: the user replaced that plan with this audit. Produce an updated self-contained HTML handoff with prioritized next actions, exact source references and honest test evidence. Existing focused test passes and old CI screenshots are not a current full-suite/release sign-off.</pre><p>Repository HEAD: <code>495315e19899193ed8bb753e9871fac98ae75682</code>. No uncommitted backend/frontend/workflow paths at this snapshot; application source matches HEAD. Audit artifacts may be newer than that commit. The new chat needs access to this working copy and the latest handoff.</p></section>
+<section id="notification-findings"><h2>Next audit batch — notification and navigation findings</h2><p>Current application checkpoint: <code>495315e19899193ed8bb753e9871fac98ae75682</code>. The user reported its GitHub pipeline passed; that result was not independently queried in this batch. Backend/frontend application source has not been edited by this audit. New report/tools remain local until separately committed.</p><table><tr><th>ID / priority</th><th>Evidence and bounded conclusion</th><th>Next action after audit approval</th></tr><tr><td>F15 · P2<br>External email duplicate-send window</td><td><code>notification_service.py:151–190</code> sends before committing sent receipt; <code>resend_client.py:33–45</code> receives no delivery key. Synthetic execution of the actual function body, with provider success then commit failure/rollback/retry, called the provider stub twice. A committed sent log suppressed a third call. Event row locking and unique delivery_key do not eliminate this crash/uncertain-outcome window.</td><td>Specify at-least-once versus duplicate-suppression requirements, verify provider-supported idempotency/reconciliation semantics before choosing a design, and test provider-accepted/DB-failed and timeout outcomes. Do not assert real duplicate emails occurred or exactly-once delivery is already proven.</td></tr><tr><td>F16 · P2<br>Seller notification destinations are incomplete</td><td><code>notification_service.py:395</code> emits /seller/wallet/payouts; <code>email_tasks.py:130</code> emits /seller/dashboard; current App routes have neither. Inbox helper permits no seller URLs, including existing /seller/products and /seller/register emitted by decisions. Inbox tests deliberately reject payout path; legacy mail test expects obsolete dashboard.</td><td>Align producers with real seller routes and extend an explicit role-aware/internal destination allowlist where appropriate. Keep external/query/credential URL rejection. Update tests against actual App destinations rather than preserving obsolete strings.</td></tr><tr><td>F17 · P1<br>Guest tracking email handoff mismatch</td><td><code>notification_service.py:249–253,331–335</code> sends /orders/{id}?guest_token=... . <code>OrderPages.tsx:53–100</code> reads only route ID and in-memory checkout access; a fresh guest gets an empty manual access-code field. It neither consumes nor clears the query capability. Repository search found no frontend guest_token query consumer. The UI claim that codes are never in the page address is inconsistent with these emails.</td><td>Define one safe email-to-browser capability handoff, handle existing-account versus guest state explicitly, clear sensitive URL material appropriately, and verify fresh-tab/reload/back-history behavior with synthetic capabilities. Do not simply copy tokens into persistent browser storage. Actual deployed logs/referrer exposure were not inspected.</td></tr><tr><td>F18 · P2<br>Email-log date filter is incorrectly typed</td><td><code>notifications.py:get_email_log</code> accepts a raw string; <code>notification_repo.py:EmailLogRepository.list_admin</code> compares it to timestamptz. Actual SQLAlchemy expression compilation for asyncpg yields <code>email_log.sent_at &gt;= $1::VARCHAR</code>, not a timestamp bind. A valid-looking date therefore does not acquire the intended SQL timestamp type; invalid date strings are not rejected at the HTTP schema boundary.</td><td>Parse/validate date or timezone-aware datetime with explicit start-boundary semantics, then bind the matching type. Verify good/bad/boundary filters on native PostgreSQL; runtime SQL rejection was not executed in this batch.</td></tr></table><p>These extend F01–F14; no previous issue has been fixed merely because CI passed.</p></section>
+<section id="notification-flow"><h2>Notification lifecycle — purpose, connections and verification limits</h2><ol><li><strong>Business transaction → queue_notification:</strong> insert unique event_key, task name and JSON args plus event key. Caller owns commit; rollback removes the notification intent with the business mutation. Duplicate keys keep the first payload.</li><li><strong>Dispatcher:</strong> select up to100 unresolved events with SKIP LOCKED. Publish ARQ job with event ID/replay generation/attempt suffix. Persist publication/error state; missing/stale jobs can be republished after15minutes. Ten publication attempts lead to durable dead letter.</li><li><strong>Delivery:</strong> lock outbox row across an allowlisted task's independent DB session. Increment delivery attempts; successful task gets completed_at, failures get type-only error and15minute recovery delay. Five handled delivery failures or an unknown task dead-letter. Worker cancellation may bypass Exception handling; actual process-kill behavior still needs verification.</li><li><strong>Recipients and inbox:</strong> lock current active user, UUID5 notification identity per event/user; repeated in-app delivery does not duplicate. Scoped list and read mutation enforce user ownership. Read-all intentionally includes archived entries, and UI confirms this.</li><li><strong>Email:</strong> keyed receipt log skips known sent deliveries; provider send precedes receipt commit. This is stronger than blind retries but has F15's unacknowledged provider-success window. Error messages are stored raw/truncated in EmailLog unlike type-only outbox errors; inspect provider error contents and log retention before assuming privacy scrub covers DB records.</li><li><strong>Preferences:</strong> user lock → preference insert/row lock → one-time bounded Redis import. Conservative existing-row merge preserves opt-outs; successful later explicit edits win. Placement notices remain mandatory; optional order updates honor email/push flags. Legacy raw email jobs use send-time identity/opt-out checks but their read context does not commit preference import.</li><li><strong>Privacy:</strong> customer deletion queues exact asset/cache cleanup manifest in its transaction. Worker validates deleted identity, bucket/owner/generated filename and current shared references; uncertain attribution is retained for operator review. Successful cleanup clears stored asset URLs. Deleted/reassigned recipients are suppressed before queued auth/order email handoff.</li><li><strong>Recovery:</strong> admin failed list omits args; replay requires unresolved dead letter, records actor/reason/prior counters and resets budgets. Same event IDs prevent duplicate committed inbox records. Admin UI remains missing (F04), and replay must not be presented as proof an email was never delivered.</li></ol><h3>Further candidates, not confirmed defects</h3><ul><li>Broadcast snapshots all undeleted audience IDs into one event, takes all selected user locks and commits once. Measure large-audience memory/timeouts and partial-failure recovery; admin_id is currently unused for broadcast attribution.</li><li>Default promotional consent and whether account users with unverified email belong in broadcast audiences need explicit policy, not invented legal assumptions.</li><li>Email provider calls run in a thread without an explicit per-call timeout in reviewed adapter code. Cancellation does not itself prove the underlying thread/provider stopped; investigate worker timeout interactions.</li><li>Notification/date pagination lacks unique timestamp tie-breakers. Test simultaneous creation plus page transitions and filter/count snapshots.</li><li>Confirm cleanup safety against a concurrent new shared image reference, not only a reference that existed before the check.</li></ul></section>
+<section id="next-batch-evidence"><h2>Current batch evidence and continuation queue</h2><p><code>check_contract_paths.py</code> parsed the master router/includes and201 HTTP method/path declarations without importing app/settings. It checked121 frontend call variants:102 possible shape matches and19 mismatches, all in F13's customer-prefix group. Seventy-six dynamic variants remain unresolved. A shape match does not prove HTTP method where dynamic, payload/response shape, role authorization, or rendered behavior. Full mismatches and unresolved sources are embedded below; supporting JSON is in audit_tools/contract_inventory.json.</p><p><code>probe_notification_recovery.py</code> used the real send_email function body with fake repository/commit/provider objects. It reproduced two provider calls across a failed-commit retry and confirmed later committed-log dedupe. It also compiled the real EmailLog timestamp comparison to a VARCHAR bind. Settings were not imported; no PostgreSQL, Redis, SDK network or email delivery occurred.</p><p>Read existing recovery, legacy preferences, privacy, queued-email and inbox tests; none were rerun here. They contain useful native session/Redis cases, but some tests are mocks despite their integration folder, and optional real Redis coverage depends on dedicated TEST_REDIS_URL. No current full-suite, live-provider or deployment sign-off is claimed.</p><p><strong>Next:</strong> resolve dynamic API calls and frontend order/return/payment response contracts; review order/payment/refund/wallet/stock services and migrations with their concurrency tests. Continue through remaining email template/cleanup/media code. Preserve limited privacy-policy approval: no timed financial/dispute deletion or new seller/admin offboarding. Do not start repairs unless the user switches from audit to implementation. Highest discovered implementation priorities include F13 customer paths and F17 guest email handoff, followed by other validated issues.</p></section>
 <section id="continuation-verification"><h2>Checkpoint evidence and precise next starting point</h2><p>6 November2026: <code>audit_tools/probe_auth_contracts.py</code> passed isolated synthetic assertions for password stripping, mismatched-space confirmation acceptance, spoofable/unbounded login IP, update-field limit gaps and a successful email-redaction control. It explicitly verifies settings were not imported; no database, Redis, provider or real account was used. These assertions document existing behavior, not desired regression acceptance.</p><p><code>audit_tools/validate_handoff.cjs</code> checked this offline report in headless Edge: path/empty/reset search, expandable file details, required sections, desktop1440px/mobile390px, zero page errors and zero network requests. Initial mobile overflow was corrected in report-only CSS and rechecked. This is artifact QA, not application browser verification.</p><p><strong>Additional F13 consumer:</strong> <code>checkout/SavedAddressPicker.tsx:8</code> also calls the nonexistent /me/addresses path. Saved-address selection is affected; its manual delivery-entry fallback remains. Review-photo /me routes and correct /customers/me deletion must be preserved when eventually fixing callers.</p><p><strong>Continue here:</strong> first complete a mounted-route versus frontend-request comparison (including tests that mock the wrong paths), then inspect notification_outbox.py, notification_service.py and worker delivery/replay/privacy tests, then order/payment/refund/wallet/stock state transitions and native concurrency evidence. Reproduce auth-version/TOTP races before promoting them from candidates. Do not start fixes or claim all frontend functions work on the strength of isolated mocks.</p><p>The inventory covers approved first-party backend/frontend/workflow text, not dependency source, binary assets, environment secrets, root .vscode editor settings or report-generation helpers. Lockfile dependency resolution and visual assets remain explicit gaps. The new chat needs the actual dirty working copy as well as this HTML; a historical commit alone is insufficient.</p></section>
 <section id="latest-findings"><h2>6 November continuation — newly verified integration defects</h2><p><strong>Audit remains incomplete. These are source-backed findings, not implementation changes.</strong> Priority is proposed repair order, not a blanket security severity rating.</p><table><tr><th>ID</th><th>Evidence / impact</th><th>Required repair and verification</th></tr><tr><td>F13 · P1<br>Customer API path mismatch</td><td><code>api/v1/customers.py:44</code> mounts /customers. Frontend <code>AccountDetails.tsx:48,56,81,91,110,118</code>, <code>AvatarPage.tsx:13,55</code>, <code>ChangePasswordPage.tsx:34</code>, <code>NotificationPreferencesPage.tsx:12,21</code>, <code>AccountWishlist.tsx:40,52,57</code>, <code>MyReviewsPage.tsx:37,69</code> call /me paths without that prefix. <code>ReviewVote.tsx:16</code> omits it on /reviews/{id}/helpful. Transport concatenates API_BASE/path with no rewrite; Vite does not rewrite. The checked-in router mounts no matching aliases. These requests target nonexistent API paths in this configuration.</td><td>After audit/approval, align these specific callers and mocks with the actual mounted contract, then run actual-backend HTTP/browser checks. Do NOT globally rewrite /me: review-photo routes intentionally mount /me/reviews/{id}/images. Account deletion already uses /customers/me; product review read/create uses valid /products/{id}/reviews routes. Check checkout address consumers too.</td></tr><tr><td>F11 · P2<br>Untrusted login session IP</td><td><code>api/v1/auth.py:_get_ip</code> takes first XFF unconditionally, despite its trusted-proxy docstring. Value goes through login to UserSession.ip_address(String45). Synthetic helper probe accepts spoofed IP and80-character non-IP text. Existing proxy tests cover middleware/payment, not this helper.</td><td>Use the shared configured trusted-chain resolver and validate length/address. Add login session-metadata tests. Confirmed impact is unreliable audit metadata and invalid-field input risk, NOT bypass of the separately protected rate limiter or PayFast allowlist. No DB failure/attack was executed.</td></tr><tr><td>F12 · P2<br>Password whitespace silently changed</td><td><code>schemas/common.py:DRIPBaseModel</code> sets str_strip_whitespace=True. Register/login/reset/both change-password schemas inherit it. Offline probes confirmed all strip outer spaces and customer confirmation differing only in spaces is accepted. Frontend password.ts/test and ChangePasswordPage explicitly promise exact preservation.</td><td>Define compatible password semantics and migration behavior for existing hashes before changing validation; use field-specific no-strip handling, not a global removal that alters addresses/names. Test HTTP register/login/reset/change/deletion and frontend together, including Unicode and surrounding spaces.</td></tr><tr><td>F14 · P2<br>Update validation bypasses create limits</td><td><code>schemas/user.py:UpdateAddressRequest</code> has no create-style address validators; UpdateReviewRequest validates only rating. Offline probes accept empty street, city101/label51, review title201/body2001. CustomerService forwards these to SQL; model bounds include city100/label50/title200. Oversized DB failure itself was not exercised.</td><td>Share appropriate create/update field constraints while preserving partial-update semantics; add HTTP boundary/empty/oversized tests. Do not rely solely on frontend maxLength or DB errors.</td></tr></table><p>Mock blind spot: <code>tests/browser/account-details.spec.ts:16,27,58</code> explicitly accepts/asserts the same incorrect /api/v1/me path. Passing isolated UI tests therefore does not establish real API compatibility.</p></section>
 <section id="auth-deep-review"><h2>Authentication review — function-level flow and remaining risks</h2><table><tr><th>Function / boundary</th><th>Logic and connection</th></tr><tr><td>AuthService.register / auth.register</td><td>Schema normalizes inputs; service checks email and hashes password, commits unverified customer; route directly enqueues verification email. Queue failure is swallowed after account commit. User can call resend API, but current frontend has no resend action. This path is not protected by the durable business notification outbox.</td></tr><tr><td>verify_email</td><td>Decode audience-specific token → undeleted user → reject already verified → update+commit → issue access and create hashed refresh session → second commit → cookie. Failure between commits may leave verified account without returned session; sign-in is recovery. Parallel verification and deletion interactions need native tests.</td></tr><tr><td>login</td><td>Lookup email → dummy hash on missing identity → Argon2 verification → email verification → admin TOTP only if enabled → optional rehash/last-login update → access claims and refresh session → commit. Route's claim all admins require TOTP is broader than implementation. User/session creation locks do not alone prove earlier credential reads remain fresh.</td></tr><tr><td>refresh_token / SessionRepository</td><td>Hash cookie; identify owner; lock/reload active User; lock/recheck unexpired session; delete old token; create new hash; build current-role/version access; commit. Shared user-before-session order protects deletion/refresh in the inspected two-interleaving test.</td></tr><tr><td>logout</td><td>Delete refresh row and commit first; then Redis blocklist access JTI; clear cookie only after service success. Redis failure can leave partially completed logout. Frontend refresh-before-logout can then fail on the deleted cookie. Preserve honest reporting while designing a local-clear/recovery path.</td></tr><tr><td>forgot_password / reset_password</td><td>Generic response hides existence in body; eligible user gets signed reset token and best-effort enqueue. Reset consumes Redis NX marker before DB change, then replaces hash, increments version, deletes sessions, commits. DB failure after marker claim consumes the link without completing reset; marker loss/eviction weakens single-use assumptions. Distinct reset tokens and account deletion/password races require native tests.</td></tr><tr><td>Two change_password services</td><td>Frontend intends CustomerService via /customers/me/change-password: lock/reload active user, verify current hash, SQL auth_version+1, revoke sessions. Legacy /auth/change-password uses AuthService: nonlocking initial read, Python cached-version increment. Need deterministic concurrent login/reset/change/delete verification; no reproduced race is claimed.</td></tr><tr><td>setup_totp / verify_and_enable_totp</td><td>Admin role gate; first stores generated secret disabled, next verifies code and stores enabled. No fresh-password challenge, active-user lock or session-version bump in these methods. Secret stored as plain String at application layer. Enrolment/enable races, recovery, replay controls and deployment key/encryption policy remain review candidates, not demonstrated account takeovers.</td></tr><tr><td>Google start / finish / wrapper</td><td>Generate state/nonce/S256 PKCE, Redis10-minute binding and browser cookie → consume once → exchange code with15s timeout → fetch signing keys → validate identity claims → reject automatic email linking and privileged roles → create hashed refresh → fixed frontend redirect. Failure wrapper rolls back, hides provider details and clears state cookie. UI strips error/query hints and confirms only through session restore.</td></tr><tr><td>Security/logging helpers</td><td>RS JWT purposes/audiences and token-version reload provide independent checks; revocation fails closed. Password Argon2 is synchronous in async service, requiring load measurement before recommending offloading. Log scrub masks email arguments; synthetic control passed. No secrets were read or copied.</td></tr></table><p><strong>Test scope:</strong> existing auth/security/native deletion-refresh tests were read, not rerun. Offline audit helper ran synthetic schema/IP/redaction probes only, with settings import explicitly prohibited. It intentionally asserts current defect behavior; it is not the desired application regression suite.</p></section>
@@ -14,189 +17,121 @@
 <section id="remaining"><h2>Prioritized remaining work — do not start fixes before audit completion</h2><ol><li><strong>Finish this audit:</strong> current source ledger first, then auth/ownership, order/payment/refund/wallet/stock concurrency, customer privacy, worker recovery, complete frontend state/contracts, tests, all migrations and configuration. Mark each actual body/connection reviewed; do not treat AST output as completion.</li><li><strong>Confirm/reproduce findings:</strong> isolated tests for callback buffering limits, nondefault-port image health and session edge cases. Review all candidates before labelling them confirmed defects.</li><li><strong>Close confirmed feature coverage:</strong> PayFast admin reconciliation; admin dashboard/analytics; notification recovery/log/broadcast tools; admin-only 2FA enrolment. Confirm desired operator scope against approved designs.</li><li><strong>Delivery guardrails:</strong> frontend CI, deterministic dependency/build checks, refreshed OpenAPI/endpoint inventory and source-to-screen mapping. Run current combined suites only in disposable environments; retain85% backend gate.</li><li><strong>Cross-role journey verification:</strong> seeded customer/guest/seller/admin happy paths and denials, reload/timeout/duplicate/conflict states, mobile/keyboard/screen-reader checks, real backend contract compatibility. Mocked browser tests cannot substitute for this.</li><li><strong>Design/performance:</strong> obtain final-resolution approved Canva assets and typography, remove stale build-status copy, assess code splitting for the ~740.69kB JS bundle. Do not redesign established premium direction without approval.</li><li><strong>Pre-production only:</strong> merchant-specific PayFast UAT/status permissions/IPs; Google consent; Supabase storage policies; Resend domain/delivery; real workers/Redis failure handling; historical ledger reconciliation; owner secret rotation where applicable; TLS/proxy/origins/backup/monitoring/load verification and separately authorized deployment.</li></ol><p>This is the currently discovered queue, not an exhaustive final backlog. More findings may emerge from the still-unreviewed bodies.</p></section>
 <section id="evidence"><h2>Verification evidence and limits</h2><p><strong>No new application tests or builds have been run during this audit pass.</strong> The following are prior observed checkpoint results from this conversation, not proof of the entire current project:</p><ul><li>Admin payouts:70 distinct backend tests;40 frontend tests;36 mocked desktop/mobile browser tests; build passed. Disposable PostgreSQL removed.</li><li>Admin settings:32 focused backend tests including native PostgreSQL races;27 frontend tests;28 mocked desktop/mobile browser tests; build passed at740.69kB JS/189.04kB gzip. Existing lint/bundle warnings retained. Disposable PostgreSQL removed.</li><li>Earlier refund/return checkpoints have scoped counts in frontend README. Do not add overlapping totals together or substitute them for a fresh suite.</li><li>Historical backend audit documentation records1104 passing,1 skipped,87.96% in an October snapshot. This is not a November measurement. The configured gate remains85%.</li><li>A previously supplied GitHub screenshot showed a successful backend lint/test job. It does not verify all latest uncommitted files, image deployment or frontend behavior.</li></ul><p>Current review evidence is static source inspection plus mechanical parsing, hashes and inventory. Provider documentation/credentials, deployed state, lockfile resolution, vulnerability advisories, full tests, image build and migration round trip were not revalidated here. No real .env/private keys were read; no live charges, emails, uploads, settings changes, Git mutations or deployment were made.</p></section>
 <section id="candidates"><h2>Candidates requiring investigation — not confirmed bugs</h2><ul><li><code>AuthProvider.signOut</code> refreshes first and only clears after successful logout. Verify the user recovery experience for expired/revoked refresh cookies and offline/server failures; distinguish honest revocation reporting from inability to locally exit an unusable session.</li><li><code>config.py</code> startup commission is strictly0&lt;rate&lt;1, while runtime admin schema permits0 and1. Trace zero-net/zero-commission ledger constraints and business policy before judging the discrepancy.</li><li><code>PaymentService.reconcile_payfast</code> holds order/payment locks during provider HTTP requests. Measure contention versus expiry/fulfilment and timeout behavior; do not remove locks without preserving state integrity.</li><li>Caller-supplied request IDs lack an explicit length/format guard in RequestIDMiddleware. Assess log/header limits and whether upstream validation suffices.</li><li>Normal rate limiting is per client IP and fails open on Redis outage. Confirm acceptable abuse controls and monitoring; do not silently change availability policy.</li><li>Admin write forms keep uncertainty markers across reloads. They intentionally prevent automatic repetition, but operators need a documented reconciliation/recovery path; do not add a blind reset button.</li><li>Guest COD validateOrder checks fewer identity fields than PayFast. Trace all display/access callers and malformed-success tests before deciding severity.</li></ul></section>
+<section id="contract-paths"><h2>Static API path-shape comparison</h2><p>Static shape matching only; dynamic variable/helper calls and runtime API prefix are not resolved. No app/settings import or provider calls.</p><p>201 backend method/path declarations; 121 frontend call variants checked; 19 mismatch variants; 76 unresolved variants. Shape matches are NOT semantic/HTTP contract sign-off.</p>
+<details><summary>Mismatches requiring repair</summary><table><tr><th>Source</th><th>Method / path</th></tr>
+<tr><td><code>drip-frontend/src/account/AccountDetails.tsx:48</code></td><td><code>GET /me</code></td></tr>
+<tr><td><code>drip-frontend/src/account/AccountDetails.tsx:56</code></td><td><code>PATCH /me</code></td></tr>
+<tr><td><code>drip-frontend/src/account/AccountDetails.tsx:81</code></td><td><code>GET /me/addresses</code></td></tr>
+<tr><td><code>drip-frontend/src/account/AccountDetails.tsx:91</code></td><td><code>? /me/addresses</code></td></tr>
+<tr><td><code>drip-frontend/src/account/AccountDetails.tsx:91</code></td><td><code>? /me/addresses/{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/account/AccountDetails.tsx:110</code></td><td><code>POST /me/addresses/{dynamic}/set-default</code></td></tr>
+<tr><td><code>drip-frontend/src/account/AccountDetails.tsx:118</code></td><td><code>DELETE /me/addresses/{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/account/AvatarPage.tsx:13</code></td><td><code>GET /me</code></td></tr>
+<tr><td><code>drip-frontend/src/account/AvatarPage.tsx:55</code></td><td><code>POST /me/avatar</code></td></tr>
+<tr><td><code>drip-frontend/src/account/ChangePasswordPage.tsx:34</code></td><td><code>POST /me/change-password</code></td></tr>
+<tr><td><code>drip-frontend/src/account/NotificationPreferencesPage.tsx:12</code></td><td><code>GET /me/notification-preferences</code></td></tr>
+<tr><td><code>drip-frontend/src/account/NotificationPreferencesPage.tsx:21</code></td><td><code>PATCH /me/notification-preferences</code></td></tr>
+<tr><td><code>drip-frontend/src/checkout/SavedAddressPicker.tsx:8</code></td><td><code>GET /me/addresses</code></td></tr>
+<tr><td><code>drip-frontend/src/reviews/MyReviewsPage.tsx:37</code></td><td><code>GET /me/reviews?page={dynamic}&amp;per_page=20</code></td></tr>
+<tr><td><code>drip-frontend/src/reviews/MyReviewsPage.tsx:69</code></td><td><code>? /me/reviews/{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/reviews/ReviewVote.tsx:16</code></td><td><code>POST /reviews/{dynamic}/helpful</code></td></tr>
+<tr><td><code>drip-frontend/src/saved/AccountWishlist.tsx:40</code></td><td><code>GET /me/wishlist</code></td></tr>
+<tr><td><code>drip-frontend/src/saved/AccountWishlist.tsx:52</code></td><td><code>POST /me/wishlist</code></td></tr>
+<tr><td><code>drip-frontend/src/saved/AccountWishlist.tsx:57</code></td><td><code>DELETE /me/wishlist/{dynamic}</code></td></tr>
+</table></details>
+<details><summary>Dynamic calls requiring manual tracing</summary><table><tr><th>Source</th><th>Method / path</th></tr>
+<tr><td><code>drip-frontend/src/account/NotificationInboxPage.tsx:18</code></td><td><code>GET /notifications?page={dynamic}&amp;per_page=20&amp;unread_only={dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminCODPage.tsx:33</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminCODPage.tsx:48</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminCODPage.tsx:60</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminContentPage.tsx:26</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminContentPage.tsx:39</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminContentPage.tsx:44</code></td><td><code>DELETE {dynamic}/{dynamic}?{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminContentPage.tsx:49</code></td><td><code>POST {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminContentPage.tsx:51</code></td><td><code>PATCH {dynamic}/{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminContentPage.tsx:59</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminPaymentsPage.tsx:41</code></td><td><code>GET /payments?{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminPaymentsPage.tsx:47</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminPaymentsPage.tsx:55</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminPaymentsPage.tsx:59</code></td><td><code>POST {dynamic}/cod-collection</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminPaymentsPage.tsx:65</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminPayoutsPage.tsx:34</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminPayoutsPage.tsx:43</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminPayoutsPage.tsx:48</code></td><td><code>POST {dynamic}/{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminPayoutsPage.tsx:52</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminProductsPage.tsx:46</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminProductsPage.tsx:57</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminProductsPage.tsx:60</code></td><td><code>POST {dynamic}/hide</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminProductsPage.tsx:60</code></td><td><code>POST {dynamic}/unhide</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminProductsPage.tsx:67</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminRefundsPage.tsx:70</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminRefundsPage.tsx:72</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminRefundsPage.tsx:74</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminRefundsPage.tsx:91</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminRefundsPage.tsx:93</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminRefundsPage.tsx:94</code></td><td><code>POST {dynamic}/confirm</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminRefundsPage.tsx:95</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReturnsPage.tsx:55</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReturnsPage.tsx:57</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReturnsPage.tsx:58</code></td><td><code>POST {dynamic}/{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReturnsPage.tsx:59</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReturnsPage.tsx:79</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReturnsPage.tsx:81</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReturnsPage.tsx:82</code></td><td><code>POST {dynamic}/messages</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReturnsPage.tsx:82</code></td><td><code>POST {dynamic}/resolve</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReturnsPage.tsx:84</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReviewsPage.tsx:42</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReviewsPage.tsx:53</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReviewsPage.tsx:57</code></td><td><code>PATCH {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminReviewsPage.tsx:63</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminSellersPage.tsx:44</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminSellersPage.tsx:59</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminSellersPage.tsx:62</code></td><td><code>? {dynamic}/{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminSellersPage.tsx:69</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminSettingsPage.tsx:22</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminSettingsPage.tsx:30</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminSettingsPage.tsx:34</code></td><td><code>PATCH {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/admin/AdminSettingsPage.tsx:37</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/hooks/useResource.ts:13</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/orders/api.ts:88</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/pages/OrderPages.tsx:32</code></td><td><code>GET /orders?page={dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/pages/OrderPages.tsx:94</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/pages/ReturnPages.tsx:21</code></td><td><code>GET /returns?page={dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/pages/Storefront.tsx:39</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/pages/Storefront.tsx:138</code></td><td><code>GET /brands?{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/pages/Storefront.tsx:165</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/reviews/ReviewPhotosPage.tsx:18</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/reviews/ReviewPhotosPage.tsx:50</code></td><td><code>? {dynamic}/{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/reviews/ReviewPhotosPage.tsx:50</code></td><td><code>? {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/ProductMedia.tsx:13</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/ProductMedia.tsx:40</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/ProductMedia.tsx:47</code></td><td><code>? {dynamic}{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/ProductMedia.tsx:87</code></td><td><code>POST {dynamic}/images</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/SellerFulfilmentPage.tsx:56</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/SellerFulfilmentPage.tsx:63</code></td><td><code>PUT {dynamic}/status</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/SellerFulfilmentPage.tsx:69</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/SellerRegistrationPage.tsx:41</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/SellerRegistrationPage.tsx:71</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/SellerReturnsPage.tsx:48</code></td><td><code>GET {dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/SellerReturnsPage.tsx:55</code></td><td><code>POST {dynamic}/received</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/SellerReturnsPage.tsx:55</code></td><td><code>POST {dynamic}/{dynamic}</code></td></tr>
+<tr><td><code>drip-frontend/src/seller/SellerReturnsPage.tsx:58</code></td><td><code>GET {dynamic}</code></td></tr>
+</table></details>
+</section>
 <section><h2>Snapshot totals</h2><pre>{
   &quot;files&quot;: 549,
   &quot;lines&quot;: 78053,
   &quot;symbols&quot;: 3635,
-  &quot;files_with_review_notes_including_partial&quot;: 79,
-  &quot;files_read_in_full_this_pass&quot;: 71,
+  &quot;files_with_review_notes_including_partial&quot;: 101,
+  &quot;files_read_in_full_this_pass&quot;: 93,
   &quot;parse_errors&quot;: 0,
   &quot;groups&quot;: {
     &quot;.github&quot;: 1,
     &quot;drip-backend&quot;: 322,
     &quot;drip-frontend&quot;: 226
   },
-  &quot;commit&quot;: &quot;c6560df5c7de6325d35d2971a0f4e52bd1a6720a&quot;
-}</pre><p>Each symbol range is inclusive. Python calls are syntactic candidates, including nested definitions, not a resolved call graph. TypeScript declarations use its compiler parser; anonymous callbacks and every JSX expression are not individually explained. Docstrings quote source intent, not independently verified behavior.</p><details><summary>Uncommitted paths at snapshot</summary><pre> M drip-backend/app/api/v1/admin/brands.py
- M drip-backend/app/api/v1/admin/cod_queue.py
- M drip-backend/app/api/v1/admin/content.py
- M drip-backend/app/api/v1/admin/orders.py
- M drip-backend/app/api/v1/admin/payouts.py
- M drip-backend/app/api/v1/admin/reviews.py
- M drip-backend/app/api/v1/payments.py
- M drip-backend/app/api/v1/products.py
- M drip-backend/app/api/v1/wallet.py
- M drip-backend/app/repositories/inventory_repo.py
- M drip-backend/app/repositories/order_repo.py
- M drip-backend/app/repositories/payment_repo.py
- M drip-backend/app/repositories/return_repo.py
- M drip-backend/app/schemas/admin.py
- M drip-backend/app/schemas/payment.py
- M drip-backend/app/schemas/product.py
- M drip-backend/app/schemas/return_.py
- M drip-backend/app/schemas/wallet.py
- M drip-backend/app/services/admin_service.py
- M drip-backend/app/services/inventory_service.py
- M drip-backend/app/services/payment_service.py
- M drip-backend/app/services/product_service.py
- M drip-backend/app/services/return_service.py
- M drip-backend/app/services/wallet_service.py
- M drip-backend/app/tasks/order_tasks.py
- M drip-backend/tests/integration/test_admin_product_reads.py
- M drip-backend/tests/integration/test_marketplace_regressions.py
- M drip-backend/tests/integration/test_wallet_api.py
- M drip-backend/tests/unit/test_admin.py
- M drip-backend/tests/unit/test_admin_product_contract.py
- M drip-backend/tests/unit/test_withdrawal_limits.py
- M drip-frontend/README.md
- M drip-frontend/playwright.config.ts
- M drip-frontend/src/App.tsx
- M drip-frontend/src/auth/GoogleCallbackPage.tsx
- M drip-frontend/src/pages/AuthPages.tsx
-?? drip-backend/tests/integration/test_admin_banners.py
-?? drip-backend/tests/integration/test_admin_cod_flow.py
-?? drip-backend/tests/integration/test_admin_collection_flow.py
-?? drip-backend/tests/integration/test_admin_order_reads.py
-?? drip-backend/tests/integration/test_admin_payout_review.py
-?? drip-backend/tests/integration/test_admin_refunds_flow.py
-?? drip-backend/tests/integration/test_admin_registration_payment.py
-?? drip-backend/tests/integration/test_admin_return_review.py
-?? drip-backend/tests/integration/test_admin_reviews.py
-?? drip-backend/tests/integration/test_admin_seller_decision_races.py
-?? drip-backend/tests/integration/test_admin_settings_flow.py
-?? drip-backend/tests/unit/test_admin_banner_contract.py
-?? drip-backend/tests/unit/test_admin_cod.py
-?? drip-backend/tests/unit/test_admin_order_contract.py
-?? drip-backend/tests/unit/test_admin_registration_contract.py
-?? drip-backend/tests/unit/test_admin_review_contract.py
-?? drip-backend/tests/unit/test_cod_collection.py
-?? drip-backend/tests/unit/test_product_publication_response.py
-?? drip-backend/tests/unit/test_refund_review.py
-?? drip-backend/tests/unit/test_seller_inventory_order.py
-?? drip-frontend/src/admin/AdminCODPage.test.tsx
-?? drip-frontend/src/admin/AdminCODPage.tsx
-?? drip-frontend/src/admin/AdminContentPage.test.tsx
-?? drip-frontend/src/admin/AdminContentPage.tsx
-?? drip-frontend/src/admin/AdminOrdersPage.test.tsx
-?? drip-frontend/src/admin/AdminOrdersPage.tsx
-?? drip-frontend/src/admin/AdminPaymentsPage.test.tsx
-?? drip-frontend/src/admin/AdminPaymentsPage.tsx
-?? drip-frontend/src/admin/AdminPayoutsPage.tsx
-?? drip-frontend/src/admin/AdminProductsPage.test.tsx
-?? drip-frontend/src/admin/AdminProductsPage.tsx
-?? drip-frontend/src/admin/AdminRefundsPage.test.tsx
-?? drip-frontend/src/admin/AdminRefundsPage.tsx
-?? drip-frontend/src/admin/AdminReturnsPage.test.tsx
-?? drip-frontend/src/admin/AdminReturnsPage.tsx
-?? drip-frontend/src/admin/AdminReviewsPage.test.tsx
-?? drip-frontend/src/admin/AdminReviewsPage.tsx
-?? drip-frontend/src/admin/AdminSellersPage.test.tsx
-?? drip-frontend/src/admin/AdminSellersPage.tsx
-?? drip-frontend/src/admin/AdminSettingsPage.tsx
-?? drip-frontend/src/admin/cod.test.ts
-?? drip-frontend/src/admin/cod.ts
-?? drip-frontend/src/admin/content.test.ts
-?? drip-frontend/src/admin/content.ts
-?? drip-frontend/src/admin/orders.test.ts
-?? drip-frontend/src/admin/orders.ts
-?? drip-frontend/src/admin/payments.test.ts
-?? drip-frontend/src/admin/payments.ts
-?? drip-frontend/src/admin/payouts.test.ts
-?? drip-frontend/src/admin/payouts.ts
-?? drip-frontend/src/admin/products.css
-?? drip-frontend/src/admin/products.test.ts
-?? drip-frontend/src/admin/products.ts
-?? drip-frontend/src/admin/refunds.test.ts
-?? drip-frontend/src/admin/refunds.ts
-?? drip-frontend/src/admin/returns.test.ts
-?? drip-frontend/src/admin/returns.ts
-?? drip-frontend/src/admin/reviews.test.ts
-?? drip-frontend/src/admin/reviews.ts
-?? drip-frontend/src/admin/sellers.css
-?? drip-frontend/src/admin/sellers.test.ts
-?? drip-frontend/src/admin/sellers.ts
-?? drip-frontend/src/admin/settings.test.ts
-?? drip-frontend/src/admin/settings.ts
-?? drip-frontend/src/auth/destination.ts
-?? drip-frontend/src/pages/PortalPage.test.tsx
-?? drip-frontend/src/pages/PortalPage.tsx
-?? drip-frontend/src/seller/ProductMedia.tsx
-?? drip-frontend/src/seller/ProductOptions.tsx
-?? drip-frontend/src/seller/SellerAnalyticsPage.tsx
-?? drip-frontend/src/seller/SellerCataloguePage.tsx
-?? drip-frontend/src/seller/SellerFulfilmentPage.tsx
-?? drip-frontend/src/seller/SellerInventoryPage.tsx
-?? drip-frontend/src/seller/SellerLogoPage.tsx
-?? drip-frontend/src/seller/SellerProductEditorPage.tsx
-?? drip-frontend/src/seller/SellerProfilePage.tsx
-?? drip-frontend/src/seller/SellerRegistrationPage.tsx
-?? drip-frontend/src/seller/SellerReturnsPage.tsx
-?? drip-frontend/src/seller/SellerStatus.test.tsx
-?? drip-frontend/src/seller/SellerStatus.tsx
-?? drip-frontend/src/seller/SellerWalletPage.tsx
-?? drip-frontend/src/seller/analytics.css
-?? drip-frontend/src/seller/analytics.test.ts
-?? drip-frontend/src/seller/analytics.ts
-?? drip-frontend/src/seller/catalogue.test.ts
-?? drip-frontend/src/seller/catalogue.ts
-?? drip-frontend/src/seller/fulfilment.test.ts
-?? drip-frontend/src/seller/fulfilment.ts
-?? drip-frontend/src/seller/inventory.test.ts
-?? drip-frontend/src/seller/inventory.ts
-?? drip-frontend/src/seller/logo.test.ts
-?? drip-frontend/src/seller/logo.ts
-?? drip-frontend/src/seller/product-editor.test.ts
-?? drip-frontend/src/seller/product-editor.ts
-?? drip-frontend/src/seller/product-media.test.ts
-?? drip-frontend/src/seller/product-media.ts
-?? drip-frontend/src/seller/product-options.test.ts
-?? drip-frontend/src/seller/product-options.ts
-?? drip-frontend/src/seller/profile.test.ts
-?? drip-frontend/src/seller/profile.ts
-?? drip-frontend/src/seller/registration.test.ts
-?? drip-frontend/src/seller/registration.ts
-?? drip-frontend/src/seller/returns.test.ts
-?? drip-frontend/src/seller/returns.ts
-?? drip-frontend/src/seller/wallet.test.ts
-?? drip-frontend/src/seller/wallet.ts
-?? drip-frontend/tests/browser/admin-cod.spec.ts
-?? drip-frontend/tests/browser/admin-content.spec.ts
-?? drip-frontend/tests/browser/admin-orders.spec.ts
-?? drip-frontend/tests/browser/admin-payments.spec.ts
-?? drip-frontend/tests/browser/admin-payouts.spec.ts
-?? drip-frontend/tests/browser/admin-products.spec.ts
-?? drip-frontend/tests/browser/admin-refunds.spec.ts
-?? drip-frontend/tests/browser/admin-registration.spec.ts
-?? drip-frontend/tests/browser/admin-returns.spec.ts
-?? drip-frontend/tests/browser/admin-reviews.spec.ts
-?? drip-frontend/tests/browser/admin-sellers.spec.ts
-?? drip-frontend/tests/browser/admin-settings.spec.ts
-?? drip-frontend/tests/browser/role-entry.spec.ts
-?? drip-frontend/tests/browser/seller-analytics.spec.ts
-?? drip-frontend/tests/browser/seller-catalogue.spec.ts
-?? drip-frontend/tests/browser/seller-fulfilment.spec.ts
-?? drip-frontend/tests/browser/seller-inventory.spec.ts
-?? drip-frontend/tests/browser/seller-logo.spec.ts
-?? drip-frontend/tests/browser/seller-product-editor.spec.ts
-?? drip-frontend/tests/browser/seller-product-media.spec.ts
-?? drip-frontend/tests/browser/seller-product-options.spec.ts
-?? drip-frontend/tests/browser/seller-profile.spec.ts
-?? drip-frontend/tests/browser/seller-registration.spec.ts
-?? drip-frontend/tests/browser/seller-returns.spec.ts
-?? drip-frontend/tests/browser/seller-status.spec.ts
-?? drip-frontend/tests/browser/seller-wallet.spec.ts
-?? drip-frontend/tests/fixtures/admin-returns.ts
-</pre></details></section>
+  &quot;commit&quot;: &quot;495315e19899193ed8bb753e9871fac98ae75682&quot;
+}</pre><p>Each symbol range is inclusive. Python calls are syntactic candidates, including nested definitions, not a resolved call graph. TypeScript declarations use its compiler parser; anonymous callbacks and every JSX expression are not individually explained. Docstrings quote source intent, not independently verified behavior.</p><details><summary>Uncommitted paths at snapshot</summary><pre></pre></details></section>
 <section id="coverage"><h2>File and definition coverage ledger</h2><label for="filter">Filter by path, symbol, import or review note</label><input id="filter" placeholder="For example: payment_service or useAccountWrite"><p id="visible"></p></section>
 <details class="file"><summary>.github/workflows/backend-ci.yml · 152 lines · 0 definitions</summary><p><strong>Review:</strong> Read in full: backend-only PR/main/tag/manual triggers; PostgreSQL16/Redis7 test services; Python3.13 critical-error Ruff and pytest coverage; API/worker image matrix publishes on qualifying pushes. No frontend job or deployment job exists here. Actions versions were not independently assessed against current upstream advisories.</p><p>Entry point, configuration, asset or tooling; inspect explicit settings and callers.</p><p class="small">SHA-256: b714600590d9777173647c3d184475ef3e57b4aed0a627ac85b7ffe6789f053c</p>
 </details>
@@ -1153,7 +1088,7 @@ add stock; updated counts matched rows, including unchanged quantities.</p>
 <p class="small">Syntactic calls: InventoryService, InventoryService(db).bulk_update_stock, router.post</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/api/v1/notifications.py · 149 lines · 10 definitions</summary><p><strong>Review:</strong> Partial review: enumerated failed-event listing/replay, customer inbox/preferences, admin broadcast and email-log routes. Admin tools lack frontend consumers in the current src search. Service authorization, audit, query behavior and each body remain pending.</p><p>HTTP boundary: dependencies and validated payloads delegate to service/repository operations.</p><p class="small">SHA-256: 1ee9299689286dd61329dc2ae4723ae32378aad0d3874da26641e773c6b34396</p>
+<details class="file"><summary>drip-backend/app/api/v1/notifications.py · 149 lines · 10 definitions</summary><p><strong>Review:</strong> Read in full: CurrentUser gates inbox/list/read/all/preferences; CurrentAdmin gates failed-event list/replay, broadcast and email-log. UUIDs/page limits validated; replay reason length10–500 but not stripped; email-log date_from remains Optional[str]. Read-all route does not collide with /{notification_id}/read because segment shapes differ. Admin bodies delegate reviewed services; no operator frontend yet.</p><p>HTTP boundary: dependencies and validated payloads delegate to service/repository operations.</p><p class="small">SHA-256: 1ee9299689286dd61329dc2ae4723ae32378aad0d3874da26641e773c6b34396</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 app.api.deps: get_db, CurrentUser, CurrentAdmin
 app.schemas.notification: NotificationListResponse, NotificationPreferencesResponse, UpdatePreferencesRequest, BroadcastRequest, BroadcastResponse, MarkReadResponse
@@ -2330,7 +2265,7 @@ urllib.parse: quote</pre></details>
 <p class="small">Syntactic calls: Decimal, PayFastProtocolError, value.is_finite, value.quantize</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/integrations/resend_client.py · 242 lines · 11 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>External provider adapter; local syntax/tests do not establish live acceptance.</p><p class="small">SHA-256: 79347b988d93b5227d181fb14bd8e75c5f165ac9f27e24afb8f1428b9d90c600</p>
+<details class="file"><summary>drip-backend/app/integrations/resend_client.py · 242 lines · 11 definitions</summary><p><strong>Review:</strong> Partial review: first110lines cover configuration gate, ResendClient.send, legacy bool-returning send_email and beginning shared template. Both offload synchronous SDK via asyncio.to_thread. Adapter has no idempotency-key parameter/forwarding or explicit per-call timeout in reviewed code. Full template bodies, escaping and destinations remain pending. No API key/settings loaded and no mail sent.</p><p>External provider adapter; local syntax/tests do not establish live acceptance.</p><p class="small">SHA-256: 79347b988d93b5227d181fb14bd8e75c5f165ac9f27e24afb8f1428b9d90c600</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 app.core.config: settings
 app.core.exceptions: ExternalServiceError
@@ -2456,7 +2391,7 @@ uuid: UUID, uuid4</pre></details>
 <p class="small">Syntactic calls: DateTime, ForeignKey, Index, String, func.now, mapped_column</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/models/base.py · 98 lines · 10 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>SQLAlchemy persistence mapping: tables, fields, relationships and constraints.</p><p class="small">SHA-256: c1402febddca8215824d72d5d910126c722443fe940b28f1c27cac5c53bd271f</p>
+<details class="file"><summary>drip-backend/app/models/base.py · 98 lines · 10 definitions</summary><p><strong>Review:</strong> Read in two contiguous batches: declarative UUID type mapping, debugging to_dict (all columns, so never log credential-bearing models blindly), primary-key/timestamp/soft-delete/audit mixins. Soft deletion is a marker, not a global ORM query filter; each repository/service must enforce it. Database default UUID versus Python defaults differs across models. No table or migration was executed.</p><p>SQLAlchemy persistence mapping: tables, fields, relationships and constraints.</p><p class="small">SHA-256: c1402febddca8215824d72d5d910126c722443fe940b28f1c27cac5c53bd271f</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 datetime: UTC, datetime
 sqlalchemy.dialects.postgresql: UUID
@@ -2524,7 +2459,7 @@ uuid: UUID, uuid4</pre></details>
 <p class="small">Syntactic calls: DateTime, ForeignKey, UniqueConstraint, mapped_column, relationship, sql_text</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/models/notification.py · 99 lines · 4 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>SQLAlchemy persistence mapping: tables, fields, relationships and constraints.</p><p class="small">SHA-256: c00d0012ea06c25101a73dd5db5b5a55f1467d28d6eefde6f14ebbf775d1b161</p>
+<details class="file"><summary>drip-backend/app/models/notification.py · 99 lines · 4 definitions</summary><p><strong>Review:</strong> Read in full: inbox/read/archive records, canonical boolean preferences plus legacy_imported marker, unique optional EmailLog.delivery_key and attempts, durable outbox unique event_key with publication/completion/dead-letter timestamps, delivery budget and replay history. Outbox args retain business/cleanup payloads. SQL model constraints are not freshly verified against migration history.</p><p>SQLAlchemy persistence mapping: tables, fields, relationships and constraints.</p><p class="small">SHA-256: c00d0012ea06c25101a73dd5db5b5a55f1467d28d6eefde6f14ebbf775d1b161</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 app.models.base: Base
 datetime: datetime
@@ -2943,7 +2878,7 @@ Called by order service (Block 5).</p>
 <p class="small">Syntactic calls: BusinessRuleError, datetime.utcnow, self.db.execute, update, update(ProductInventory).where, update(ProductInventory).where(ProductInventory.variant_id == variant_id, ProductInventory.reserved &gt;= quantity, ProductInventory.stock &gt;= quantity).values</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/repositories/notification_repo.py · 159 lines · 15 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Persistence access: queries and row locking, usually inside the caller&#x27;s transaction.</p><p class="small">SHA-256: 644abc21d6e9f0a632ff491fd3027f1cd7f020097f47bf8fb14276d3d1478d46</p>
+<details class="file"><summary>drip-backend/app/repositories/notification_repo.py · 159 lines · 15 definitions</summary><p><strong>Review:</strong> Read in full: deterministic create_once via PK conflict; user-scoped unarchived list/unread counts; read/read-all preserve first timestamp using coalesce (read-all includes archived); canonical preference get/upsert; keyed email log read FOR UPDATE and insert/list. Pagination lacks unique time tie-breaker. Admin date filter compares timestamptz to string; offline asyncpg compilation yields VARCHAR bind. No PostgreSQL execution performed.</p><p>Persistence access: queries and row locking, usually inside the caller&#x27;s transaction.</p><p class="small">SHA-256: 644abc21d6e9f0a632ff491fd3027f1cd7f020097f47bf8fb14276d3d1478d46</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 app.models.notification: Notification, NotificationPreference, EmailLog
 datetime: datetime
@@ -3885,7 +3820,7 @@ typing: Annotated</pre></details>
 <p class="small">Syntactic calls: format</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/schemas/notification.py · 86 lines · 8 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Pydantic input/output validation and serialization contract.</p><p class="small">SHA-256: ad56528e1c75d803ff8ad9bc34eb4c44cd9f799b09c356df563931c178c952fc</p>
+<details class="file"><summary>drip-backend/app/schemas/notification.py · 86 lines · 8 definitions</summary><p><strong>Review:</strong> Read in full: inbox/page/preferences/broadcast/email-log contracts. Uses plain BaseModel, not extra-forbid shared request base. Broadcast title/body/audience/URL-length bounds; URL semantics and whitespace-only content not checked. Optional preference None means omission. Email-log dates remain raw route strings, not schema-parsed datetimes. No frontend admin recovery/broadcast UI yet.</p><p>Pydantic input/output validation and serialization contract.</p><p class="small">SHA-256: ad56528e1c75d803ff8ad9bc34eb4c44cd9f799b09c356df563931c178c952fc</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 datetime: datetime
 pydantic: BaseModel, Field
@@ -5336,7 +5271,7 @@ thresholds.</p>
 <p class="small">Syntactic calls: BulkStockUpdateRequest, BulkStockUpdateResponse, datetime.now, len, logger.info, self.db.begin_nested, self.db.commit, self.db.execute, self.db.rollback, sorted, str, update, update(ProductInventory).where, update(ProductInventory).where(ProductInventory.variant_id == item.variant_id, ProductInventory.reserved &lt;= item.stock).values</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/services/legacy_preferences.py · 62 lines · 1 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Business operations: coordinates authorization, repositories, transaction effects and integrations.</p><p class="small">SHA-256: 86a06a2f831bce383a9bbc5a1fbf5d5346db6ab3abd7ce121727879cc4164662</p>
+<details class="file"><summary>drip-backend/app/services/legacy_preferences.py · 62 lines · 1 definitions</summary><p><strong>Review:</strong> Read in full: lock active user then upsert/lock preference row, return if imported; bounded3s Redis hash import, strict recognized boolean encodings; new rows inherit old flags, existing rows conservatively AND to preserve opt-outs; mark imported and flush, caller commits. Legacy data retained. Malformed/Redis failure raises, never assumes consent. Reads can write/import once by design.</p><p>Business operations: coordinates authorization, repositories, transaction effects and integrations.</p><p class="small">SHA-256: 86a06a2f831bce383a9bbc5a1fbf5d5346db6ab3abd7ce121727879cc4164662</p>
 <details><summary>Imports / direct dependencies</summary><pre>app.core.exceptions: ExternalServiceError
 app.core.redis: get_redis
 app.models.notification: NotificationPreference
@@ -5351,7 +5286,7 @@ uuid: UUID</pre></details>
 <p class="small">Syntactic calls: ExternalServiceError, LEGACY_FIELDS.items, ValueError, asyncio.timeout, db.execute, db.flush, db.scalar, get_redis, get_redis().hgetall, getattr, insert, insert(NotificationPreference).values, insert(NotificationPreference).values(user_id=user_id).on_conflict_do_nothing, isinstance, key.decode, lock_active_user, raw.items, select, select(NotificationPreference).where, select(NotificationPreference).where(NotificationPreference.user_id == user_id).with_for_update, select(NotificationPreference).where(NotificationPreference.user_id == user_id).with_for_update().execution_options, setattr, value.decode</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/services/notification_outbox.py · 97 lines · 3 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Business operations: coordinates authorization, repositories, transaction effects and integrations.</p><p class="small">SHA-256: 90dc1594948e16292de8ba22f78ab07baa3bf9d9c3060de92e52ba2726efd902</p>
+<details class="file"><summary>drip-backend/app/services/notification_outbox.py · 97 lines · 3 definitions</summary><p><strong>Review:</strong> Read in full: queue_notification appends event_key to args and inserts in caller transaction with event-key conflict suppression. Failed list excludes payload args; replay locks/refetches row, requires unresolved dead letter, records actor/reason/prior counters/error and resets budgets/publication. Does not alter completed rows or send directly. Replay reason whitespace and retention/history growth need policy; event-key reuse with changed payload silently keeps first event.</p><p>Business operations: coordinates authorization, repositories, transaction effects and integrations.</p><p class="small">SHA-256: 90dc1594948e16292de8ba22f78ab07baa3bf9d9c3060de92e52ba2726efd902</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 app.core.exceptions: BusinessRuleError, NotFoundError
 app.models.notification: NotificationOutbox
@@ -5373,7 +5308,7 @@ uuid: UUID</pre></details>
 <p class="small">Syntactic calls: BusinessRuleError, NotFoundError, datetime.now, datetime.now(UTC).isoformat, db.commit, db.scalar, select, select(NotificationOutbox).where, select(NotificationOutbox).where(NotificationOutbox.id == event_id).with_for_update, select(NotificationOutbox).where(NotificationOutbox.id == event_id).with_for_update().execution_options, str</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/services/notification_service.py · 486 lines · 16 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Business operations: coordinates authorization, repositories, transaction effects and integrations.</p><p class="small">SHA-256: 07a3709eef05650ee11c676a4654c5f2e3d3b662ac8d58d95a0f15d5c86f23c1</p>
+<details class="file"><summary>drip-backend/app/services/notification_service.py · 486 lines · 16 definitions</summary><p><strong>Review:</strong> Read in two contiguous batches: deterministic inbox IDs under active-user row lock; scoped list/read; shared one-time legacy preference import. send_email skips committed sent log, sends then commits receipt, records failures and raises; mock commit-failure/retry probe causes two provider calls, delivery key is not passed to adapter. Placement is mandatory transactional notice; later order updates respect email/push flags. Guest tracking URLs carry query token that frontend does not consume. Payout/seller notices are inbox-only with stale/unsupported links. Broadcast snapshots all undeleted selected-role IDs into one durable event; admin_id unused. Email log maps typed responses but raw date input is not parsed.</p><p>Business operations: coordinates authorization, repositories, transaction effects and integrations.</p><p class="small">SHA-256: 07a3709eef05650ee11c676a4654c5f2e3d3b662ac8d58d95a0f15d5c86f23c1</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 app.core.exceptions: ExternalServiceError
 app.core.money: format_pkr
@@ -5933,7 +5868,7 @@ variants.</p>
 <p class="small">Syntactic calls: NotFoundError, self.db.commit, self.product_repo.get_by_id</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/services/queued_email_privacy.py · 124 lines · 1 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Business operations: coordinates authorization, repositories, transaction effects and integrations.</p><p class="small">SHA-256: a7d929f0fc8d04b88dcab94e8d37a7d4fa0ef7526acb791480a3b53aedcb5dfc</p>
+<details class="file"><summary>drip-backend/app/services/queued_email_privacy.py · 124 lines · 1 definitions</summary><p><strong>Review:</strong> Read in full: async context checks token purpose/identity or persisted order/brand, rejects deleted/reassigned/wrong recipient, stale verification/used reset, inactive seller and opted-out optional email. Holds user lock through provider handoff; guest mail binds persisted order/email, not same-email user. Returns current name, converts infrastructure/provider exceptions to ARQ Retry. Normalization is local to checker; wrapper still passes original email to sender. Legacy preference import inside this read context is rolled back on exit, so repeated legacy jobs may reconsult Redis until another committed import.</p><p>Business operations: coordinates authorization, repositories, transaction effects and integrations.</p><p class="small">SHA-256: a7d929f0fc8d04b88dcab94e8d37a7d4fa0ef7526acb791480a3b53aedcb5dfc</p>
 <details><summary>Imports / direct dependencies</summary><pre>app.core.database: AsyncSessionLocal
 app.core.exceptions: TokenInvalidError
 app.core.logging: get_logger
@@ -6469,7 +6404,7 @@ in-progress uploads.</p>
 <p class="small">Syntactic calls: datetime.fromisoformat, isinstance, parsed.astimezone, value.replace, value.strip</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/tasks/email_tasks.py · 134 lines · 6 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Background worker function or scheduler registration; inspect retries and transaction boundaries.</p><p class="small">SHA-256: db6b1ffe40157139312e6df489d99068504e79074f9cf8f4aa6493becfa30a07</p>
+<details class="file"><summary>drip-backend/app/tasks/email_tasks.py · 134 lines · 6 definitions</summary><p><strong>Review:</strong> Read in full: six legacy email wrappers preserve signatures but check current recipient under privacy context; false send result raises ARQ Retry; current name replaces queued stale name. Seller approval ignores queued dashboard URL and constructs configured /seller/dashboard, which current frontend lacks. Direct jobs do not gain durable outbox completion merely by being registered.</p><p>Background worker function or scheduler registration; inspect retries and transaction boundaries.</p><p class="small">SHA-256: db6b1ffe40157139312e6df489d99068504e79074f9cf8f4aa6493becfa30a07</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 app.core.logging: get_logger
 app.core.money: MoneyDisplayValue
@@ -6502,7 +6437,7 @@ arq: Retry</pre></details>
 <p class="small">Syntactic calls: Retry, checked_email_recipient, ctx.get, frontend_url, logger.error, send_seller_approved_email</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/app/tasks/notification_tasks.py · 240 lines · 7 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Background worker function or scheduler registration; inspect retries and transaction boundaries.</p><p class="small">SHA-256: d3dc6926e8c9a878bccd9f565466bb122854788807110130137e9e2ce3f87ee4</p>
+<details class="file"><summary>drip-backend/app/tasks/notification_tasks.py · 240 lines · 7 definitions</summary><p><strong>Review:</strong> Read in full: wrappers open independent DB sessions and translate failures to Retry. Broadcast sorts/deduplicates recipients, locks each active user, UUID5 inserts and single commit. Dispatcher selects100 eligible events SKIP LOCKED, republishes after15min, caps10 publication attempts; delivery locks event, calls seven-name allowlist with own child session, records completion or error/caps5 deliveries. Completion separate from email provider receipt; crash window remains. Cleanup success redacts asset manifest. Timeout cancellation budget behavior, unbounded broadcast duration and DB-pool use remain candidates.</p><p>Background worker function or scheduler registration; inspect retries and transaction boundaries.</p><p class="small">SHA-256: d3dc6926e8c9a878bccd9f565466bb122854788807110130137e9e2ce3f87ee4</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 app.core.database: AsyncSessionLocal
 app.core.logging: get_logger
@@ -7920,7 +7855,7 @@ uuid: UUID</pre></details>
 <p class="small">Syntactic calls: ResolveDisputeRequest, ReturnService, _fulfil_and_collect_cod, _reject_and_open_dispute, db.get, db.scalar, func.count, select, service.get_admin_return, service.resolve_dispute</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/tests/integration/test_b4_notifications.py · 218 lines · 5 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: 232899e2d6586bc49dcd0077bce21df3790487274728fd799b2f0c7300006c7d</p>
+<details class="file"><summary>drip-backend/tests/integration/test_b4_notifications.py · 218 lines · 5 definitions</summary><p><strong>Review:</strong> Read in full: durable checkout event/publisher Redis failure then retry; failed-email then success and committed receipt dedupe; escaped product HTML and backend-valid guest capability link; canonical optional preferences and mandatory placement; payout/seller/cancel business event generation. Same-session wrappers are mocks, not independent concurrent transactions. No test of email provider success followed by failed receipt commit or browser consumption of generated guest URL.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: 232899e2d6586bc49dcd0077bce21df3790487274728fd799b2f0c7300006c7d</p>
 <details><summary>Imports / direct dependencies</summary><pre>__future__: annotations
 app.core.exceptions: NotFoundError
 app.core: database
@@ -8190,7 +8125,7 @@ uuid: UUID, uuid4</pre></details>
 <p class="small">Syntactic calls: CouponService, CouponService(db).apply_to_order, Decimal, Order, db.add, db.commit, db.refresh, db.scalar, func.count, int, pytest.mark.parametrize, pytest.raises, select, setup_coupon</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/tests/integration/test_customer_privacy.py · 364 lines · 12 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: 53236f5aed0d1d5b3dcc21d4e1784956d5b21b34abeceff8b11257d7ce3434ac</p>
+<details class="file"><summary>drip-backend/tests/integration/test_customer_privacy.py · 364 lines · 12 definitions</summary><p><strong>Review:</strong> Read in two contiguous batches: late credential writes cannot restore deleted user; cleanup cache outage persists retry; deletion commit failure rolls back cleanup publication; financial/rating retention and external delete retry/redacted manifest; unowned/shared/external assets skipped for review; postdelete account/queue writes suppressed; return/dispute versus deletion interleavings. Native DB plus fake providers; not rerun. Shared-asset tests cover preexisting references, not concurrent reassignment during delete.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: 53236f5aed0d1d5b3dcc21d4e1784956d5b21b34abeceff8b11257d7ce3434ac</p>
 <details><summary>Imports / direct dependencies</summary><pre>app.core.config: settings
 app.core.database
 app.core.exceptions: BusinessRuleError, NotFoundError
@@ -8346,7 +8281,7 @@ uuid: uuid4</pre></details>
 <p class="small">Syntactic calls: AsyncMock, assert_contract, client.post, db.scalar, func.count, handler.assert_not_awaited, monkeypatch.setattr, pytest.mark.parametrize, select</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/tests/integration/test_legacy_preferences.py · 67 lines · 3 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: a6d7c60cb0d3f2148c864e343a4062cfb05ae6a4eea0db99611ccefb4804009b</p>
+<details class="file"><summary>drip-backend/tests/integration/test_legacy_preferences.py · 67 lines · 3 definitions</summary><p><strong>Review:</strong> Read in full: old opt-outs/new opt-ins imported, later explicit edits preserved, conflicting rows conservatively retain opt-outs, malformed/Redis outage leaves import unfinished. No concurrent first-import test in this file. Not rerun.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: a6d7c60cb0d3f2148c864e343a4062cfb05ae6a4eea0db99611ccefb4804009b</p>
 <details><summary>Imports / direct dependencies</summary><pre>app.core.exceptions: ExternalServiceError
 app.models.notification: NotificationPreference
 app.schemas.notification: UpdatePreferencesRequest
@@ -8630,7 +8565,7 @@ full intended debit amount for platform reconciliation.</p>
 <p class="small">Syntactic calls: Decimal, PaymentService, PaymentService(db).confirm_refund, _do_return_and_process, _fulfil_and_collect_cod, db.commit, db.get, db.refresh</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/tests/integration/test_notification_api.py · 141 lines · 20 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: e79c6fa800018cf00c795c7892d30d1e7be3876c74d4c5294e9075193a63827a</p>
+<details class="file"><summary>drip-backend/tests/integration/test_notification_api.py · 141 lines · 20 definitions</summary><p><strong>Review:</strong> Read in full: isolated FastAPI/mocked DB, dependency overrides for selected schema cases, no-auth assertions allow401 OR422, invalid page/audience/title. This is not full native HTTP integration or precise permission-status coverage. Does not test successful email-log date filtering, replay, broadcast identity snapshots or inbox ownership mutation. Not rerun.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: e79c6fa800018cf00c795c7892d30d1e7be3876c74d4c5294e9075193a63827a</p>
 <details><summary>Imports / direct dependencies</summary><pre>app.api.deps: get_db, require_customer, require_admin
 app.api.v1.notifications: router
 app.core.database: get_db
@@ -9027,7 +8962,7 @@ uuid: uuid4</pre></details>
 <p class="small">Syntactic calls: SetStockRequest, pytest.mark.parametrize, pytest.raises</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/tests/integration/test_preship_recovery.py · 232 lines · 9 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: bbedbfe9e92e1487a5f3fba3c8a44f7caf6951bef6cb8c549b2b72c3d66c8f0e</p>
+<details class="file"><summary>drip-backend/tests/integration/test_preship_recovery.py · 232 lines · 9 definitions</summary><p><strong>Review:</strong> Read in full: native sessions exercise stale-job republication, concurrent event generations, bounded delivery/publication, broadcast replay after inner commit, unsupported task allowlist, actor/reason replay API and real ARQ optional TEST_REDIS_URL /15 test. Broadcast crash recovery is not proof of exactly-once external email. Tests not rerun; real Redis test may skip without dedicated setup.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: bbedbfe9e92e1487a5f3fba3c8a44f7caf6951bef6cb8c549b2b72c3d66c8f0e</p>
 <details><summary>Imports / direct dependencies</summary><pre>app.core.security: create_access_token
 app.core: database
 app.models.notification: Notification, NotificationOutbox
@@ -9188,7 +9123,7 @@ urllib.parse: parse_qs, urlsplit</pre></details>
 <p class="small">Syntactic calls: AsyncMock, OrderService, OrderService(db).create_guest_order, PayFastClient, PaymentService, PaymentService(db).initiate, db.commit, db.get, guest_payload, monkeypatch.setattr, pytest.mark.parametrize, str, token.assert_awaited_once_with</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/tests/integration/test_queued_email_privacy.py · 301 lines · 11 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: 4011389cda58dadbd0bfd2a1d960067e9ebacff1fbc98698e09db5ab79b9382c</p>
+<details class="file"><summary>drip-backend/tests/integration/test_queued_email_privacy.py · 301 lines · 11 definitions</summary><p><strong>Review:</strong> Read in two contiguous batches: synthetic current-name/retry and case normalization, invalid/expired/purpose/identity rejection, deleted/reassigned suppression, completed-token checks, Redis failure, both provider/deletion race orders, persisted guest/account order matching, seller brand/status/deletion and legacy/canonical opt-outs. Provider calls mocked; independent sessions for lock tests,0.1s blocked checks. Seller approval test codifies obsolete /seller/dashboard URL. Not rerun.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: 4011389cda58dadbd0bfd2a1d960067e9ebacff1fbc98698e09db5ab79b9382c</p>
 <details><summary>Imports / direct dependencies</summary><pre>app.core.config: settings
 app.core.database
 app.core.security: create_access_token, create_email_verify_token, create_password_reset_token, hash_password
@@ -11110,7 +11045,7 @@ uuid: uuid4</pre></details>
 <p class="small">Syntactic calls: AsyncMock, NoSlotsAvailableError, ProductService, SimpleNamespace, SlotService, db.commit.assert_not_awaited, object, pytest.mark.parametrize, pytest.raises, service.assert_slot_available, service.publish_product, uuid4</p>
 </div>
 </details>
-<details class="file"><summary>drip-backend/tests/unit/test_notifications.py · 65 lines · 12 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: 633407dab13417964be6942d972f165cb3b2793a72025eba1799e2fda0fbbd45</p>
+<details class="file"><summary>drip-backend/tests/unit/test_notifications.py · 65 lines · 12 definitions</summary><p><strong>Review:</strong> Read in full: preferences partial/default/false values and broadcast audience/empty/length/action-url schema cases. Does not cover delivery, route matching, unknown fields or whitespace-only content. Not rerun.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: 633407dab13417964be6942d972f165cb3b2793a72025eba1799e2fda0fbbd45</p>
 <details><summary>Imports / direct dependencies</summary><pre>app.schemas.notification: UpdatePreferencesRequest, BroadcastRequest
 pydantic: ValidationError
 pytest</pre></details>
@@ -12473,7 +12408,7 @@ react-router
 <div class="symbol"><strong>DeletionForm.submit</strong> <span class="small">FunctionDeclaration · lines 27–46</span>
 </div>
 </details>
-<details class="file"><summary>drip-frontend/src/account/NotificationInboxPage.tsx · 69 lines · 4 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>React UI/component: renders state and coordinates hooks, forms and API reads/writes.</p><p class="small">SHA-256: fc7381b7c11bf6c7947905cf1721a912d9a550c62c89ca397885f868573e1fb3</p>
+<details class="file"><summary>drip-frontend/src/account/NotificationInboxPage.tsx · 69 lines · 4 definitions</summary><p><strong>Review:</strong> Read in full: owner-keyed gated inbox, validated paginated/unread snapshot; explicit mark one/all, receipt checks and shared uncertainty guard; no implicit read on link open; bulk-read confirmation includes archived rows as backend does. URLs match mounted backend. Related links filtered by strict helper, which suppresses valid seller routes as well as unsafe links. Page/read consistency and observer identity handling inherited from useOrderRead.</p><p>React UI/component: renders state and coordinates hooks, forms and API reads/writes.</p><p class="small">SHA-256: fc7381b7c11bf6c7947905cf1721a912d9a550c62c89ca397885f868573e1fb3</p>
 <details><summary>Imports / direct dependencies</summary><pre>react
 react-router
 ../api/client
@@ -12550,11 +12485,11 @@ react-router
 <div class="symbol"><strong>addressPayload</strong> <span class="small">FunctionDeclaration · lines 36–41</span>
 </div>
 </details>
-<details class="file"><summary>drip-frontend/src/account/inbox.test.ts · 13 lines · 0 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: ea96d37043f96059d6d01d9b26496b25b5fcd79b1a9aa9335d836de81b1ccc3d</p>
+<details class="file"><summary>drip-frontend/src/account/inbox.test.ts · 13 lines · 0 definitions</summary><p><strong>Review:</strong> Read in full: snapshot/page/count/type/duplicate checks and allow order link; rejection cases explicitly include /seller/wallet/payouts. Shows deliberate restricted linking, not a test certifying backend generated-link usability. Not rerun.</p><p>Test/fixture: verification intent, not proof of a passing current run.</p><p class="small">SHA-256: ea96d37043f96059d6d01d9b26496b25b5fcd79b1a9aa9335d836de81b1ccc3d</p>
 <details><summary>Imports / direct dependencies</summary><pre>vitest
 ./inbox</pre></details>
 </details>
-<details class="file"><summary>drip-frontend/src/account/inbox.ts · 18 lines · 5 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>Frontend types, parsing, validation or state helpers; imports identify consumers.</p><p class="small">SHA-256: d24aeaa1e8df8e6c1492f68fc57cd9149c615be4e0f754f61de1d91a4a2ddc8a</p>
+<details class="file"><summary>drip-frontend/src/account/inbox.ts · 18 lines · 5 definitions</summary><p><strong>Review:</strong> Read in full: max20 rows, expected page, nonnegative safe counts, canonical UUIDs, timestamps/field types and duplicate checks. notificationLink permits fixed public/account paths and order/product UUID paths only, rejects all queries/external/other destinations. Safety policy is explicit but needs extension for actual seller notices; do not replace with unrestricted URLs.</p><p>Frontend types, parsing, validation or state helpers; imports identify consumers.</p><p class="small">SHA-256: d24aeaa1e8df8e6c1492f68fc57cd9149c615be4e0f754f61de1d91a4a2ddc8a</p>
 <div class="symbol"><strong>InboxItem</strong> <span class="small">InterfaceDeclaration · lines 1–1</span>
 </div>
 <div class="symbol"><strong>Inbox</strong> <span class="small">InterfaceDeclaration · lines 2–2</span>
@@ -14100,7 +14035,7 @@ react-router
 <div class="symbol"><strong>DisputeManager.submit</strong> <span class="small">FunctionDeclaration · lines 37–53</span>
 </div>
 </details>
-<details class="file"><summary>drip-frontend/src/pages/OrderPages.tsx · 170 lines · 12 definitions</summary><p><strong>Review:</strong> Mechanically indexed only; semantic line-by-line review remains open.</p><p>React UI/component: renders state and coordinates hooks, forms and API reads/writes.</p><p class="small">SHA-256: b1e7daedcd81f2914d7096eb0196d33fcd0e783184b3ba6b97653027aea6ab83</p>
+<details class="file"><summary>drip-frontend/src/pages/OrderPages.tsx · 170 lines · 12 definitions</summary><p><strong>Review:</strong> Read in full: gated account history, ID validation, guest lookup with manual identifier/token or in-memory checkout handoff; never reads/removes guest_token query from email link. Owner-keyed reads and uncertainty-preserving write hook; scoped guest headers for cancel/return; return receipt/access follow-up; authenticated-only review entry; shipment/total UI distinguishes original total from refund balance. Guest email URL contract mismatch is confirmed by producer/consumer source. Pagination/read helpers and full request-preview eligibility remain separate review tasks.</p><p>React UI/component: renders state and coordinates hooks, forms and API reads/writes.</p><p class="small">SHA-256: b1e7daedcd81f2914d7096eb0196d33fcd0e783184b3ba6b97653027aea6ab83</p>
 <details><summary>Imports / direct dependencies</summary><pre>react
 react-router
 ../api/client

@@ -20,7 +20,7 @@ async function main() {
     const count = await page.locator('details.file').count()
     if (!count || !(await page.locator('#visible').innerText()).startsWith(String(count))) throw new Error('Missing inventory')
     if (!(await page.locator('section.warn').innerText()).includes('not a completed')) throw new Error('Missing review limitation')
-    for (const id of ['latest-findings', 'auth-deep-review', 'customer-deep-review', 'start', 'coverage', 'excluded']) {
+    for (const id of ['notification-findings', 'notification-flow', 'contract-paths', 'latest-findings', 'auth-deep-review', 'customer-deep-review', 'start', 'coverage', 'excluded']) {
       if (await page.locator(`#${id}`).count() !== 1) throw new Error(`Missing section ${id}`)
     }
     await page.screenshot({ path: path.join(__dirname, 'handoff-desktop.png') })
