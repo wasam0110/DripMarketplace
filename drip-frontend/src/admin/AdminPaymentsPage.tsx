@@ -8,7 +8,7 @@ import { Button, EmptyState, ErrorNotice, Field } from '../components/ui'
 import { isOrderId, orderDate, statusLabel, useOrderRead } from '../orders/api'
 import { paymentMethodLabel } from './orders'
 import { sellerMoney } from './sellers'
-import { collectionMarker, collectionPayload, confirmCollection, confirmCollectionReadback, paymentQuery, paymentStatusLabel, paymentStatuses, samePaymentReview, validatePayment, validatePayments, type AdminPayment, type AdminPayments, type CollectionReceipt, type PaymentRow } from './payments'
+import { collectionMarker, collectionPayload, confirmCollection, confirmCollectionReadback, paymentQuery, paymentStatusLabel, paymentStatuses, reconciliationMarker, samePaymentReview, validatePayment, validatePayFastReconcile, validatePayments, type AdminPayment, type AdminPayments, type CollectionReceipt, type PayFastReconcileResponse, type PaymentRow } from './payments'
 import './products.css'
 
 export function AdminPaymentsPage({ detail = false }: { detail?: boolean }) {
@@ -67,10 +67,34 @@ function PaymentInspection({ owner, id }: { owner: string; id: string }) {
       sessionStorage.removeItem(collectionMarker(owner, id)); setPending(false)
     }, resource.retry, 'COD collection recorded and saved payment evidence confirmed. No seller payout was made.')
   }
-  return <><p><Link className="text-link" to="/admin/payments">Back to payments</Link></p>{resource.loading && <p role="status">Loading payment detail...</p>}{Boolean(resource.error) && <ErrorNotice error={resource.error} />}<WriteFeedback state={write} />{pending && !write.busy && <p role="alert">A collection is awaiting confirmation. Inspect the saved reference or contact support before another action.</p>}{payment && <>
+  const reconciliationPending = payment?.method === 'payfast' && (() => { try { return sessionStorage.getItem(reconciliationMarker(owner, payment.order_id)) !== null } catch { return true } })()
+  return <><p><Link className="text-link" to="/admin/payments">Back to payments</Link></p>{resource.loading && <p role="status">Loading payment detail...</p>}{Boolean(resource.error) && <ErrorNotice error={resource.error} />}<WriteFeedback state={write} />{pending && !write.busy && <p role="alert">A collection is awaiting confirmation. Inspect the saved reference or contact support before another action.</p>}{reconciliationPending && !write.busy && <p role="alert">A PayFast reconciliation is awaiting confirmation. Refresh and inspect the saved payment before repeating the provider check.</p>}{payment && <>
     <PaymentCard row={payment} /><p><Link className="text-link" to={`/admin/payments/${payment.id}/refunds`}>Inspect refund history or request a refund</Link></p><section className="account-card"><h2>Collection eligibility and evidence</h2><dl><dt>Currency</dt><dd>{payment.currency}</dd><dt>Order status</dt><dd>{statusLabel(payment.order_status)}</dd><dt>Recorded by administrator</dt><dd>{payment.collection_recorded_by || 'Not recorded (may be a historical payment)'}</dd></dl><p><Link className="text-link" to={`/admin/orders/${payment.order_id}`}>Inspect full saved order {payment.order_number}</Link></p>{payment.collection_blockers.map((v) => <p role="status" key={v}>{v}</p>)}<p>A manual reference records the administrator's confirmation; it is not independent provider verification. Seller proceeds follow the existing settlement and hold policy, not an immediate payout.</p></section>
+    {payment.method === 'payfast' && <PayFastReconciliation payment={payment} owner={owner} disabled={resource.loading || write.busy || write.blocked || Boolean(reconciliationPending)} save={(result) => { try { sessionStorage.removeItem(reconciliationMarker(owner, payment.order_id)) } catch { /* a failed cleanup keeps the action blocked on reload */ } resource.retry(); return result }} write={write} />}
     {payment.can_record_cod_collection && <CollectionForm key={`${payment.order_updated_at}:${payment.amount}`} payment={payment} disabled={resource.loading || write.busy || write.blocked || pending} save={(payload) => save(payment, payload)} />}
   </>}<Button className="button-secondary" disabled={resource.loading || write.busy} onClick={resource.retry}>Refresh payment and discard collection draft</Button></>
+}
+function PayFastReconciliation({ payment, owner, disabled, save, write }: { payment: AdminPayment; owner: string; disabled: boolean; save: (result: PayFastReconcileResponse) => PayFastReconcileResponse; write: ReturnType<typeof useAccountWrite> }) {
+  const active = useRef(false)
+  useEffect(() => { active.current = true; return () => { active.current = false } }, [])
+  function reconcile() {
+    if (disabled) return
+    void write.run(async () => {
+      const current = validatePayment(await request<AdminPayment>(`/payments/${payment.id}`, { authenticated: true, cache: 'no-store' }), payment.id)
+      if (!active.current || !samePaymentReview(payment, current)) { throw new Error('Payment or order changed. Refresh and inspect the current records before reconciling.') }
+      try { sessionStorage.setItem(reconciliationMarker(owner, payment.order_id), 'pending') } catch { throw new Error('This browser cannot safely record an unresolved reconciliation. No provider check was sent.') }
+      try {
+        const result = validatePayFastReconcile(await request<PayFastReconcileResponse>(`/payments/${payment.order_id}/reconcile`, { authenticated: true, method: 'POST' }), payment)
+        const readback = validatePayment(await request<AdminPayment>(`/payments/${payment.id}`, { authenticated: true, cache: 'no-store' }), payment.id)
+        if (readback.status !== result.local_status || (result.matched && result.local_status === 'completed' && result.transaction_id !== readback.gateway_reference)) throw new Error('Reconciliation response did not match the saved payment. Inspect the records before repeating the provider check.')
+        return result
+      } catch (reason) {
+        if (reason instanceof Error && reason.message.includes('did not match')) throw reason
+        throw reason
+      }
+    }, save, 'PayFast response reconciled and saved payment state confirmed. Review the provider detail before taking further action.')
+  }
+  return <section className="account-card"><h2>PayFast reconciliation</h2><p>Use the provider status API only for a missed or uncertain callback. This may update the saved payment; it does not initiate a new charge or refund.</p><Button disabled={disabled} onClick={reconcile}>{write.busy ? 'Checking PayFast status...' : 'Check PayFast status'}</Button></section>
 }
 function CollectionForm({ payment, disabled, save }: { payment: AdminPayment; disabled: boolean; save: (payload: ReturnType<typeof collectionPayload>) => void }) {
   const [reference, setReference] = useState(''), [checked, setChecked] = useState(false), [review, setReview] = useState<ReturnType<typeof collectionPayload> | null>(null), [error, setError] = useState<unknown>(null)

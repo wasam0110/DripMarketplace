@@ -6,6 +6,7 @@ export interface User {
   first_name: string | null
   last_name: string | null
   has_verified_email: boolean
+  is_2fa_enabled?: boolean
 }
 
 export interface AuthResponse { access_token: string; user: User }

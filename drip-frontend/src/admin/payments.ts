@@ -9,6 +9,7 @@ export interface PaymentRow { id: string; order_id: string; order_number: string
 export interface AdminPayments { data: PaymentRow[]; total: number; page: number; per_page: number; total_pages: number }
 export interface AdminPayment extends PaymentRow { currency: string; order_status: string; order_updated_at: string; can_record_cod_collection: boolean; collection_blockers: string[]; collection_recorded_by: string | null }
 export interface CollectionReceipt { payment_id: string; order_id: string; order_number: string; status: string; amount: string; currency: string; reference: string; paid_at: string; recorded_by: string | null }
+export interface PayFastReconcileResponse { order_id: string; payment_id: string; provider_status: string; local_status: string; transaction_id: string | null; matched: boolean; detail: string }
 const fail = (): never => { throw new Error('Payment information could not be verified. Refresh and inspect the saved records.') }
 const text = (v: unknown): v is string => typeof v === 'string' && !!v.trim()
 const date = (v: unknown): v is string => typeof v === 'string' && /^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(v) && Number.isFinite(Date.parse(v))
@@ -54,3 +55,8 @@ export function confirmCollectionReadback(current: AdminPayment, before: AdminPa
   return current
 }
 export const collectionMarker = (owner: string, id: string) => `wearhowz:admin-collection-pending:${owner}:${id}`
+export const reconciliationMarker = (owner: string, id: string) => `wearhowz:admin-payfast-reconciliation-pending:${owner}:${id}`
+export function validatePayFastReconcile(value: PayFastReconcileResponse, before: AdminPayment) {
+  if (!value || value.order_id !== before.order_id || value.payment_id !== before.id || !text(value.provider_status) || !paymentStatuses.some((status) => status === value.local_status) || typeof value.matched !== 'boolean' || !(value.transaction_id === null || text(value.transaction_id)) || !text(value.detail)) return fail()
+  return value
+}

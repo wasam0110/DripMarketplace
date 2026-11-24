@@ -1,6 +1,29 @@
 {
   "components": {
     "schemas": {
+      "AccountCheckoutQuoteRequest": {
+        "description": "Quote the current account cart, including any coupon, before acceptance.",
+        "properties": {
+          "coupon_code": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Code"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethod",
+            "default": "cod"
+          }
+        },
+        "title": "AccountCheckoutQuoteRequest",
+        "type": "object"
+      },
       "AddDisputeMessageRequest": {
         "properties": {
           "body": {
@@ -8,6 +31,29 @@
             "minLength": 1,
             "title": "Body",
             "type": "string"
+          },
+          "expected_message_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Message Count"
+          },
+          "expected_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Status"
           }
         },
         "required": [
@@ -186,6 +232,124 @@
         "title": "AdminDashboardResponse",
         "type": "object"
       },
+      "AdminOrderDetailResponse": {
+        "description": "Read-only operational detail; never exposes checkout or guest-access secrets.",
+        "properties": {
+          "address": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShippingAddressResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "commission": {
+            "title": "Commission",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "customer_name": {
+            "title": "Customer Name",
+            "type": "string"
+          },
+          "discount_amount": {
+            "title": "Discount Amount",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/OrderItemResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "order_number": {
+            "title": "Order Number",
+            "type": "string"
+          },
+          "payment_method": {
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "seller_orders": {
+            "items": {
+              "$ref": "#/components/schemas/SellerOrderResponse"
+            },
+            "title": "Seller Orders",
+            "type": "array"
+          },
+          "shipping_fee": {
+            "title": "Shipping Fee",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "subtotal": {
+            "title": "Subtotal",
+            "type": "string"
+          },
+          "total": {
+            "title": "Total",
+            "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          }
+        },
+        "required": [
+          "id",
+          "order_number",
+          "status",
+          "payment_method",
+          "subtotal",
+          "discount_amount",
+          "shipping_fee",
+          "total",
+          "notes",
+          "address",
+          "items",
+          "seller_orders",
+          "created_at",
+          "customer_name",
+          "user_id",
+          "commission"
+        ],
+        "title": "AdminOrderDetailResponse",
+        "type": "object"
+      },
       "AdminOrderRowResponse": {
         "properties": {
           "commission": {
@@ -246,6 +410,118 @@
         "title": "AdminOrderRowResponse",
         "type": "object"
       },
+      "AdminPaymentDetailResponse": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "can_record_cod_collection": {
+            "title": "Can Record Cod Collection",
+            "type": "boolean"
+          },
+          "collection_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Collection Blockers",
+            "type": "array"
+          },
+          "collection_recorded_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Collection Recorded By"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
+          "gateway_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Reference"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "order_id": {
+            "format": "uuid",
+            "title": "Order Id",
+            "type": "string"
+          },
+          "order_number": {
+            "title": "Order Number",
+            "type": "string"
+          },
+          "order_status": {
+            "title": "Order Status",
+            "type": "string"
+          },
+          "order_updated_at": {
+            "format": "date-time",
+            "title": "Order Updated At",
+            "type": "string"
+          },
+          "paid_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Paid At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "order_id",
+          "order_number",
+          "method",
+          "status",
+          "amount",
+          "currency",
+          "gateway_reference",
+          "paid_at",
+          "created_at",
+          "order_status",
+          "order_updated_at",
+          "can_record_cod_collection",
+          "collection_blockers"
+        ],
+        "title": "AdminPaymentDetailResponse",
+        "type": "object"
+      },
       "AdminPayoutActionRequest": {
         "properties": {
           "admin_note": {
@@ -259,9 +535,330 @@
               }
             ],
             "title": "Admin Note"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PayoutReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "AdminPayoutActionRequest",
+        "type": "object"
+      },
+      "AdminPayoutDetailResponse": {
+        "properties": {
+          "admin_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Note"
+          },
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "available_actions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Available Actions",
+            "type": "array"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "last_action_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Action By"
+          },
+          "payment_detail": {
+            "title": "Payment Detail",
+            "type": "string"
+          },
+          "payment_method": {
+            "title": "Payment Method",
+            "type": "string"
+          },
+          "requested_at": {
+            "format": "date-time",
+            "title": "Requested At",
+            "type": "string"
+          },
+          "seller_id": {
+            "format": "uuid",
+            "title": "Seller Id",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "transfer_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer Reference"
+          }
+        },
+        "required": [
+          "id",
+          "amount",
+          "payment_method",
+          "payment_detail",
+          "status",
+          "admin_note",
+          "requested_at",
+          "completed_at",
+          "seller_id",
+          "last_action_by",
+          "available_actions"
+        ],
+        "title": "AdminPayoutDetailResponse",
+        "type": "object"
+      },
+      "AdminProductDetailResponse": {
+        "properties": {
+          "admin_hidden": {
+            "title": "Admin Hidden",
+            "type": "boolean"
+          },
+          "alpha_sizes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Alpha Sizes",
+            "type": "array"
+          },
+          "avg_rating": {
+            "title": "Avg Rating",
+            "type": "number"
+          },
+          "brand_color": {
+            "title": "Brand Color",
+            "type": "string"
+          },
+          "brand_name": {
+            "title": "Brand Name",
+            "type": "string"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "colours": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Colours",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "has_stock": {
+            "title": "Has Stock",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ProductImageResponse"
+            },
+            "title": "Images",
+            "type": "array"
+          },
+          "is_new": {
+            "title": "Is New",
+            "type": "boolean"
+          },
+          "is_published": {
+            "title": "Is Published",
+            "type": "boolean"
+          },
+          "meta_description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta Description"
+          },
+          "meta_title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta Title"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "numeric_sizes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Numeric Sizes",
+            "type": "array"
+          },
+          "price": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
+            "title": "Price",
+            "type": "string"
+          },
+          "primary_image": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Image"
+          },
+          "review_count": {
+            "title": "Review Count",
+            "type": "integer"
+          },
+          "sale_price": {
+            "anyOf": [
+              {
+                "description": "PKR major units as a two-decimal string; not integer paisa.",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sale Price"
+          },
+          "seller": {
+            "$ref": "#/components/schemas/SellerSummaryResponse"
+          },
+          "seller_deleted": {
+            "title": "Seller Deleted",
+            "type": "boolean"
+          },
+          "seller_id": {
+            "format": "uuid",
+            "title": "Seller Id",
+            "type": "string"
+          },
+          "seller_status": {
+            "title": "Seller Status",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/VariantWithStockResponse"
+            },
+            "title": "Variants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "seller_id",
+          "brand_name",
+          "brand_color",
+          "name",
+          "slug",
+          "price",
+          "sale_price",
+          "primary_image",
+          "colours",
+          "alpha_sizes",
+          "numeric_sizes",
+          "avg_rating",
+          "review_count",
+          "is_new",
+          "has_stock",
+          "is_published",
+          "description",
+          "meta_title",
+          "meta_description",
+          "images",
+          "variants",
+          "seller",
+          "category",
+          "created_at",
+          "admin_hidden",
+          "seller_status",
+          "seller_deleted"
+        ],
+        "title": "AdminProductDetailResponse",
         "type": "object"
       },
       "AdminProductRowResponse": {
@@ -369,6 +966,17 @@
             "title": "Amount",
             "type": "string"
           },
+          "can_confirm_refund": {
+            "title": "Can Confirm Refund",
+            "type": "boolean"
+          },
+          "confirmation_blockers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Confirmation Blockers",
+            "type": "array"
+          },
           "confirmed_by": {
             "anyOf": [
               {
@@ -381,12 +989,27 @@
             ],
             "title": "Confirmed By"
           },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
           "history": {
             "items": {
               "$ref": "#/components/schemas/RefundHistoryEvent"
             },
             "title": "History",
             "type": "array"
+          },
+          "linked_return_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linked Return Status"
           },
           "order_id": {
             "format": "uuid",
@@ -483,6 +1106,7 @@
           "return_id",
           "status",
           "amount",
+          "currency",
           "reason",
           "transfer_reference",
           "requested_by",
@@ -490,7 +1114,9 @@
           "requested_at",
           "processed_at",
           "payment",
-          "history"
+          "history",
+          "can_confirm_refund",
+          "confirmation_blockers"
         ],
         "title": "AdminRefundDetailResponse",
         "type": "object"
@@ -522,6 +1148,10 @@
               }
             ],
             "title": "Confirmed By"
+          },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
           },
           "order_id": {
             "format": "uuid",
@@ -615,6 +1245,7 @@
           "return_id",
           "status",
           "amount",
+          "currency",
           "reason",
           "transfer_reference",
           "requested_by",
@@ -638,6 +1269,44 @@
               }
             ],
             "title": "Admin Note"
+          },
+          "expected_notes": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Notes"
+          },
+          "expected_refund_amount": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Refund Amount"
+          },
+          "expected_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Status"
           }
         },
         "title": "AdminReturnActionRequest",
@@ -945,6 +1614,17 @@
             "title": "Order Number",
             "type": "string"
           },
+          "payment_currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Currency"
+          },
           "payment_id": {
             "anyOf": [
               {
@@ -1078,6 +1758,155 @@
         "title": "AdminReturnSellerResponse",
         "type": "object"
       },
+      "AdminReviewResponse": {
+        "properties": {
+          "admin_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Note"
+          },
+          "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Body"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "helpful_count": {
+            "title": "Helpful Count",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewImageResponse"
+            },
+            "title": "Images",
+            "type": "array"
+          },
+          "is_verified_purchase": {
+            "title": "Is Verified Purchase",
+            "type": "boolean"
+          },
+          "moderated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Moderated At"
+          },
+          "product_id": {
+            "format": "uuid",
+            "title": "Product Id",
+            "type": "string"
+          },
+          "rating": {
+            "title": "Rating",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "unhelpful_count": {
+            "title": "Unhelpful Count",
+            "type": "integer"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/ReviewAuthorResponse"
+          }
+        },
+        "required": [
+          "id",
+          "user",
+          "product_id",
+          "rating",
+          "title",
+          "body",
+          "status",
+          "is_verified_purchase",
+          "helpful_count",
+          "unhelpful_count",
+          "images",
+          "created_at",
+          "updated_at",
+          "admin_note",
+          "moderated_at"
+        ],
+        "title": "AdminReviewResponse",
+        "type": "object"
+      },
+      "AdminReviewsPage": {
+        "properties": {
+          "data": {
+            "items": {
+              "$ref": "#/components/schemas/AdminReviewResponse"
+            },
+            "title": "Data",
+            "type": "array"
+          },
+          "page": {
+            "title": "Page",
+            "type": "integer"
+          },
+          "per_page": {
+            "title": "Per Page",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data",
+          "total",
+          "page",
+          "per_page"
+        ],
+        "title": "AdminReviewsPage",
+        "type": "object"
+      },
       "AdminSellerDetailResponse": {
         "properties": {
           "available_balance": {
@@ -1143,9 +1972,48 @@
             "title": "Product Count",
             "type": "integer"
           },
+          "registration_amount_due": {
+            "title": "Registration Amount Due",
+            "type": "string"
+          },
           "registration_fee": {
             "title": "Registration Fee",
             "type": "string"
+          },
+          "registration_paid_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registration Paid At"
+          },
+          "registration_paid_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registration Paid By"
+          },
+          "registration_payment_reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Registration Payment Reference"
           },
           "rejected_reason": {
             "anyOf": [
@@ -1220,6 +2088,10 @@
           "return_policy",
           "pending_balance",
           "registration_fee",
+          "registration_amount_due",
+          "registration_paid_at",
+          "registration_payment_reference",
+          "registration_paid_by",
           "rejected_reason"
         ],
         "title": "AdminSellerDetailResponse",
@@ -1452,6 +2324,11 @@
             "title": "Title",
             "type": "string"
           },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
           "valid_from": {
             "anyOf": [
               {
@@ -1487,7 +2364,8 @@
           "is_active",
           "valid_from",
           "valid_until",
-          "created_at"
+          "created_at",
+          "updated_at"
         ],
         "title": "BannerResponse",
         "type": "object"
@@ -1507,6 +2385,7 @@
           "link_url": {
             "anyOf": [
               {
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -1516,15 +2395,24 @@
             "title": "Link Url"
           },
           "position": {
+            "enum": [
+              "homepage_hero",
+              "homepage_secondary",
+              "category_top"
+            ],
             "title": "Position",
             "type": "string"
           },
           "sort_order": {
             "default": 0,
+            "maximum": 2147483647.0,
+            "minimum": 0.0,
             "title": "Sort Order",
             "type": "integer"
           },
           "title": {
+            "maxLength": 200,
+            "minLength": 1,
             "title": "Title",
             "type": "string"
           }
@@ -1580,6 +2468,20 @@
           "images"
         ],
         "title": "Body_upload_product_images_api_v1_seller_products__product_id__images_post",
+        "type": "object"
+      },
+      "Body_upload_review_photo_api_v1_me_reviews__review_id__images_post": {
+        "properties": {
+          "image": {
+            "contentMediaType": "application/octet-stream",
+            "title": "Image",
+            "type": "string"
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "title": "Body_upload_review_photo_api_v1_me_reviews__review_id__images_post",
         "type": "object"
       },
       "BrandSuggestion": {
@@ -1754,6 +2656,142 @@
         "title": "BulkStockUpdateResponse",
         "type": "object"
       },
+      "CODCollectionRequest": {
+        "properties": {
+          "expected_amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Amount"
+          },
+          "expected_order_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Order Updated At"
+          },
+          "reference": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference"
+        ],
+        "title": "CODCollectionRequest",
+        "type": "object"
+      },
+      "CODCollectionResponse": {
+        "properties": {
+          "amount": {
+            "title": "Amount",
+            "type": "string"
+          },
+          "currency": {
+            "const": "PKR",
+            "default": "PKR",
+            "title": "Currency",
+            "type": "string"
+          },
+          "order_id": {
+            "format": "uuid",
+            "title": "Order Id",
+            "type": "string"
+          },
+          "order_number": {
+            "title": "Order Number",
+            "type": "string"
+          },
+          "paid_at": {
+            "format": "date-time",
+            "title": "Paid At",
+            "type": "string"
+          },
+          "payment_id": {
+            "format": "uuid",
+            "title": "Payment Id",
+            "type": "string"
+          },
+          "recorded_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recorded By"
+          },
+          "reference": {
+            "title": "Reference",
+            "type": "string"
+          },
+          "status": {
+            "const": "completed",
+            "default": "completed",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "payment_id",
+          "order_id",
+          "order_number",
+          "amount",
+          "reference",
+          "paid_at"
+        ],
+        "title": "CODCollectionResponse",
+        "type": "object"
+      },
+      "CODDecisionResponse": {
+        "properties": {
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "order_id": {
+            "format": "uuid",
+            "title": "Order Id",
+            "type": "string"
+          },
+          "order_number": {
+            "title": "Order Number",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "order_id",
+          "order_number",
+          "status",
+          "message"
+        ],
+        "title": "CODDecisionResponse",
+        "type": "object"
+      },
       "CODQueueItem": {
         "properties": {
           "brand_names": {
@@ -1797,6 +2835,11 @@
           "total": {
             "title": "Total",
             "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
           }
         },
         "required": [
@@ -1808,13 +2851,38 @@
           "brand_names",
           "placed_at",
           "expires_at",
-          "minutes_remaining"
+          "minutes_remaining",
+          "updated_at"
         ],
         "title": "CODQueueItem",
         "type": "object"
       },
       "CODVerifyRequest": {
         "properties": {
+          "expected_expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Expires At"
+          },
+          "expected_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Updated At"
+          },
           "note": {
             "anyOf": [
               {
@@ -2039,6 +3107,74 @@
           "slug"
         ],
         "title": "CategoryResponse",
+        "type": "object"
+      },
+      "CheckoutOrderRequest": {
+        "description": "HTTP order creation requires a client-generated key and accepted signed quote.",
+        "properties": {
+          "checkout_key": {
+            "format": "uuid4",
+            "title": "Checkout Key",
+            "type": "string"
+          },
+          "coupon_code": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Code"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "quote_token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Quote Token",
+            "type": "string"
+          },
+          "shipping_address": {
+            "$ref": "#/components/schemas/ShippingAddressInput"
+          }
+        },
+        "required": [
+          "checkout_key",
+          "shipping_address",
+          "payment_method",
+          "quote_token"
+        ],
+        "title": "CheckoutOrderRequest",
+        "type": "object"
+      },
+      "CheckoutRecoveryRequest": {
+        "properties": {
+          "checkout_key": {
+            "format": "uuid4",
+            "title": "Checkout Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "checkout_key"
+        ],
+        "title": "CheckoutRecoveryRequest",
         "type": "object"
       },
       "CitiesResponse": {
@@ -2349,11 +3485,33 @@
       },
       "CompletePayoutRequest": {
         "properties": {
+          "admin_note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Admin Note"
+          },
           "reference": {
             "maxLength": 255,
             "minLength": 3,
             "title": "Reference",
             "type": "string"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PayoutReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -2542,117 +3700,6 @@
           }
         },
         "title": "CreateBankAccountRequest",
-        "type": "object"
-      },
-      "CreateGuestOrderRequest": {
-        "description": "Guest checkout \u2014 must supply items and personal details.",
-        "properties": {
-          "coupon_code": {
-            "anyOf": [
-              {
-                "maxLength": 30,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Coupon Code"
-          },
-          "guest_email": {
-            "format": "email",
-            "title": "Guest Email",
-            "type": "string"
-          },
-          "guest_name": {
-            "maxLength": 200,
-            "minLength": 2,
-            "title": "Guest Name",
-            "type": "string"
-          },
-          "guest_phone": {
-            "maxLength": 20,
-            "title": "Guest Phone",
-            "type": "string"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/CartItemInput"
-            },
-            "maxItems": 100,
-            "minItems": 1,
-            "title": "Items",
-            "type": "array"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          },
-          "payment_method": {
-            "$ref": "#/components/schemas/PaymentMethod"
-          },
-          "shipping_address": {
-            "$ref": "#/components/schemas/ShippingAddressInput"
-          }
-        },
-        "required": [
-          "shipping_address",
-          "payment_method",
-          "guest_email",
-          "guest_name",
-          "guest_phone",
-          "items"
-        ],
-        "title": "CreateGuestOrderRequest",
-        "type": "object"
-      },
-      "CreateOrderRequest": {
-        "description": "For authenticated users \u2014 items come from Redis cart.",
-        "properties": {
-          "coupon_code": {
-            "anyOf": [
-              {
-                "maxLength": 30,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Coupon Code"
-          },
-          "notes": {
-            "anyOf": [
-              {
-                "maxLength": 500,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Notes"
-          },
-          "payment_method": {
-            "$ref": "#/components/schemas/PaymentMethod"
-          },
-          "shipping_address": {
-            "$ref": "#/components/schemas/ShippingAddressInput"
-          }
-        },
-        "required": [
-          "shipping_address",
-          "payment_method"
-        ],
-        "title": "CreateOrderRequest",
         "type": "object"
       },
       "CreateOrderResponse": {
@@ -3204,6 +4251,88 @@
         "title": "GatewayStatusResponse",
         "type": "object"
       },
+      "GuestCheckoutOrderRequest": {
+        "properties": {
+          "checkout_key": {
+            "format": "uuid4",
+            "title": "Checkout Key",
+            "type": "string"
+          },
+          "coupon_code": {
+            "anyOf": [
+              {
+                "maxLength": 30,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coupon Code"
+          },
+          "guest_email": {
+            "format": "email",
+            "title": "Guest Email",
+            "type": "string"
+          },
+          "guest_name": {
+            "maxLength": 200,
+            "minLength": 2,
+            "title": "Guest Name",
+            "type": "string"
+          },
+          "guest_phone": {
+            "maxLength": 20,
+            "title": "Guest Phone",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CartItemInput"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethod"
+          },
+          "quote_token": {
+            "maxLength": 4096,
+            "minLength": 1,
+            "title": "Quote Token",
+            "type": "string"
+          },
+          "shipping_address": {
+            "$ref": "#/components/schemas/ShippingAddressInput"
+          }
+        },
+        "required": [
+          "checkout_key",
+          "shipping_address",
+          "payment_method",
+          "guest_email",
+          "guest_name",
+          "guest_phone",
+          "items",
+          "quote_token"
+        ],
+        "title": "GuestCheckoutOrderRequest",
+        "type": "object"
+      },
       "GuestCheckoutQuoteRequest": {
         "description": "Guest items to price before collecting checkout details.",
         "properties": {
@@ -3227,6 +4356,10 @@
             "minItems": 1,
             "title": "Items",
             "type": "array"
+          },
+          "payment_method": {
+            "$ref": "#/components/schemas/PaymentMethod",
+            "default": "cod"
           }
         },
         "required": [
@@ -3278,6 +4411,16 @@
             "title": "Payment Methods",
             "type": "array"
           },
+          "quote_expires_at": {
+            "format": "date-time",
+            "title": "Quote Expires At",
+            "type": "string"
+          },
+          "quote_token": {
+            "description": "Accept this 15-minute quote in order creation.",
+            "title": "Quote Token",
+            "type": "string"
+          },
           "shipping_fee": {
             "title": "Shipping Fee",
             "type": "string"
@@ -3305,7 +4448,9 @@
           "total",
           "free_shipping_threshold",
           "amount_until_free_shipping",
-          "payment_methods"
+          "payment_methods",
+          "quote_token",
+          "quote_expires_at"
         ],
         "title": "GuestCheckoutQuoteResponse",
         "type": "object"
@@ -3466,6 +4611,18 @@
               }
             ],
             "title": "Admin Note"
+          },
+          "expected_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Updated At"
           },
           "status": {
             "enum": [
@@ -3943,8 +5100,21 @@
             "title": "Page",
             "type": "integer"
           },
+          "per_page": {
+            "default": 25,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Per Page",
+            "type": "integer"
+          },
           "total": {
             "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "default": 1,
+            "minimum": 1.0,
+            "title": "Total Pages",
             "type": "integer"
           },
           "totals": {
@@ -4029,8 +5199,18 @@
             "title": "Page",
             "type": "integer"
           },
+          "per_page": {
+            "default": 25,
+            "title": "Per Page",
+            "type": "integer"
+          },
           "total": {
             "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "default": 1,
+            "title": "Total Pages",
             "type": "integer"
           }
         },
@@ -4086,8 +5266,18 @@
             "title": "Page",
             "type": "integer"
           },
+          "per_page": {
+            "default": 25,
+            "title": "Per Page",
+            "type": "integer"
+          },
           "total": {
             "title": "Total",
+            "type": "integer"
+          },
+          "total_pages": {
+            "default": 1,
+            "title": "Total Pages",
             "type": "integer"
           }
         },
@@ -4331,6 +5521,18 @@
       },
       "PaymentInitResponse": {
         "properties": {
+          "attempt_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt Id"
+          },
           "checkout_url": {
             "anyOf": [
               {
@@ -4495,6 +5697,10 @@
             "title": "Completed Refund Amount",
             "type": "string"
           },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
           "order_id": {
             "format": "uuid",
             "title": "Order Id",
@@ -4548,6 +5754,7 @@
           "payment_status",
           "payment_method",
           "payment_amount",
+          "currency",
           "pending_refund_amount",
           "completed_refund_amount",
           "reserved_refund_amount",
@@ -4567,6 +5774,10 @@
           "created_at": {
             "format": "date-time",
             "title": "Created At",
+            "type": "string"
+          },
+          "currency": {
+            "title": "Currency",
             "type": "string"
           },
           "gateway_reference": {
@@ -4622,6 +5833,7 @@
           "method",
           "status",
           "amount",
+          "currency",
           "gateway_reference",
           "paid_at",
           "created_at"
@@ -4694,6 +5906,7 @@
           "admin_note": {
             "anyOf": [
               {
+                "maxLength": 500,
                 "type": "string"
               },
               {
@@ -4712,6 +5925,16 @@
               }
             ],
             "title": "Payment Reference"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PayoutReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "title": "PayoutActionRequest",
@@ -4737,6 +5960,16 @@
             "minLength": 3,
             "title": "Payment Reference",
             "type": "string"
+          },
+          "review": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PayoutReview"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -4819,6 +6052,60 @@
           "completed_at"
         ],
         "title": "PayoutResponse",
+        "type": "object"
+      },
+      "PayoutReview": {
+        "properties": {
+          "expected_admin_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Admin Note"
+          },
+          "expected_amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Expected Amount"
+          },
+          "expected_payment_detail": {
+            "title": "Expected Payment Detail",
+            "type": "string"
+          },
+          "expected_payment_method": {
+            "title": "Expected Payment Method",
+            "type": "string"
+          },
+          "expected_seller_id": {
+            "format": "uuid",
+            "title": "Expected Seller Id",
+            "type": "string"
+          },
+          "expected_status": {
+            "title": "Expected Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "expected_status",
+          "expected_amount",
+          "expected_seller_id",
+          "expected_payment_method",
+          "expected_payment_detail",
+          "expected_admin_note"
+        ],
+        "title": "PayoutReview",
         "type": "object"
       },
       "PlatformAnalytics": {
@@ -5125,6 +6412,10 @@
             "title": "Is New",
             "type": "boolean"
           },
+          "is_published": {
+            "title": "Is Published",
+            "type": "boolean"
+          },
           "meta_description": {
             "anyOf": [
               {
@@ -5227,6 +6518,7 @@
           "review_count",
           "is_new",
           "has_stock",
+          "is_published",
           "description",
           "meta_title",
           "meta_description",
@@ -5408,6 +6700,60 @@
         "title": "RefundAllocationResponse",
         "type": "object"
       },
+      "RefundConfirmationRequest": {
+        "properties": {
+          "expected_amount": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Amount"
+          },
+          "expected_payment_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Payment Id"
+          },
+          "expected_return_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Return Id"
+          },
+          "reference": {
+            "maxLength": 255,
+            "minLength": 3,
+            "title": "Reference",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference"
+        ],
+        "title": "RefundConfirmationRequest",
+        "type": "object"
+      },
       "RefundHistoryEvent": {
         "properties": {
           "actor_id": {
@@ -5465,6 +6811,10 @@
             "title": "Completed Refund Amount",
             "type": "string"
           },
+          "currency": {
+            "title": "Currency",
+            "type": "string"
+          },
           "order_id": {
             "format": "uuid",
             "title": "Order Id",
@@ -5511,6 +6861,7 @@
           "payment_status",
           "payment_method",
           "payment_amount",
+          "currency",
           "pending_refund_amount",
           "completed_refund_amount",
           "reserved_refund_amount",
@@ -5533,6 +6884,21 @@
               }
             ],
             "title": "Amount"
+          },
+          "expected_remaining_amount": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Remaining Amount"
           },
           "idempotency_key": {
             "anyOf": [
@@ -5736,6 +7102,29 @@
       },
       "ResolveDisputeRequest": {
         "properties": {
+          "expected_message_count": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Message Count"
+          },
+          "expected_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Status"
+          },
           "in_favor_of": {
             "pattern": "^(customer|seller)$",
             "title": "In Favor Of",
@@ -7948,21 +9337,6 @@
         "title": "TopSellersResponse",
         "type": "object"
       },
-      "TransferConfirmationRequest": {
-        "properties": {
-          "reference": {
-            "maxLength": 255,
-            "minLength": 3,
-            "title": "Reference",
-            "type": "string"
-          }
-        },
-        "required": [
-          "reference"
-        ],
-        "title": "TransferConfirmationRequest",
-        "type": "object"
-      },
       "UpdateAddressRequest": {
         "additionalProperties": false,
         "properties": {
@@ -8027,6 +9401,18 @@
       },
       "UpdateBannerRequest": {
         "properties": {
+          "expected_updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expected Updated At"
+          },
           "is_active": {
             "anyOf": [
               {
@@ -8065,6 +9451,7 @@
           "sort_order": {
             "anyOf": [
               {
+                "maximum": 2147483647.0,
                 "minimum": 0.0,
                 "type": "integer"
               },
@@ -8510,6 +9897,7 @@
         "type": "object"
       },
       "UpdateSettingsRequest": {
+        "additionalProperties": false,
         "properties": {
           "cod_timeout_minutes": {
             "anyOf": [
@@ -8536,6 +9924,16 @@
               }
             ],
             "title": "Commission Rate"
+          },
+          "expected_settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PlatformSettingsResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "extra_slot_price": {
             "anyOf": [
@@ -9082,6 +10480,14 @@
             "title": "Available Balance",
             "type": "string"
           },
+          "maximum_withdrawal_amount": {
+            "title": "Maximum Withdrawal Amount",
+            "type": "string"
+          },
+          "minimum_withdrawal_amount": {
+            "title": "Minimum Withdrawal Amount",
+            "type": "string"
+          },
           "pending_balance": {
             "title": "Pending Balance",
             "type": "string"
@@ -9099,7 +10505,9 @@
           "available_balance",
           "pending_balance",
           "total_earned",
-          "total_commission"
+          "total_commission",
+          "minimum_withdrawal_amount",
+          "maximum_withdrawal_amount"
         ],
         "title": "WalletSummaryResponse",
         "type": "object"
@@ -11120,8 +12528,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Cancel Cod Order Api V1 Admin Cod Queue  Order Id  Cancel Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CODDecisionResponse"
                 }
               }
             },
@@ -11309,8 +12716,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "title": "Response Verify Cod Order Api V1 Admin Cod Queue  Order Id  Verify Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/CODDecisionResponse"
                 }
               }
             },
@@ -11824,6 +13230,23 @@
               "format": "uuid",
               "title": "Banner Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "expected_updated_at",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Expected Updated At"
             }
           }
         ],
@@ -14543,6 +15966,185 @@
         ]
       }
     },
+    "/api/v1/admin/orders/{order_id}": {
+      "get": {
+        "description": "Inspect saved order/fulfilment snapshots without performing a payment action.",
+        "operationId": "admin_order_detail_api_v1_admin_orders__order_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Order Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminOrderDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Order Detail",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
     "/api/v1/admin/payouts": {
       "get": {
         "operationId": "list_all_payouts_api_v1_admin_payouts_get",
@@ -15511,6 +17113,185 @@
           }
         ],
         "summary": "Admin List Products",
+        "tags": [
+          "products"
+        ]
+      }
+    },
+    "/api/v1/admin/products/{product_id}": {
+      "get": {
+        "description": "Inspect a listing for moderation without changing its view count.",
+        "operationId": "admin_product_detail_api_v1_admin_products__product_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "product_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Product Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminProductDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Product Detail",
         "tags": [
           "products"
         ]
@@ -17037,7 +18818,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewsPage"
+                }
               }
             },
             "description": "Successful Response"
@@ -17195,6 +18978,183 @@
       }
     },
     "/api/v1/admin/reviews/{review_id}": {
+      "get": {
+        "description": "Read pending and non-public review content without changing it.",
+        "operationId": "review_detail_api_v1_admin_reviews__review_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Review Detail",
+        "tags": [
+          "admin"
+        ]
+      },
       "patch": {
         "operationId": "moderate_review_api_v1_admin_reviews__review_id__patch",
         "parameters": [
@@ -17223,7 +19183,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/AdminReviewResponse"
+                }
               }
             },
             "description": "Successful Response"
@@ -17992,7 +19954,13 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "additionalProperties": {
+                    "type": "string"
+                  },
+                  "title": "Response Record Registration Payment Api V1 Admin Sellers  Seller Id  Registration Payment Post",
+                  "type": "object"
+                }
               }
             },
             "description": "Successful Response"
@@ -19404,6 +21372,184 @@
           }
         ],
         "summary": "Admin List Payouts",
+        "tags": [
+          "wallet"
+        ]
+      }
+    },
+    "/api/v1/admin/wallet/payouts/{payout_id}": {
+      "get": {
+        "operationId": "admin_get_payout_api_v1_admin_wallet_payouts__payout_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payout_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payout Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPayoutDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Admin Get Payout",
         "tags": [
           "wallet"
         ]
@@ -28253,6 +30399,561 @@
         ]
       }
     },
+    "/api/v1/me/reviews/{review_id}/images": {
+      "get": {
+        "description": "Read photo metadata only through the owning account, including locked reviews.",
+        "operationId": "get_review_photos_api_v1_me_reviews__review_id__images_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Review Photos",
+        "tags": [
+          "customers"
+        ]
+      },
+      "post": {
+        "description": "Accept one bounded file; the service validates actual bytes and decoded dimensions.",
+        "operationId": "upload_review_photo_api_v1_me_reviews__review_id__images_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_review_photo_api_v1_me_reviews__review_id__images_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Upload Review Photo",
+        "tags": [
+          "customers"
+        ]
+      }
+    },
+    "/api/v1/me/reviews/{review_id}/images/{image_id}": {
+      "delete": {
+        "description": "Remove only a photo belonging to the authenticated customer's review.",
+        "operationId": "delete_review_photo_api_v1_me_reviews__review_id__images__image_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "review_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Review Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Delete Review Photo",
+        "tags": [
+          "customers"
+        ]
+      }
+    },
     "/api/v1/notifications": {
       "get": {
         "operationId": "list_notifications_api_v1_notifications_get",
@@ -29323,7 +32024,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateOrderRequest"
+                "$ref": "#/components/schemas/CheckoutOrderRequest"
               }
             }
           },
@@ -29499,7 +32200,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CreateGuestOrderRequest"
+                "$ref": "#/components/schemas/GuestCheckoutOrderRequest"
               }
             }
           },
@@ -29834,6 +32535,177 @@
         ]
       }
     },
+    "/api/v1/orders/guest/recover": {
+      "post": {
+        "operationId": "recover_guest_checkout_api_v1_orders_guest_recover_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutRecoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateOrderResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "summary": "Recover Guest Checkout",
+        "tags": [
+          "orders"
+        ]
+      }
+    },
     "/api/v1/orders/number/{order_number}": {
       "get": {
         "operationId": "get_order_by_number_api_v1_orders_number__order_number__get",
@@ -30040,6 +32912,358 @@
           }
         ],
         "summary": "Get Order By Number",
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/v1/orders/quote": {
+      "post": {
+        "operationId": "quote_account_checkout_api_v1_orders_quote_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountCheckoutQuoteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GuestCheckoutQuoteResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Quote Account Checkout",
+        "tags": [
+          "orders"
+        ]
+      }
+    },
+    "/api/v1/orders/recover": {
+      "post": {
+        "operationId": "recover_account_checkout_api_v1_orders_recover_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CheckoutRecoveryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateOrderResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Recover Account Checkout",
         "tags": [
           "orders"
         ]
@@ -31428,7 +34652,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TransferConfirmationRequest"
+                "$ref": "#/components/schemas/RefundConfirmationRequest"
               }
             }
           },
@@ -32174,6 +35398,185 @@
         ]
       }
     },
+    "/api/v1/payments/{payment_id}": {
+      "get": {
+        "description": "Read a private payment snapshot without provider secrets or customer capabilities.",
+        "operationId": "get_admin_payment_api_v1_payments__payment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "payment_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Payment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AdminPaymentDetailResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "405": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Method not allowed"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Payload too large"
+          },
+          "415": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unsupported media type"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Validation or business rule error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Rate limited"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Internal server error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Upstream service error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service unavailable"
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gateway timeout"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Get Admin Payment",
+        "tags": [
+          "payments"
+        ]
+      }
+    },
     "/api/v1/payments/{payment_id}/cod-collection": {
       "post": {
         "operationId": "record_cod_collection_api_v1_payments__payment_id__cod_collection_post",
@@ -32193,7 +35596,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TransferConfirmationRequest"
+                "$ref": "#/components/schemas/CODCollectionRequest"
               }
             }
           },
@@ -32203,7 +35606,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CODCollectionResponse"
+                }
               }
             },
             "description": "Successful Response"

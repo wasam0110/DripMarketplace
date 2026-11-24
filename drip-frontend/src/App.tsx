@@ -46,6 +46,9 @@ import { AdminRefundsPage } from './admin/AdminRefundsPage'
 import { AdminReturnsPage } from './admin/AdminReturnsPage'
 import { AdminPayoutsPage } from './admin/AdminPayoutsPage'
 import { AdminSettingsPage } from './admin/AdminSettingsPage'
+import { AdminAnalyticsPage } from './admin/AdminAnalyticsPage'
+import { AdminNotificationsPage } from './admin/AdminNotificationsPage'
+import { AdminTwoFactorPage } from './admin/AdminTwoFactorPage'
 
 export default function App() {
   return <ErrorBoundary><AuthProvider><OrderAccessProvider><CartProvider><SavedProvider><Routes>
@@ -111,6 +114,9 @@ export default function App() {
       <Route path="admin/returns" element={<AdminReturnsPage />} />
       <Route path="admin/payouts" element={<AdminPayoutsPage />} />
       <Route path="admin/settings" element={<AdminSettingsPage />} />
+      <Route path="admin/analytics" element={<AdminAnalyticsPage />} />
+      <Route path="admin/notifications" element={<AdminNotificationsPage />} />
+      <Route path="admin/security/2fa" element={<AdminTwoFactorPage />} />
       <Route path="admin/payouts/:id" element={<AdminPayoutsPage detail />} />
       <Route path="admin/returns/:id" element={<AdminReturnsPage detail />} />
       <Route path="admin/disputes" element={<AdminReturnsPage disputes />} />

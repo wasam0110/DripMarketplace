@@ -14,6 +14,10 @@ async function setup(page: Page, mode = 'ready', role = 'admin', verified = true
     expect(route.request().headers().authorization).toBe('Bearer fixture-token')
     if (method === 'POST') {
       writes.push({ path, body: route.request().postDataJSON() })
+      if (path.endsWith('/reconcile')) {
+        status = 'completed'
+        return route.fulfill({ json: { order_id: other, payment_id: id, provider_status: 'COMPLETED', local_status: status, transaction_id: 'RECEIPT-001', matched: true, detail: 'Payment reconciled successfully' } })
+      }
       if (mode === 'rejection' || mode === 'conflict') return route.fulfill({ status: mode === 'conflict' ? 409 : 422, json: { error: { message: 'Refresh and inspect the collection evidence.' } } })
       status = 'completed'
       if (mode === 'lost') return route.abort()
@@ -40,6 +44,11 @@ test('reviewed collection is submitted once and confirmed by saved evidence', as
   const state = await setup(page); await open(page); await review(page); expect(state.writes).toEqual([])
   expect((await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze()).violations).toEqual([]); expect(await page.locator('body').evaluate((body) => body.scrollWidth <= innerWidth)).toBe(true); await page.getByRole('heading', { level: 1 }).click(); await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: info.outputPath('admin-payment-review.png'), fullPage: true })
   await page.getByRole('button', { name: 'Confirm cash collection', exact: true }).dblclick(); await expect(page.getByText('COD collection recorded and saved payment evidence confirmed. No seller payout was made.', { exact: true })).toBeVisible(); expect(state.writes).toHaveLength(1); expect(state.writes[0]).toEqual({ path: `/api/v1/payments/${id}/cod-collection`, body: { reference: 'RECEIPT-001', expected_amount: '1200.25', expected_order_updated_at: '2026-11-01T01:00:00Z' } }); await expect(page.getByRole('button', { name: 'Review cash collection' })).toHaveCount(0); expect(await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }))).not.toMatch(/fixture-token|RECEIPT-001/)
+})
+test('PayFast reconciliation checks and confirms the saved provider result', async ({ page }) => {
+  const state = await setup(page, 'payfast'); await open(page); await page.getByRole('button', { name: 'Check PayFast status', exact: true }).click()
+  await expect(page.getByText('PayFast response reconciled and saved payment state confirmed. Review the provider detail before taking further action.', { exact: true })).toBeVisible()
+  expect(state.writes).toEqual([{ path: `/api/v1/payments/${other}/reconcile`, body: null }])
 })
 test('draft can be abandoned and requires explicit receipt confirmation', async ({ page }) => {
   const state = await setup(page); await open(page); await page.getByRole('button', { name: 'Review cash collection', exact: true }).click(); await expect(page.getByRole('alert')).toContainText('Confirm receipt'); await review(page); await page.getByRole('button', { name: 'Back to collection draft', exact: true }).click(); await expect(page.getByRole('button', { name: 'Confirm cash collection', exact: true })).toHaveCount(0); expect(state.writes).toEqual([])

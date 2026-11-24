@@ -1,6 +1,6 @@
 # WearHowZ endpoint inventory
 
-Generated from the application: 190 HTTP operations.
+Generated from the application: 201 HTTP operations.
 
 Dependency names show route-level access checks. Guest capability tokens, resource ownership, payment verification and business-state checks also run inside handlers/services; consult the OpenAPI schema and implementation.
 
@@ -33,11 +33,13 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | GET | `/api/v1/admin/notifications/failed` | get_current_user_payload, require_admin | `app.api.v1.notifications.failed_notifications` |
 | POST | `/api/v1/admin/notifications/failed/{event_id}/replay` | get_current_user_payload, require_admin | `app.api.v1.notifications.replay_notification` |
 | GET | `/api/v1/admin/orders` | get_current_user_payload, require_admin | `app.api.v1.admin.orders.list_all_orders` |
+| GET | `/api/v1/admin/orders/{order_id}` | get_current_user_payload, require_admin | `app.api.v1.admin.orders.admin_order_detail` |
 | GET | `/api/v1/admin/payouts` | get_current_user_payload, require_admin | `app.api.v1.admin.payouts.list_all_payouts` |
 | POST | `/api/v1/admin/payouts/{payout_id}/approve` | get_current_user_payload, require_admin | `app.api.v1.admin.payouts.approve_payout` |
 | POST | `/api/v1/admin/payouts/{payout_id}/complete` | get_current_user_payload, require_admin | `app.api.v1.admin.payouts.complete_payout` |
 | POST | `/api/v1/admin/payouts/{payout_id}/reject` | get_current_user_payload, require_admin | `app.api.v1.admin.payouts.reject_payout` |
 | GET | `/api/v1/admin/products` | get_current_user_payload, require_admin | `app.api.v1.products.admin_list_products` |
+| GET | `/api/v1/admin/products/{product_id}` | get_current_user_payload, require_admin | `app.api.v1.products.admin_product_detail` |
 | POST | `/api/v1/admin/products/{product_id}/hide` | get_current_user_payload, require_admin | `app.api.v1.products.admin_hide_product` |
 | POST | `/api/v1/admin/products/{product_id}/unhide` | get_current_user_payload, require_admin | `app.api.v1.products.unhide_product` |
 | GET | `/api/v1/admin/returns` | get_current_user_payload, require_admin | `app.api.v1.returns.admin_list_returns` |
@@ -47,6 +49,7 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | POST | `/api/v1/admin/returns/{return_id}/refund` | get_current_user_payload, require_admin | `app.api.v1.returns.admin_process_refund` |
 | POST | `/api/v1/admin/returns/{return_id}/reject` | get_current_user_payload, require_admin | `app.api.v1.returns.admin_reject_return` |
 | GET | `/api/v1/admin/reviews` | get_current_user_payload, require_admin | `app.api.v1.admin.reviews.list_reviews` |
+| GET | `/api/v1/admin/reviews/{review_id}` | get_current_user_payload, require_admin | `app.api.v1.admin.reviews.review_detail` |
 | PATCH | `/api/v1/admin/reviews/{review_id}` | get_current_user_payload, require_admin | `app.api.v1.admin.reviews.moderate_review` |
 | GET | `/api/v1/admin/sellers` | get_current_user_payload, require_admin | `app.api.v1.admin.brands.list_sellers` |
 | GET | `/api/v1/admin/sellers/{seller_id}` | get_current_user_payload, require_admin | `app.api.v1.admin.brands.get_seller` |
@@ -59,6 +62,7 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | PATCH | `/api/v1/admin/settings` | get_current_user_payload, require_admin | `app.api.v1.admin.settings.update_settings` |
 | GET | `/api/v1/admin/wallet/overview` | get_current_user_payload, require_admin | `app.api.v1.wallet.admin_wallet_overview` |
 | GET | `/api/v1/admin/wallet/payouts` | get_current_user_payload, require_admin | `app.api.v1.wallet.admin_list_payouts` |
+| GET | `/api/v1/admin/wallet/payouts/{payout_id}` | get_current_user_payload, require_admin | `app.api.v1.wallet.admin_get_payout` |
 | POST | `/api/v1/admin/wallet/payouts/{payout_id}/approve` | get_current_user_payload, require_admin | `app.api.v1.wallet.admin_approve_payout` |
 | POST | `/api/v1/admin/wallet/payouts/{payout_id}/complete` | get_current_user_payload, require_admin | `app.api.v1.wallet.admin_complete_payout` |
 | POST | `/api/v1/admin/wallet/payouts/{payout_id}/reject` | get_current_user_payload, require_admin | `app.api.v1.wallet.admin_reject_payout` |
@@ -110,6 +114,9 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | GET | `/api/v1/customers/reviews/product/{product_id}` | Public / handler checks | `app.api.v1.customers.list_product_reviews` |
 | POST | `/api/v1/customers/reviews/{review_id}/helpful` | get_current_user_payload, require_customer | `app.api.v1.customers.mark_review_helpful` |
 | GET | `/api/v1/health` | Public / handler checks | `app.api.v1.health.health_check` |
+| GET | `/api/v1/me/reviews/{review_id}/images` | get_current_user_payload, require_customer | `app.api.v1.review_photos.get_review_photos` |
+| POST | `/api/v1/me/reviews/{review_id}/images` | get_current_user_payload, require_customer | `app.api.v1.review_photos.upload_review_photo` |
+| DELETE | `/api/v1/me/reviews/{review_id}/images/{image_id}` | get_current_user_payload, require_customer | `app.api.v1.review_photos.delete_review_photo` |
 | GET | `/api/v1/notifications` | get_current_user_payload, require_customer | `app.api.v1.notifications.list_notifications` |
 | GET | `/api/v1/notifications/preferences` | get_current_user_payload, require_customer | `app.api.v1.notifications.get_preferences` |
 | PATCH | `/api/v1/notifications/preferences` | get_current_user_payload, require_customer | `app.api.v1.notifications.update_preferences` |
@@ -119,7 +126,10 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | POST | `/api/v1/orders` | get_current_user_payload, require_customer | `app.api.v1.orders.place_order` |
 | POST | `/api/v1/orders/guest` | Public / handler checks | `app.api.v1.orders.place_guest_order` |
 | POST | `/api/v1/orders/guest/quote` | Public / handler checks | `app.api.v1.orders.quote_guest_checkout` |
+| POST | `/api/v1/orders/guest/recover` | Public / handler checks | `app.api.v1.orders.recover_guest_checkout` |
 | GET | `/api/v1/orders/number/{order_number}` | get_optional_user_payload | `app.api.v1.orders.get_order_by_number` |
+| POST | `/api/v1/orders/quote` | get_current_user_payload, require_customer | `app.api.v1.orders.quote_account_checkout` |
+| POST | `/api/v1/orders/recover` | get_current_user_payload, require_customer | `app.api.v1.orders.recover_account_checkout` |
 | GET | `/api/v1/orders/{order_id}` | get_optional_user_payload | `app.api.v1.orders.get_order` |
 | POST | `/api/v1/orders/{order_id}/cancel` | get_optional_user_payload | `app.api.v1.orders.cancel_order` |
 | GET | `/api/v1/payments` | get_current_user_payload, require_admin | `app.api.v1.payments.list_payments` |
@@ -133,6 +143,7 @@ Dependency names show route-level access checks. Guest capability tokens, resour
 | POST | `/api/v1/payments/{order_id}/reconcile` | get_current_user_payload, require_admin | `app.api.v1.payments.reconcile_payfast_payment` |
 | POST | `/api/v1/payments/{order_id}/retry` | get_optional_user_payload | `app.api.v1.payments.retry_payment` |
 | GET | `/api/v1/payments/{order_id}/status` | get_optional_user_payload | `app.api.v1.payments.get_payment_status` |
+| GET | `/api/v1/payments/{payment_id}` | get_current_user_payload, require_admin | `app.api.v1.payments.get_admin_payment` |
 | POST | `/api/v1/payments/{payment_id}/cod-collection` | get_current_user_payload, require_admin | `app.api.v1.payments.record_cod_collection` |
 | POST | `/api/v1/payments/{payment_id}/refund` | get_current_user_payload, require_admin | `app.api.v1.payments.refund_payment` |
 | GET | `/api/v1/payments/{payment_id}/refunds` | get_current_user_payload, require_admin | `app.api.v1.payments.get_payment_refunds` |

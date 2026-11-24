@@ -1,0 +1,52 @@
+name: Frontend CI
+
+on:
+  pull_request:
+    paths:
+      - "drip-frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "drip-frontend/**"
+      - ".github/workflows/frontend-ci.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: frontend-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Install, build, and test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: drip-frontend
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "22.12.0"
+          cache: npm
+          cache-dependency-path: drip-frontend/package-lock.json
+
+      - name: Install locked dependencies
+        run: npm ci
+
+      - name: Check formatting-sensitive diff
+        run: git diff --check
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Run frontend tests
+        run: npm test

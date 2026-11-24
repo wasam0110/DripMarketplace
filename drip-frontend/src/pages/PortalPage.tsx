@@ -49,10 +49,13 @@ export function PortalPage({ role }: { role: 'seller' | 'admin' }) {
       {role === 'admin' && user.has_verified_email && <p><Link className="text-link" to="/admin/refunds">Inspect refunds and recorded transfers</Link></p>}
       {role === 'admin' && user.has_verified_email && <p><Link className="text-link" to="/admin/payouts">Review seller payouts and transfer records</Link></p>}
       {role === 'admin' && user.has_verified_email && <p><Link className="text-link" to="/admin/settings">Manage platform settings</Link></p>}
+      {role === 'admin' && user.has_verified_email && <p><Link className="text-link" to="/admin/analytics">View platform analytics</Link></p>}
+      {role === 'admin' && user.has_verified_email && <p><Link className="text-link" to="/admin/notifications">Manage notification recovery and broadcasts</Link></p>}
+      {role === 'admin' && user.has_verified_email && <p><Link className="text-link" to="/admin/security/2fa">Set up admin two-factor authentication</Link></p>}
       {role === 'admin' && user.has_verified_email && <p><Link className="text-link" to="/admin/returns">Review returns</Link> · <Link className="text-link" to="/admin/disputes">Review disputes</Link></p>}
       <p>{role === 'seller'
         ? 'Catalogue, fulfilment and wallet tools are not connected in this frontend checkpoint. Your application status above comes from the server; your account role alone does not confirm that your brand is approved to sell.'
-        : 'Seller reviews, registration-payment records, product moderation and customer review moderation are connected. Banner management, orders, COD decisions and collection, refunds, returns, disputes, seller payout records and platform settings are also connected. PayFast reconciliation follows separately.'}</p>
+        : 'Seller reviews, registration-payment records, product moderation and customer review moderation are connected. Banner management, orders, COD decisions and collection, refunds, returns, disputes, seller payout records, platform settings and platform analytics are also connected. PayFast reconciliation is available from payment details.'}</p>
       <p className="muted">No operational totals or actions are shown on this workspace overview. Open the connected tools to inspect current records.</p>
     </div>
   </section>

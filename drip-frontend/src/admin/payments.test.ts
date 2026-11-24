@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { collectionMarker, collectionPayload, confirmCollection, confirmCollectionReadback, paymentQuery, paymentStatusLabel, samePaymentReview, validatePayment, validatePayments, type AdminPayment } from './payments'
+import { collectionMarker, collectionPayload, confirmCollection, confirmCollectionReadback, paymentQuery, paymentStatusLabel, reconciliationMarker, samePaymentReview, validatePayment, validatePayments, validatePayFastReconcile, type AdminPayment } from './payments'
 const id = '11111111-1111-4111-8111-111111111111', owner = '22222222-2222-4222-8222-222222222222'
 const payment = (): AdminPayment => ({ id, order_id: owner, order_number: 'WHZ-001', method: 'cod', status: 'pending', amount: '1200.25', gateway_reference: null, paid_at: null, created_at: '2026-11-01T00:00:00Z', currency: 'PKR', order_status: 'delivered', order_updated_at: '2026-11-01T01:00:00Z', can_record_cod_collection: true, collection_blockers: [], collection_recorded_by: null })
 it('uses payment states rather than misleading fulfilment labels', () => {
@@ -31,6 +31,13 @@ it('rejects changed preflight evidence and isolates pending markers by owner and
   expect(samePaymentReview(payment(), { ...payment(), order_updated_at: '2026-11-01T02:00:00Z' })).toBe(false)
   expect(collectionMarker(owner, id)).not.toBe(collectionMarker(id, id))
   expect(collectionMarker(owner, id)).not.toBe(collectionMarker(owner, owner))
+  expect(reconciliationMarker(owner, id)).not.toBe(reconciliationMarker(id, id))
+})
+it('validates reconciliation responses against the reviewed payment', () => {
+  const payfast = { ...payment(), method: 'payfast' }
+  const response = { order_id: owner, payment_id: id, provider_status: 'COMPLETED', local_status: 'completed', transaction_id: 'txn-1', matched: true, detail: 'Payment reconciled successfully' }
+  expect(validatePayFastReconcile(response, payfast)).toBe(response)
+  for (const fields of [{ payment_id: owner }, { local_status: 'unknown' }, { matched: 'yes' }, { detail: '' }]) expect(() => validatePayFastReconcile({ ...response, ...fields } as typeof response, payfast)).toThrow()
 })
 it('requires a structured receipt matching amount, order, reference and acting administrator', () => {
   const receipt = { payment_id: id, order_id: owner, order_number: 'WHZ-001', status: 'completed', amount: '1200.25', currency: 'PKR', reference: 'REC-001', paid_at: '2026-11-01T02:00:00Z', recorded_by: owner }

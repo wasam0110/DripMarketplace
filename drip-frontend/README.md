@@ -2255,8 +2255,113 @@ No live settings, provider calls, commits, pushes or deployments were performed.
 The task-labelled settings-test container and disposable synthetic-data volume were
 removed after verification; application databases were untouched. The browser-owned
 preview stopped and port 4173 had no remaining listener.
-Next separately selected checkpoint: PayFast reconciliation; production verification
+PayFast reconciliation is documented in the checkpoint below; production verification
 remains separate.
+
+## PayFast reconciliation checkpoint — 24 November 2026
+
+Added a verified-admin PayFast reconciliation action to the existing payment detail
+screen. The action rechecks the saved payment before calling
+`POST /payments/{order_id}/reconcile`, validates the provider response and confirms
+the saved payment readback. It never initiates a new charge, refund or transfer.
+
+An owner/order-scoped session marker locks an uncertain provider check across reloads.
+Network failures, malformed responses and mismatched readbacks remain blocked for
+manual inspection; a failed provider result may update the local payment to failed,
+while a matched completed result must save the provider transaction reference.
+
+Verification:
+
+- **8 focused frontend unit tests passed**, including reconciliation response and
+  uncertainty-marker validation.
+- **56 mocked desktop/mobile admin-payment browser tests passed**.
+- `npm run build` passed: **743.04 kB JavaScript / 189.59 kB gzip**. The existing
+  >500 kB bundle warning remains.
+- No provider calls, live payment changes, commits, pushes or deployments were made.
+
+## Admin analytics checkpoint — 24 November 2026
+
+Added `/admin/analytics` and a verified-admin workspace link. The dashboard reads
+the existing admin analytics contracts for platform overview metrics, recorded
+revenue buckets and top sellers, with selectable 7-day, 30-day, 90-day and yearly
+periods plus day/week/month revenue grouping.
+
+Responses are validated before display, including exact decimal money strings,
+bounded counts, ordered revenue buckets, valid seller identifiers and duplicate
+ranking protection. Empty, denied and malformed responses remain explicit and
+retryable. Metrics are operational aggregates, not payout statements or a
+replacement for payment, refund or settlement reconciliation.
+
+Verification:
+
+- **3 focused admin analytics unit tests passed**; the combined analytics/payment
+  focused run passed **11 tests**.
+- `npm run build` passed: **750.03 kB JavaScript / 191.10 kB gzip**. The existing
+  >500 kB bundle warning remains.
+- No live analytics changes, commits, pushes or deployments were made.
+
+## Admin notification operations checkpoint — 24 November 2026
+
+Added `/admin/notifications` for verified administrators. It provides durable
+failed-event recovery with reasoned replay, in-app audience broadcasts, and
+paginated email delivery-log inspection with recipient/date filters.
+
+Broadcasts are acknowledged only when the server returns a recipient count and
+task ID. Replay requests require a reason, use owner/event-scoped uncertainty
+markers across reloads, and never automatically retry after an unknown result.
+Delivery logs and failed-event records are diagnostic evidence; neither proves
+recipient engagement or provider delivery.
+
+Verification:
+
+- **2 focused notification-operation unit tests passed**.
+- `npm run build` passed: **758.86 kB JavaScript / 192.82 kB gzip**. The existing
+  >500 kB bundle warning remains.
+- No live broadcasts, email replays, commits, pushes or deployments were made.
+
+## Admin two-factor enrollment checkpoint — 24 November 2026
+
+Added `/admin/security/2fa` for verified administrators. The screen follows the
+existing backend TOTP contract: generate an enrollment secret, add it to an
+authenticator app, and verify a six-digit code before enabling 2FA.
+
+The secret and authenticator URI remain in component memory only; they are not
+stored in browser storage, URLs or logs. Verification failures can be corrected,
+while uncertain verification outcomes are locked by the existing write-safety
+state so the enable request is never replayed automatically.
+
+Verification:
+
+- **1 focused admin 2FA unit test passed**.
+- `npm run build` passed: **763.29 kB JavaScript / 193.65 kB gzip**. The existing
+  >500 kB bundle warning remains.
+- No live authenticator enrollment, commits, pushes or deployments were made.
+
+## Frontend CI guardrail checkpoint — 24 November 2026
+
+Added a path-scoped GitHub Actions workflow for the frontend. Pull requests and
+pushes to `main` touching `drip-frontend` now use Node 22.12.0, install strictly
+from `package-lock.json` with `npm ci`, run `git diff --check`, build with strict
+TypeScript/Vite checks, and execute the Vitest suite. The workflow does not start
+live backend services or run browser tests that require external infrastructure.
+
+The local lockfile was verified with `npm ci --ignore-scripts --dry-run`; no
+dependency manifest or lockfile changes were needed.
+
+## API contract inventory checkpoint — 24 November 2026
+
+Regenerated the backend OpenAPI contract and endpoint inventory from the current
+application using the repository `.venv`. The inventory now contains **201 HTTP
+operations**, including the admin analytics, notification operations, and admin
+2FA routes added in the preceding checkpoints.
+
+Command:
+
+`cd drip-backend; ..\.venv\Scripts\python.exe scripts/export_contract.py`
+
+The exporter validates duplicate routes and checks that every OpenAPI operation
+appears in the generated inventory. The default global Python environment lacks
+the required FastAPI route helper, so the repository environment must be used.
 
 ## Design and assets
 
