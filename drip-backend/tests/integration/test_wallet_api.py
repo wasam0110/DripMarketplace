@@ -244,8 +244,8 @@ async def test_wallet_summary_uses_identity_and_preserves_exact_amounts(client, 
         "pending_balance": "100.25",
         "total_earned": "2000.50",
         "total_commission": "300.10",
-        "minimum_withdrawal_amount": str(settings.MIN_WITHDRAWAL_AMOUNT),
-        "maximum_withdrawal_amount": str(settings.MAX_WITHDRAWAL_AMOUNT),
+        "minimum_withdrawal_amount": format(settings.MIN_WITHDRAWAL_AMOUNT, ".2f"),
+        "maximum_withdrawal_amount": format(settings.MAX_WITHDRAWAL_AMOUNT, ".2f"),
     }
     assert await snapshot(db) == before
 

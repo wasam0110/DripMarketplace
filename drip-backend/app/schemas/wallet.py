@@ -28,8 +28,8 @@ class WalletSummaryResponse(BaseModel):
 class WalletTransactionResponse(BaseModel):
     id:              UUID
     type:            str
-    amount:          Decimal
-    balance_after:   Decimal
+    amount:          PKRResponseAmount
+    balance_after:   PKRResponseAmount
     reference:       Optional[str]
     note:            Optional[str]
     created_at:      datetime
@@ -58,7 +58,7 @@ class WithdrawalRequest(BaseModel):
 
 class PayoutResponse(BaseModel):
     id:             UUID
-    amount:         Decimal
+    amount:         PKRResponseAmount
     payment_method: str
     payment_detail: str
     status:         str
@@ -80,19 +80,19 @@ class PaginatedPayouts(BaseModel):
 class CommissionEntryResponse(BaseModel):
     id:                UUID
     seller_order_id:   UUID
-    gross_amount:      Decimal
+    gross_amount:      PKRResponseAmount
     commission_rate:   float
-    commission_amount: Decimal
-    seller_amount:     Decimal
-    original_gross_amount: Decimal
-    original_commission_amount: Decimal
-    original_seller_amount: Decimal
-    refunded_gross_amount: Decimal
-    reversed_commission_amount: Decimal
-    reversed_seller_amount: Decimal
-    recovered_seller_amount: Decimal
-    settlement_offset_amount: Decimal
-    platform_shortfall_amount: Decimal
+    commission_amount: PKRResponseAmount
+    seller_amount:     PKRResponseAmount
+    original_gross_amount: PKRResponseAmount
+    original_commission_amount: PKRResponseAmount
+    original_seller_amount: PKRResponseAmount
+    refunded_gross_amount: PKRResponseAmount
+    reversed_commission_amount: PKRResponseAmount
+    reversed_seller_amount: PKRResponseAmount
+    recovered_seller_amount: PKRResponseAmount
+    settlement_offset_amount: PKRResponseAmount
+    platform_shortfall_amount: PKRResponseAmount
     released_at: datetime | None
     settled_at:        datetime
 
@@ -100,18 +100,18 @@ class CommissionEntryResponse(BaseModel):
 
 
 class CommissionSummary(BaseModel):
-    total_gross:      Decimal
-    total_commission: Decimal
-    total_net:        Decimal
-    original_gross: Decimal
-    original_commission: Decimal
-    original_net: Decimal
-    total_refunded_gross: Decimal
-    total_reversed_commission: Decimal
-    total_reversed_seller: Decimal
-    total_recovered_seller: Decimal
-    total_settlement_offset: Decimal
-    total_platform_shortfall: Decimal
+    total_gross:      PKRResponseAmount
+    total_commission: PKRResponseAmount
+    total_net:        PKRResponseAmount
+    original_gross: PKRResponseAmount
+    original_commission: PKRResponseAmount
+    original_net: PKRResponseAmount
+    total_refunded_gross: PKRResponseAmount
+    total_reversed_commission: PKRResponseAmount
+    total_reversed_seller: PKRResponseAmount
+    total_recovered_seller: PKRResponseAmount
+    total_settlement_offset: PKRResponseAmount
+    total_platform_shortfall: PKRResponseAmount
 
 
 class CommissionBreakdownResponse(BaseModel):

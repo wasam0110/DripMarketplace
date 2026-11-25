@@ -32,7 +32,9 @@ async def test_wallet_summary_exposes_configured_withdrawal_limits(monkeypatch):
     assert summary.available_balance == Decimal("1000.25")
     assert summary.minimum_withdrawal_amount == Decimal("750")
     assert summary.maximum_withdrawal_amount == Decimal("1250")
-    assert summary.model_dump(mode="json")["minimum_withdrawal_amount"] == "750"
+    response = summary.model_dump(mode="json")
+    assert response["minimum_withdrawal_amount"] == "750.00"
+    assert response["maximum_withdrawal_amount"] == "1250.00"
 
 
 @pytest.mark.parametrize(

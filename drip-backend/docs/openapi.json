@@ -3316,6 +3316,7 @@
       "CommissionEntryResponse": {
         "properties": {
           "commission_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Commission Amount",
             "type": "string"
           },
@@ -3324,6 +3325,7 @@
             "type": "number"
           },
           "gross_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Gross Amount",
             "type": "string"
           },
@@ -3333,26 +3335,32 @@
             "type": "string"
           },
           "original_commission_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Original Commission Amount",
             "type": "string"
           },
           "original_gross_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Original Gross Amount",
             "type": "string"
           },
           "original_seller_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Original Seller Amount",
             "type": "string"
           },
           "platform_shortfall_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Platform Shortfall Amount",
             "type": "string"
           },
           "recovered_seller_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Recovered Seller Amount",
             "type": "string"
           },
           "refunded_gross_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Refunded Gross Amount",
             "type": "string"
           },
@@ -3369,14 +3377,17 @@
             "title": "Released At"
           },
           "reversed_commission_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Reversed Commission Amount",
             "type": "string"
           },
           "reversed_seller_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Reversed Seller Amount",
             "type": "string"
           },
           "seller_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Seller Amount",
             "type": "string"
           },
@@ -3391,6 +3402,7 @@
             "type": "string"
           },
           "settlement_offset_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Settlement Offset Amount",
             "type": "string"
           }
@@ -3420,50 +3432,62 @@
       "CommissionSummary": {
         "properties": {
           "original_commission": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Original Commission",
             "type": "string"
           },
           "original_gross": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Original Gross",
             "type": "string"
           },
           "original_net": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Original Net",
             "type": "string"
           },
           "total_commission": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Commission",
             "type": "string"
           },
           "total_gross": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Gross",
             "type": "string"
           },
           "total_net": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Net",
             "type": "string"
           },
           "total_platform_shortfall": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Platform Shortfall",
             "type": "string"
           },
           "total_recovered_seller": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Recovered Seller",
             "type": "string"
           },
           "total_refunded_gross": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Refunded Gross",
             "type": "string"
           },
           "total_reversed_commission": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Reversed Commission",
             "type": "string"
           },
           "total_reversed_seller": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Reversed Seller",
             "type": "string"
           },
           "total_settlement_offset": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Settlement Offset",
             "type": "string"
           }
@@ -5994,6 +6018,7 @@
             "title": "Admin Note"
           },
           "amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Amount",
             "type": "string"
           },
@@ -10523,10 +10548,12 @@
       "WalletTransactionResponse": {
         "properties": {
           "amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Amount",
             "type": "string"
           },
           "balance_after": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Balance After",
             "type": "string"
           },
