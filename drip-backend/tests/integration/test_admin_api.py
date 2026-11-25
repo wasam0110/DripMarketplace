@@ -124,23 +124,23 @@ class TestCODQueue:
 class TestPayoutAdmin:
     def test_list_no_auth(self, client):
         r = client.get("/admin/payouts")
-        assert r.status_code in (401, 422)
+        assert r.status_code == 401
 
     def test_list_invalid_status(self, client):
         r = client.get("/admin/payouts?status=unknown")
-        assert r.status_code in (401, 422)
+        assert r.status_code == 401
 
     def test_approve_no_auth(self, client):
         r = client.post(f"/admin/payouts/{uuid4()}/approve", json={})
-        assert r.status_code in (401, 422)
+        assert r.status_code == 401
 
     def test_reject_no_auth(self, client):
         r = client.post(f"/admin/payouts/{uuid4()}/reject", json={"admin_note": "Duplicate"})
-        assert r.status_code in (401, 422)
+        assert r.status_code == 401
 
     def test_complete_no_auth(self, client):
         r = client.post(f"/admin/payouts/{uuid4()}/complete", json={})
-        assert r.status_code in (401, 422)
+        assert r.status_code == 401
 
 
 class TestSettingsAdmin:

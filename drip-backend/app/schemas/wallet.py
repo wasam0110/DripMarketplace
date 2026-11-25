@@ -5,23 +5,24 @@ Validated request and response contracts used by API routes and services.
 
 from __future__ import annotations
 
-from decimal import Decimal
-from uuid import UUID
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.schemas.money import PKRResponseAmount
 
 
 class WalletSummaryResponse(BaseModel):
-    available_balance: Decimal
-    pending_balance:   Decimal
-    total_earned:      Decimal
-    total_commission:  Decimal
-    minimum_withdrawal_amount: Decimal
-    maximum_withdrawal_amount: Decimal
+    available_balance: PKRResponseAmount
+    pending_balance:   PKRResponseAmount
+    total_earned:      PKRResponseAmount
+    total_commission:  PKRResponseAmount
+    minimum_withdrawal_amount: PKRResponseAmount
+    maximum_withdrawal_amount: PKRResponseAmount
 
 
 class WalletTransactionResponse(BaseModel):
@@ -145,7 +146,7 @@ class CompletePayoutRequest(AdminPayoutActionRequest):
 
 
 class AdminWalletOverviewResponse(BaseModel):
-    total_available_balance: Decimal
-    total_pending_balance:   Decimal
+    total_available_balance: PKRResponseAmount
+    total_pending_balance:   PKRResponseAmount
     total_payouts_pending:   int
     total_payouts_completed: int

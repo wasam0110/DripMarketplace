@@ -1,10 +1,63 @@
 """Unit tests — Block 7: Wallet. No DB required."""
-import pytest
 from decimal import Decimal
+
+import pytest
 from pydantic import ValidationError
 
+from app.schemas.wallet import (
+    AdminPayoutActionRequest,
+    AdminWalletOverviewResponse,
+    WalletSummaryResponse,
+    WithdrawalRequest,
+)
 from app.services.commission_service import COMMISSION_RATE
-from app.schemas.wallet import WithdrawalRequest, AdminPayoutActionRequest
+
+
+class TestWalletResponseMoney:
+    def test_summary_amounts_serialize_with_two_decimal_places(self):
+        response = WalletSummaryResponse(
+            available_balance=Decimal("12.5"),
+            pending_balance=Decimal("0"),
+            total_earned=Decimal("20.00"),
+            total_commission=Decimal("3.45"),
+            minimum_withdrawal_amount=Decimal("500"),
+            maximum_withdrawal_amount=Decimal("200000"),
+        )
+
+        assert response.model_dump(mode="json") == {
+            "available_balance": "12.50",
+            "pending_balance": "0.00",
+            "total_earned": "20.00",
+            "total_commission": "3.45",
+            "minimum_withdrawal_amount": "500.00",
+            "maximum_withdrawal_amount": "200000.00",
+        }
+
+    def test_summary_amounts_reject_more_than_two_decimal_places(self):
+        with pytest.raises(ValidationError):
+            WalletSummaryResponse(
+                available_balance=Decimal("12.345"),
+                pending_balance=Decimal("0"),
+                total_earned=Decimal("20.00"),
+                total_commission=Decimal("3.45"),
+                minimum_withdrawal_amount=Decimal("500"),
+                maximum_withdrawal_amount=Decimal("200000"),
+            )
+
+    def test_admin_overview_amounts_serialize_with_two_decimal_places(self):
+        response = AdminWalletOverviewResponse(
+            total_available_balance=Decimal("12.5"),
+            total_pending_balance=Decimal("0"),
+            total_payouts_pending=1,
+            total_payouts_completed=2,
+        )
+
+        assert response.model_dump(mode="json") == {
+            "total_available_balance": "12.50",
+            "total_pending_balance": "0.00",
+            "total_payouts_pending": 1,
+            "total_payouts_completed": 2,
+        }
 
 
 class TestCommissionMath:

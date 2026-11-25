@@ -20,7 +20,7 @@ function renderAt(route = '/') { return render(<MemoryRouter initialEntries={[ro
 
 it('renders the approved homepage and real empty catalogue state', async () => {
   renderAt()
-  expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Good labels.Great finds.')
+  expect(await screen.findByRole('heading', { level: 1 })).toHaveTextContent('Good labels.Great finds.')
   expect(await screen.findByText('Room for something good.')).toBeInTheDocument()
   expect(screen.queryByText('PKR 8,900')).not.toBeInTheDocument()
 })
@@ -28,7 +28,7 @@ it('renders the approved homepage and real empty catalogue state', async () => {
 it('opens and closes mobile navigation with keyboard dismissal', async () => {
   renderAt()
   const user = userEvent.setup()
-  await user.click(screen.getByRole('button', { name: 'Open menu' }))
+  await user.click(await screen.findByRole('button', { name: 'Open menu' }))
   const navigation = screen.getByRole('navigation', { name: 'Mobile navigation' })
   expect(navigation).toBeInTheDocument()
   const link = navigation.querySelector('a')!
@@ -50,9 +50,10 @@ it('submits search through the URL and backend query', async () => {
 
 it('keeps the authenticator field admin-only', async () => {
   renderAt('/login')
+  await screen.findByLabelText('Administrator sign-in')
   expect(screen.queryByLabelText('Administrator authenticator code')).not.toBeInTheDocument()
   await userEvent.click(screen.getByLabelText('Administrator sign-in'))
-  expect(screen.getByLabelText('Administrator authenticator code')).toBeRequired()
+  expect(await screen.findByLabelText('Administrator authenticator code')).toBeRequired()
 })
 
 it('signs in using the backend contract and displays the returned profile', async () => {

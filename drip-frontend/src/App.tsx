@@ -1,57 +1,69 @@
+import { lazy, Suspense } from 'react'
 import { Link, Route, Routes } from 'react-router'
 import { AuthProvider } from './auth/AuthProvider'
 import { Layout } from './components/Layout'
 import { ErrorBoundary, NotFound } from './components/ui'
-import { AccountPage, AuthPage, VerifyEmailPage } from './pages/AuthPages'
-import { BrandPage, BrandsPageView, CataloguePageView, HomePage } from './pages/Storefront'
-import { ProductPage } from './pages/ProductPage'
-import { BagPage } from './pages/BagPage'
 import { CartProvider } from './cart/CartProvider'
-import { CheckoutPage } from './pages/CheckoutPage'
-import { GuestTrackingPage, OrderDetailPage, OrdersPage } from './pages/OrderPages'
 import { OrderAccessProvider } from './orders/access'
 import { SavedProvider } from './saved/SavedProvider'
-import { SavedPage } from './pages/SavedPage'
-import { MyReviewsPage } from './reviews/MyReviewsPage'
-import { AddressesPage, ProfilePage } from './account/AccountDetails'
-import { NotificationPreferencesPage } from './account/NotificationPreferencesPage'
-import { NotificationInboxPage } from './account/NotificationInboxPage'
-import { ChangePasswordPage } from './account/ChangePasswordPage'
-import { AvatarPage } from './account/AvatarPage'
-import { GuestReturnPage, ReturnDetailPage, ReturnsPage } from './pages/ReturnPages'
-import { DisputePage } from './pages/DisputePage'
-import { ReviewPhotosPage } from './reviews/ReviewPhotosPage'
-import { DeleteAccountPage } from './account/DeleteAccountPage'
-import { GoogleCallbackPage } from './auth/GoogleCallbackPage'
-import { PaymentStatusPage } from './payments/PaymentStatusPage'
-import { PortalPage } from './pages/PortalPage'
-import { SellerRegistrationPage } from './seller/SellerRegistrationPage'
-import { SellerProfilePage } from './seller/SellerProfilePage'
-import { SellerLogoPage } from './seller/SellerLogoPage'
-import { SellerCataloguePage } from './seller/SellerCataloguePage'
-import { SellerProductEditorPage } from './seller/SellerProductEditorPage'
-import { SellerInventoryPage } from './seller/SellerInventoryPage'
-import { SellerFulfilmentPage } from './seller/SellerFulfilmentPage'
-import { SellerReturnsPage } from './seller/SellerReturnsPage'
-import { SellerWalletPage } from './seller/SellerWalletPage'
-import { SellerAnalyticsPage } from './seller/SellerAnalyticsPage'
-import { AdminSellersPage } from './admin/AdminSellersPage'
-import { AdminProductsPage } from './admin/AdminProductsPage'
-import { AdminReviewsPage } from './admin/AdminReviewsPage'
-import { AdminContentPage } from './admin/AdminContentPage'
-import { AdminOrdersPage } from './admin/AdminOrdersPage'
-import { AdminCODPage } from './admin/AdminCODPage'
-import { AdminPaymentsPage } from './admin/AdminPaymentsPage'
-import { AdminRefundsPage } from './admin/AdminRefundsPage'
-import { AdminReturnsPage } from './admin/AdminReturnsPage'
-import { AdminPayoutsPage } from './admin/AdminPayoutsPage'
-import { AdminSettingsPage } from './admin/AdminSettingsPage'
-import { AdminAnalyticsPage } from './admin/AdminAnalyticsPage'
-import { AdminNotificationsPage } from './admin/AdminNotificationsPage'
-import { AdminTwoFactorPage } from './admin/AdminTwoFactorPage'
+
+const AccountPage = lazy(() => import('./pages/AuthPages').then(({ AccountPage }) => ({ default: AccountPage })))
+const AuthPage = lazy(() => import('./pages/AuthPages').then(({ AuthPage }) => ({ default: AuthPage })))
+const VerifyEmailPage = lazy(() => import('./pages/AuthPages').then(({ VerifyEmailPage }) => ({ default: VerifyEmailPage })))
+const BrandPage = lazy(() => import('./pages/Storefront').then(({ BrandPage }) => ({ default: BrandPage })))
+const BrandsPageView = lazy(() => import('./pages/Storefront').then(({ BrandsPageView }) => ({ default: BrandsPageView })))
+const CataloguePageView = lazy(() => import('./pages/Storefront').then(({ CataloguePageView }) => ({ default: CataloguePageView })))
+const HomePage = lazy(() => import('./pages/Storefront').then(({ HomePage }) => ({ default: HomePage })))
+const ProductPage = lazy(() => import('./pages/ProductPage').then(({ ProductPage }) => ({ default: ProductPage })))
+const BagPage = lazy(() => import('./pages/BagPage').then(({ BagPage }) => ({ default: BagPage })))
+const CheckoutPage = lazy(() => import('./pages/CheckoutPage').then(({ CheckoutPage }) => ({ default: CheckoutPage })))
+const GuestTrackingPage = lazy(() => import('./pages/OrderPages').then(({ GuestTrackingPage }) => ({ default: GuestTrackingPage })))
+const OrderDetailPage = lazy(() => import('./pages/OrderPages').then(({ OrderDetailPage }) => ({ default: OrderDetailPage })))
+const OrdersPage = lazy(() => import('./pages/OrderPages').then(({ OrdersPage }) => ({ default: OrdersPage })))
+const SavedPage = lazy(() => import('./pages/SavedPage').then(({ SavedPage }) => ({ default: SavedPage })))
+const MyReviewsPage = lazy(() => import('./reviews/MyReviewsPage').then(({ MyReviewsPage }) => ({ default: MyReviewsPage })))
+const AddressesPage = lazy(() => import('./account/AccountDetails').then(({ AddressesPage }) => ({ default: AddressesPage })))
+const ProfilePage = lazy(() => import('./account/AccountDetails').then(({ ProfilePage }) => ({ default: ProfilePage })))
+const NotificationPreferencesPage = lazy(() => import('./account/NotificationPreferencesPage').then(({ NotificationPreferencesPage }) => ({ default: NotificationPreferencesPage })))
+const NotificationInboxPage = lazy(() => import('./account/NotificationInboxPage').then(({ NotificationInboxPage }) => ({ default: NotificationInboxPage })))
+const ChangePasswordPage = lazy(() => import('./account/ChangePasswordPage').then(({ ChangePasswordPage }) => ({ default: ChangePasswordPage })))
+const AvatarPage = lazy(() => import('./account/AvatarPage').then(({ AvatarPage }) => ({ default: AvatarPage })))
+const GuestReturnPage = lazy(() => import('./pages/ReturnPages').then(({ GuestReturnPage }) => ({ default: GuestReturnPage })))
+const ReturnDetailPage = lazy(() => import('./pages/ReturnPages').then(({ ReturnDetailPage }) => ({ default: ReturnDetailPage })))
+const ReturnsPage = lazy(() => import('./pages/ReturnPages').then(({ ReturnsPage }) => ({ default: ReturnsPage })))
+const DisputePage = lazy(() => import('./pages/DisputePage').then(({ DisputePage }) => ({ default: DisputePage })))
+const ReviewPhotosPage = lazy(() => import('./reviews/ReviewPhotosPage').then(({ ReviewPhotosPage }) => ({ default: ReviewPhotosPage })))
+const DeleteAccountPage = lazy(() => import('./account/DeleteAccountPage').then(({ DeleteAccountPage }) => ({ default: DeleteAccountPage })))
+const GoogleCallbackPage = lazy(() => import('./auth/GoogleCallbackPage').then(({ GoogleCallbackPage }) => ({ default: GoogleCallbackPage })))
+const PaymentStatusPage = lazy(() => import('./payments/PaymentStatusPage').then(({ PaymentStatusPage }) => ({ default: PaymentStatusPage })))
+const PortalPage = lazy(() => import('./pages/PortalPage').then(({ PortalPage }) => ({ default: PortalPage })))
+const SellerRegistrationPage = lazy(() => import('./seller/SellerRegistrationPage').then(({ SellerRegistrationPage }) => ({ default: SellerRegistrationPage })))
+const SellerProfilePage = lazy(() => import('./seller/SellerProfilePage').then(({ SellerProfilePage }) => ({ default: SellerProfilePage })))
+const SellerLogoPage = lazy(() => import('./seller/SellerLogoPage').then(({ SellerLogoPage }) => ({ default: SellerLogoPage })))
+const SellerCataloguePage = lazy(() => import('./seller/SellerCataloguePage').then(({ SellerCataloguePage }) => ({ default: SellerCataloguePage })))
+const SellerProductEditorPage = lazy(() => import('./seller/SellerProductEditorPage').then(({ SellerProductEditorPage }) => ({ default: SellerProductEditorPage })))
+const SellerInventoryPage = lazy(() => import('./seller/SellerInventoryPage').then(({ SellerInventoryPage }) => ({ default: SellerInventoryPage })))
+const SellerFulfilmentPage = lazy(() => import('./seller/SellerFulfilmentPage').then(({ SellerFulfilmentPage }) => ({ default: SellerFulfilmentPage })))
+const SellerReturnsPage = lazy(() => import('./seller/SellerReturnsPage').then(({ SellerReturnsPage }) => ({ default: SellerReturnsPage })))
+const SellerWalletPage = lazy(() => import('./seller/SellerWalletPage').then(({ SellerWalletPage }) => ({ default: SellerWalletPage })))
+const SellerAnalyticsPage = lazy(() => import('./seller/SellerAnalyticsPage').then(({ SellerAnalyticsPage }) => ({ default: SellerAnalyticsPage })))
+const AdminSellersPage = lazy(() => import('./admin/AdminSellersPage').then(({ AdminSellersPage }) => ({ default: AdminSellersPage })))
+const AdminProductsPage = lazy(() => import('./admin/AdminProductsPage').then(({ AdminProductsPage }) => ({ default: AdminProductsPage })))
+const AdminReviewsPage = lazy(() => import('./admin/AdminReviewsPage').then(({ AdminReviewsPage }) => ({ default: AdminReviewsPage })))
+const AdminContentPage = lazy(() => import('./admin/AdminContentPage').then(({ AdminContentPage }) => ({ default: AdminContentPage })))
+const AdminOrdersPage = lazy(() => import('./admin/AdminOrdersPage').then(({ AdminOrdersPage }) => ({ default: AdminOrdersPage })))
+const AdminCODPage = lazy(() => import('./admin/AdminCODPage').then(({ AdminCODPage }) => ({ default: AdminCODPage })))
+const AdminPaymentsPage = lazy(() => import('./admin/AdminPaymentsPage').then(({ AdminPaymentsPage }) => ({ default: AdminPaymentsPage })))
+const AdminRefundsPage = lazy(() => import('./admin/AdminRefundsPage').then(({ AdminRefundsPage }) => ({ default: AdminRefundsPage })))
+const AdminReturnsPage = lazy(() => import('./admin/AdminReturnsPage').then(({ AdminReturnsPage }) => ({ default: AdminReturnsPage })))
+const AdminPayoutsPage = lazy(() => import('./admin/AdminPayoutsPage').then(({ AdminPayoutsPage }) => ({ default: AdminPayoutsPage })))
+const AdminSettingsPage = lazy(() => import('./admin/AdminSettingsPage').then(({ AdminSettingsPage }) => ({ default: AdminSettingsPage })))
+const AdminAnalyticsPage = lazy(() => import('./admin/AdminAnalyticsPage').then(({ AdminAnalyticsPage }) => ({ default: AdminAnalyticsPage })))
+const AdminNotificationsPage = lazy(() => import('./admin/AdminNotificationsPage').then(({ AdminNotificationsPage }) => ({ default: AdminNotificationsPage })))
+const AdminTwoFactorPage = lazy(() => import('./admin/AdminTwoFactorPage').then(({ AdminTwoFactorPage }) => ({ default: AdminTwoFactorPage })))
 
 export default function App() {
-  return <ErrorBoundary><AuthProvider><OrderAccessProvider><CartProvider><SavedProvider><Routes>
+  return <ErrorBoundary><AuthProvider><OrderAccessProvider><CartProvider><SavedProvider><Suspense fallback={<p className="container page" role="status">Loading page…</p>}><Routes>
     <Route element={<Layout />}>
       <Route index element={<HomePage />} />
       <Route path="clothing" element={<CataloguePageView />} />
@@ -142,5 +154,5 @@ export default function App() {
       </section>} />
       <Route path="*" element={<NotFound />} />
     </Route>
-  </Routes></SavedProvider></CartProvider></OrderAccessProvider></AuthProvider></ErrorBoundary>
+  </Routes></Suspense></SavedProvider></CartProvider></OrderAccessProvider></AuthProvider></ErrorBoundary>
 }

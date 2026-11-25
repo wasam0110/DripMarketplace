@@ -70,12 +70,13 @@ async def test_legacy_order_email_accepts_decimal_queue_values(monkeypatch, amou
 def test_slot_money_is_two_place_json_string_but_counts_stay_integer(quantity):
     pricing = SlotService.calculate_pricing(quantity)
     data = pricing.model_dump(mode="json")
+    properties = SlotPricingResponse.model_json_schema(mode="serialization")["properties"]
     for name in ("registration_fee", "extra_slot_price", "extra_cost", "total_cost"):
         assert isinstance(getattr(pricing, name), Decimal)
         assert data[name] == f"{getattr(pricing, name):.2f}"
-        assert (
-            SlotPricingResponse.model_json_schema(mode="serialization")["properties"][name]["type"]
-            == "string"
+        assert properties[name]["type"] == "string"
+        assert properties[name]["description"] == (
+            "PKR major units, serialized as a two-decimal string; not integer paisa."
         )
     for name in ("base_slots", "extra_slots", "total_slots"):
         assert type(data[name]) is int
@@ -86,6 +87,12 @@ def test_slot_money_is_two_place_json_string_but_counts_stay_integer(quantity):
         amount_charged=Decimal("261.75"),
     )
     assert purchased.model_dump(mode="json")["amount_charged"] == "261.75"
+    assert (
+        SlotPurchaseResponse.model_json_schema(mode="serialization")["properties"][
+            "amount_charged"
+        ]["description"]
+        == properties["registration_fee"]["description"]
+    )
 
 
 @pytest.mark.parametrize("value", ["NaN", "Infinity", "-0.01", "1.001"])

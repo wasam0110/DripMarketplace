@@ -2383,11 +2383,17 @@ API origin with compatible CORS/cookies). Do not expose the Vite development
 server publicly. Production headers, callback URLs, secrets and end-to-end
 verification belong to the deployment stage.
 
-## Existing Git history
+## Repository dependency cleanup — 25 November 2026
 
-The old frontend was already absent from disk when this build began, but its
-files (including 6,247 `node_modules` paths) are still tracked in the repository.
-The new `.gitignore` prevents new dependency/build files from being added; it does
-not untrack old entries. No staging, commits, or index cleanup were performed.
-Review the legacy deletions and untrack generated dependencies before committing;
-do not blindly stage the entire workspace.
+Removed 328 previously tracked files under `drip-frontend/node_modules` from the
+Git index while preserving the local installation. The existing frontend
+`.gitignore` excludes `node_modules`, and CI restores dependencies with `npm ci`
+from the lockfile. No dependency manifest or lockfile changes were made.
+
+## Route-level code splitting — 25 November 2026
+
+Application pages now load on demand by route, with an accessible status message
+while a page chunk is loading. This keeps seller, admin and account modules out of
+the initial storefront bundle until their routes are visited. The production
+entry chunk is **249.05 kB minified / 75.81 kB gzip**, down from **763.29 kB /
+193.65 kB gzip**; the build no longer emits the >500 kB chunk warning.

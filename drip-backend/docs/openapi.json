@@ -2160,6 +2160,7 @@
       "AdminWalletOverviewResponse": {
         "properties": {
           "total_available_balance": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Available Balance",
             "type": "string"
           },
@@ -2172,6 +2173,7 @@
             "type": "integer"
           },
           "total_pending_balance": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Pending Balance",
             "type": "string"
           }
@@ -10477,26 +10479,32 @@
       "WalletSummaryResponse": {
         "properties": {
           "available_balance": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Available Balance",
             "type": "string"
           },
           "maximum_withdrawal_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Maximum Withdrawal Amount",
             "type": "string"
           },
           "minimum_withdrawal_amount": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Minimum Withdrawal Amount",
             "type": "string"
           },
           "pending_balance": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Pending Balance",
             "type": "string"
           },
           "total_commission": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Commission",
             "type": "string"
           },
           "total_earned": {
+            "description": "PKR major units as a two-decimal string; not integer paisa.",
             "title": "Total Earned",
             "type": "string"
           }

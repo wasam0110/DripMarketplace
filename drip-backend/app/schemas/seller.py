@@ -58,9 +58,8 @@ class SellerRegistrationResponse(BaseModel):
 # ── Slot Pricing ───────────────────────────────────────────────────────────────
 
 SlotMoney = Annotated[
-    Decimal,
-    Field(ge=0, decimal_places=2, allow_inf_nan=False,
-          description="PKR major units, serialized as a two-decimal string; not integer paisa."),
+    PKRResponseAmount,
+    Field(description="PKR major units, serialized as a two-decimal string; not integer paisa."),
 ]
 
 
@@ -73,14 +72,6 @@ class SlotPricingResponse(BaseModel):
     total_cost:       SlotMoney
     total_slots:      int
 
-    @field_serializer(
-        "registration_fee", "extra_slot_price", "extra_cost", "total_cost", when_used="json"
-    )
-    def serialize_money(self, value: Decimal) -> str:
-        """Serialize slot-pricing amounts as fixed two-decimal PKR strings."""
-        return format(value, ".2f")
-
-
 class SlotPurchaseRequest(BaseModel):
     quantity:       int = Field(ge=1, le=10_000)
     payment_method: Literal["wallet"]
@@ -91,11 +82,6 @@ class SlotPurchaseResponse(BaseModel):
     new_total_slots:     int
     new_slots_available: int
     amount_charged:      SlotMoney
-
-    @field_serializer("amount_charged", when_used="json")
-    def serialize_money(self, value: Decimal) -> str:
-        """Serialize slot-pricing amounts as fixed two-decimal PKR strings."""
-        return format(value, ".2f")
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────

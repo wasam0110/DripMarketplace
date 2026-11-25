@@ -376,3 +376,5 @@
     .order-history .order-card { grid-template-columns: minmax(0, 1fr); padding: 18px; }
   }
 }
+
+a.button { color: var(--ivory); }
